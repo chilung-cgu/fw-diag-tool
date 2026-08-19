@@ -1,0 +1,12 @@
+Time [s],Packet ID,Address,Data,Read/Write,ACK/NAK
+0.001000,0,0x50,,Write,ACK
+0.001025,0,,0x06,Write,ACK
+0.001050,0,,0x11,Write,ACK
+0.001075,0,,0x22,Write,ACK
+0.001100,0,,0x33,Write,ACK
+0.001125,0,,0x44,Write,ACK
+0.001150,0,,0x55,Write,ACK
+0.001175,0,,0x66,Write,ACK
+0.002000,1,0x58,,Write,ACK
+0.002025,1,,0x10,Write,ACK
+0.002050,1,,0xFF,Write,NAK
