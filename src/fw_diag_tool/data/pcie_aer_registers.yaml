@@ -1,0 +1,97 @@
+registers:
+  - name: "UNCORRECTABLE_ERROR_STATUS"
+    offset: 0x04
+    size: 32
+    description: "PCIe AER Uncorrectable Error Status Register (Offset 0x04 in AER Capability)"
+    fields:
+      - name: "DLP_ERROR"
+        bits: "4"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "Data Link Protocol Error (Active)"
+        warning_values: [1]
+      - name: "SURPRISE_DOWN"
+        bits: "5"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "Surprise Down Error (Active)"
+        warning_values: [1]
+      - name: "POISONED_TLP"
+        bits: "12"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "Poisoned TLP Received (Active)"
+        warning_values: [1]
+      - name: "FLOW_CONTROL_PROTOCOL_ERROR"
+        bits: "13"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "Flow Control Protocol Error (Active)"
+        warning_values: [1]
+      - name: "COMPLETION_TIMEOUT"
+        bits: "14"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "Completion Timeout (Active)"
+        warning_values: [1]
+      - name: "COMPLETER_ABORT"
+        bits: "15"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "Completer Abort (Active)"
+        warning_values: [1]
+      - name: "UNEXPECTED_COMPLETION"
+        bits: "16"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "Unexpected Completion (Active)"
+        warning_values: [1]
+      - name: "RECEIVER_OVERFLOW"
+        bits: "17"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "Receiver Overflow (Active)"
+        warning_values: [1]
+      - name: "MALFORMED_TLP"
+        bits: "18"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "Malformed TLP (Active)"
+        warning_values: [1]
+      - name: "ECRC_ERROR"
+        bits: "19"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "ECRC Error (Active)"
+        warning_values: [1]
+      - name: "UNSUPPORTED_REQUEST"
+        bits: "20"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "Unsupported Request (Active)"
+        warning_values: [1]
+      - name: "ACS_VIOLATION"
+        bits: "21"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "ACS Violation (Active)"
+        warning_values: [1]
+      - name: "UNCORRECTABLE_INTERNAL_ERROR"
+        bits: "22"
+        access: "W1C"
+        values:
+          0: "Normal"
+          1: "Uncorrectable Internal Error (Active)"
+        warning_values: [1]

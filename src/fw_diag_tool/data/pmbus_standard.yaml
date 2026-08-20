@@ -1,0 +1,124 @@
+registers:
+  - name: "STATUS_WORD"
+    offset: 0x79
+    size: 16
+    description: "PMBus Standard Status Word (Fault and Warning summary)"
+    fields:
+      - name: "VOUT_FAULT"
+        bits: "15"
+        access: "RO"
+        values:
+          0: "OK"
+          1: "VOUT Fault/Warning occurred"
+        warning_values: [1]
+      - name: "IOUT_FAULT"
+        bits: "14"
+        access: "RO"
+        values:
+          0: "OK"
+          1: "IOUT Fault/Warning occurred"
+        warning_values: [1]
+      - name: "INPUT_FAULT"
+        bits: "13"
+        access: "RO"
+        values:
+          0: "OK"
+          1: "Input Voltage/Current/Power Fault occurred"
+        warning_values: [1]
+      - name: "MFR_SPECIFIC"
+        bits: "12"
+        access: "RO"
+        values:
+          0: "OK"
+          1: "Manufacturer Specific Fault"
+        warning_values: [1]
+      - name: "POWER_GOOD_N"
+        bits: "11"
+        access: "RO"
+        values:
+          0: "POWER_GOOD Asserted (Normal)"
+          1: "POWER_GOOD Negated (Power Rail Down)"
+        warning_values: [1]
+      - name: "TEMPERATURE"
+        bits: "10"
+        access: "RO"
+        values:
+          0: "OK"
+          1: "Overtemperature Fault/Warning occurred"
+        warning_values: [1]
+      - name: "CML_FAULT"
+        bits: "9"
+        access: "RO"
+        values:
+          0: "OK"
+          1: "Communication, Memory or Logic (CML) Fault"
+        warning_values: [1]
+      - name: "BUSY"
+        bits: "7"
+        access: "RO"
+        values:
+          0: "Ready"
+          1: "Device Busy / Packet Rejected"
+        warning_values: [1]
+      - name: "OFF"
+        bits: "6"
+        access: "RO"
+        values:
+          0: "Unit is Outputting Power"
+          1: "Unit is Off"
+        warning_values: [1]
+
+  - name: "STATUS_BYTE"
+    offset: 0x78
+    size: 8
+    description: "PMBus Standard Status Byte"
+    fields:
+      - name: "BUSY"
+        bits: "7"
+        access: "RO"
+        values:
+          0: "Ready"
+          1: "Busy"
+        warning_values: [1]
+      - name: "OFF"
+        bits: "6"
+        access: "RO"
+        values:
+          0: "Unit On"
+          1: "Unit Off"
+        warning_values: [1]
+      - name: "VOUT_OV"
+        bits: "5"
+        access: "RO"
+        values:
+          0: "OK"
+          1: "Vout Overvoltage Fault"
+        warning_values: [1]
+      - name: "IOUT_OC"
+        bits: "4"
+        access: "RO"
+        values:
+          0: "OK"
+          1: "Iout Overcurrent Fault"
+        warning_values: [1]
+      - name: "VIN_UV"
+        bits: "3"
+        access: "RO"
+        values:
+          0: "OK"
+          1: "Vin Undervoltage Fault"
+        warning_values: [1]
+      - name: "TEMPERATURE"
+        bits: "2"
+        access: "RO"
+        values:
+          0: "OK"
+          1: "Overtemperature Alarm"
+        warning_values: [1]
+      - name: "CML"
+        bits: "1"
+        access: "RO"
+        values:
+          0: "OK"
+          1: "CML Error"
+        warning_values: [1]

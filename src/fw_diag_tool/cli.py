@@ -150,6 +150,16 @@ def decode_register(
         console.print(f"[dim]Unmapped non-zero bits: 0x{result.unmapped_bits:08X}[/]")
 
 
+@app.command("gui")
+def launch_gui(port: int = typer.Option(8501, "--port", "-p"), host: str = typer.Option("127.0.0.1", "--host", "-h")):
+    """Launch the interactive Web GUI dashboard."""
+    import subprocess, sys
+    from pathlib import Path
+    app_path = Path(__file__).parent / "gui" / "app.py"
+    console.print(f"[bold green]🚀 Launching Web GUI on http://{host}:{port}...[/]")
+    subprocess.run([sys.executable, "-m", "streamlit", "run", str(app_path), f"--server.port={port}", f"--server.address={host}"])
+
+
 def main():
     app()
 
