@@ -19,9 +19,13 @@ class I2CTimingCharts:
             for p in tx.byte_packets:
                 if p.bit_rate_khz and p.bit_rate_khz > 0:
                     bitrates.append(p.bit_rate_khz)
+                elif p.duration_s and p.duration_s > 0:
+                    # Compute per-byte frequency: 9 clock cycles (8 data + 1 ACK)
+                    freq_khz = (9.0 / p.duration_s) / 1000.0
+                    if 1.0 <= freq_khz <= 5000.0:
+                        bitrates.append(freq_khz)
 
         if not bitrates:
-            # Fallback based on average frequency
             avg_f = report.timing_stats.avg_frequency_khz
             bitrates = [avg_f] if avg_f > 0 else [100.0]
 
