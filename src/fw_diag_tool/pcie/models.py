@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -9,6 +11,7 @@ class HeaderType(Enum):
     TYPE_2_CARDBUS = 2
     UNKNOWN = -1
 
+
 @dataclass
 class BARInfo:
     index: int
@@ -18,6 +21,7 @@ class BARInfo:
     is_prefetchable: bool = False
     base_address: int = 0
     size: int | None = None
+
 
 @dataclass
 class BridgeBusInfo:
@@ -32,6 +36,7 @@ class BridgeBusInfo:
     pref_mem_base: int
     pref_mem_limit: int
 
+
 @dataclass
 class StandardCapability:
     cap_id: int
@@ -40,6 +45,7 @@ class StandardCapability:
     next_offset: int
     raw_bytes: bytes
     decoded_info: dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class ExtendedCapability:
@@ -50,6 +56,20 @@ class ExtendedCapability:
     next_offset: int
     raw_bytes: bytes
     decoded_info: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class PCIeLinkInfo:
+    max_speed_code: int = 0
+    max_speed_str: str = "Unknown"
+    max_width: int = 0
+    current_speed_code: int = 0
+    current_speed_str: str = "Unknown"
+    current_width: int = 0
+    is_degraded: bool = False
+    degradation_reason: str = ""
+    root_cause_guide: str = ""
+
 
 @dataclass
 class TLPHeaderDecoded:
@@ -73,6 +93,7 @@ class TLPHeaderDecoded:
     last_dw_be: int | None = None
     raw_dw: list[int] = field(default_factory=list)
 
+
 @dataclass
 class AERUncorrectableError:
     bit_pos: int
@@ -83,6 +104,7 @@ class AERUncorrectableError:
     severity: str
     root_cause_guide: str | None = None
 
+
 @dataclass
 class AERCorrectableError:
     bit_pos: int
@@ -91,6 +113,7 @@ class AERCorrectableError:
     is_active: bool
     is_masked: bool
     root_cause_guide: str | None = None
+
 
 @dataclass
 class AERAnalysisResult:
@@ -110,6 +133,7 @@ class AERAnalysisResult:
     active_uncorr_fatal_count: int = 0
     active_uncorr_nonfatal_count: int = 0
     active_corr_count: int = 0
+
 
 @dataclass
 class PCIeConfigSpace:
@@ -140,6 +164,8 @@ class PCIeConfigSpace:
     standard_capabilities: list[StandardCapability] = field(default_factory=list)
     extended_capabilities: list[ExtendedCapability] = field(default_factory=list)
     aer_analysis: AERAnalysisResult | None = None
+    link_info: PCIeLinkInfo | None = None
+
 
 @dataclass
 class DmesgAEREvent:

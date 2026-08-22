@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from .models import DmesgAEREvent, HeaderType, PCIeConfigSpace
 
 
@@ -15,8 +17,20 @@ class PCIeReporter:
         lines.append(f"- **Command Register**: `0x{cfg.command:04X}` (MSE: `{bool(cfg.command & 0x02)}`, BME: `{bool(cfg.command & 0x04)}`, IOSE: `{bool(cfg.command & 0x01)}`)")
         lines.append(f"- **Status Register**: `0x{cfg.status:04X}` (CapList: `{bool(cfg.status & 0x10)}`, MasterDataParity: `{bool(cfg.status & 0x8000)}`)")
         lines.append("")
+
+        if cfg.link_info:
+            lines.append("## 2. PCIe Link Negotiation & Speed/Width Health")
+            lines.append(f"- **Maximum Capable**: `{cfg.link_info.max_speed_str} x{cfg.link_info.max_width}`")
+            lines.append(f"- **Negotiated Status**: `{cfg.link_info.current_speed_str} x{cfg.link_info.current_width}`")
+            if cfg.link_info.is_degraded:
+                lines.append(f"- **Link Health**: `🚨 DEGRADED` ({cfg.link_info.degradation_reason})")
+                lines.append(f"\n```text\n{cfg.link_info.root_cause_guide}\n```\n")
+            else:
+                lines.append("- **Link Health**: `✔ OPTIMAL` (Operating at maximum designed capability)")
+            lines.append("")
+
         if cfg.header_type == HeaderType.TYPE_0_ENDPOINT:
-            lines.append("## 2. Base Address Registers (BAR 0 - 5)")
+            lines.append("## 3. Base Address Registers (BAR 0 - 5)")
             lines.append("| BAR Index | Type | 64-bit | Prefetchable | Base Address | Raw Hex |")
             lines.append("|---|---|---|---|---|---|")
             for bar in cfg.bars:
@@ -25,13 +39,14 @@ class PCIeReporter:
             lines.append("")
         elif cfg.header_type == HeaderType.TYPE_1_BRIDGE and cfg.bridge_bus:
             b = cfg.bridge_bus
-            lines.append("## 2. Type 1 PCI-to-PCI Bridge Configuration")
+            lines.append("## 3. Type 1 PCI-to-PCI Bridge Configuration")
             lines.append(f"- **Primary / Secondary / Subordinate Bus**: `{b.primary_bus}` / `{b.secondary_bus}` / `{b.subordinate_bus}`")
             lines.append(f"- **Memory Window**: `0x{b.mem_base:08X}` - `0x{b.mem_limit:08X}`")
             lines.append(f"- **Prefetchable Memory Window**: `0x{b.pref_mem_base:08X}` - `0x{b.pref_mem_limit:08X}`")
             lines.append(f"- **I/O Window**: `0x{b.io_base:04X}` - `0x{b.io_limit:04X}`")
             lines.append("")
-        lines.append("## 3. Standard PCI Capabilities (0x34 Linked List)")
+
+        lines.append("## 4. Standard PCI Capabilities (0x34 Linked List)")
         if cfg.standard_capabilities:
             lines.append("| Offset | Cap ID | Name | Next Offset | Key Parameters |")
             lines.append("|---|---|---|---|---|")
@@ -41,7 +56,8 @@ class PCIeReporter:
         else:
             lines.append("*No Standard Capabilities found.*")
         lines.append("")
-        lines.append("## 4. PCI Express Extended Capabilities (0x100 Linked List)")
+
+        lines.append("## 5. PCI Express Extended Capabilities (0x100 Linked List)")
         if cfg.extended_capabilities:
             lines.append("| Offset | Ext Cap ID | Version | Name | Next Offset |")
             lines.append("|---|---|---|---|---|")
@@ -50,7 +66,8 @@ class PCIeReporter:
         else:
             lines.append("*No Extended Capabilities found.*")
         lines.append("")
-        lines.append("## 5. AER (Advanced Error Reporting) In-Depth Analysis")
+
+        lines.append("## 6. AER (Advanced Error Reporting) In-Depth Analysis")
         if cfg.aer_analysis:
             aer = cfg.aer_analysis
             lines.append(f"- **AER Capability Offset**: `0x{aer.offset:03X}`")
@@ -59,6 +76,7 @@ class PCIeReporter:
             lines.append(f"- **Active Uncorrectable Errors**: Fatal: `{aer.active_uncorr_fatal_count}`, Non-Fatal: `{aer.active_uncorr_nonfatal_count}`")
             lines.append(f"- **Active Correctable Errors**: `{aer.active_corr_count}`")
             lines.append("")
+
             active_uncorr = [e for e in aer.uncorr_errors if e.is_active]
             if active_uncorr:
                 lines.append("### Active Uncorrectable Errors & Root Cause Guidance")
@@ -66,8 +84,9 @@ class PCIeReporter:
                     masked_tag = " (MASKED)" if err.is_masked else ""
                     lines.append(f"#### [{err.severity}] {err.name} (Bit {err.bit_pos}){masked_tag}")
                     if err.root_cause_guide:
-                        lines.append(f"```text\n{err.root_cause_guide}\n```")
+                        lines.append(f"\n```text\n{err.root_cause_guide}\n```\n")
                 lines.append("")
+
             active_corr = [e for e in aer.corr_errors if e.is_active]
             if active_corr:
                 lines.append("### Active Correctable Errors")
@@ -75,8 +94,9 @@ class PCIeReporter:
                     masked_tag = " (MASKED)" if err.is_masked else ""
                     lines.append(f"#### {err.name} (Bit {err.bit_pos}){masked_tag}")
                     if err.root_cause_guide:
-                        lines.append(f"```text\n{err.root_cause_guide}\n```")
+                        lines.append(f"\n```text\n{err.root_cause_guide}\n```\n")
                 lines.append("")
+
             if aer.decoded_tlp:
                 tlp = aer.decoded_tlp
                 lines.append("### TLP Header Log Decoded (Faulting Transaction)")

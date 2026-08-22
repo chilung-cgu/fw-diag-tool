@@ -6,6 +6,7 @@ and actionable diagnostic advice generation.
 """
 
 from __future__ import annotations
+from .mux_tracker import I2CMuxTracker
 
 from typing import Any
 
@@ -45,6 +46,7 @@ class I2CDiagnosticEngine:
         self.high_jitter_threshold_pct = high_jitter_threshold_pct
         self.default_eeprom_page_size = default_eeprom_page_size
         self.default_vout_exponent = default_vout_exponent
+        self.mux_tracker = I2CMuxTracker()
         self.anomaly_detector = I2CAnomalyDetector(
             smbus_timeout_ms=smbus_timeout_ms,
             high_jitter_threshold_pct=high_jitter_threshold_pct,
@@ -352,7 +354,8 @@ class I2CDiagnosticEngine:
             total_duration = max(0.0, events[-1].timestamp - events[0].timestamp)
             
         timing_stats = analyze_timing_statistics(transactions, total_duration)
-        issues = self.anomaly_detector.analyze_transactions(transactions, timing_stats)
+        mux_issues = self.mux_tracker.process_transactions(transactions)
+        issues = self.anomaly_detector.analyze_transactions(transactions, timing_stats) + mux_issues
         
         devices_detected: dict[str, dict[str, Any]] = {}
         for tx in transactions:
@@ -404,3 +407,5 @@ class I2CDiagnosticEngine:
         """Convenience method to analyze raw Python dictionaries."""
         events = I2CParser.parse_raw_records(records)
         return self.analyze(events)
+
+I2CDiagnosticEngine.analyze_csv_content = I2CDiagnosticEngine.analyze_csv_string

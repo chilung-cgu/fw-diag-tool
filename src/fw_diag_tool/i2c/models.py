@@ -110,6 +110,8 @@ class I2CTransaction:
     decoded_values: dict[str, Any] = field(default_factory=dict)
     
     # Diagnostics & Timing
+    mux_topology: str | None = None
+    mux_channels: list[int] = field(default_factory=list)
     anomalies: list[str] = field(default_factory=list)
     inter_byte_delays_us: list[float] = field(default_factory=list)
     clock_stretching_events: list[dict[str, Any]] = field(default_factory=list)

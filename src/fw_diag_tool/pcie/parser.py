@@ -29,6 +29,31 @@ from .models import (
 
 
 class PCIeAnalyzer:
+    @classmethod
+    def parse_multi_lspci_text(cls, text: str) -> list[PCIeConfigSpace]:
+        chunks = []
+        current_lines = []
+        bdf_pattern = re.compile(r"^[0-9a-fA-F]{2,4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]")
+        for line in text.splitlines():
+            if bdf_pattern.match(line.strip()):
+                if current_lines:
+                    chunks.append("\n".join(current_lines))
+                    current_lines = []
+            current_lines.append(line)
+        if current_lines:
+            chunks.append("\n".join(current_lines))
+        results = []
+        for chunk in chunks:
+            if not chunk.strip():
+                continue
+            try:
+                bdf, raw_bytes = cls.parse_lspci_text(chunk)
+                cfg = cls.decode_config_space(raw_bytes, bdf=bdf)
+                results.append(cfg)
+            except Exception:
+                continue
+        return results
+
     @staticmethod
     def parse_raw_hex(hex_input: str | bytes) -> bytes:
         if isinstance(hex_input, bytes):
@@ -230,6 +255,7 @@ class PCIeAnalyzer:
                     decoded_details["max_payload_size"] = 128 << ((dev_ctl >> 5) & 0x07)
                     decoded_details["max_read_request_size"] = 128 << ((dev_ctl >> 12) & 0x07)
 
+                    link_cap = struct.unpack_from("<I", raw_data, ptr + 12)[0]
                     link_ctl, link_sta = struct.unpack_from("<HH", raw_data, ptr + 16)
                     speed_map = {
                         1: "2.5 GT/s (Gen1)",
@@ -239,8 +265,50 @@ class PCIeAnalyzer:
                         5: "32.0 GT/s (Gen5)",
                         6: "64.0 GT/s (Gen6)"
                     }
-                    decoded_details["link_speed"] = speed_map.get(link_sta & 0x0F, f"Unknown ({link_sta & 0x0F})")
-                    decoded_details["link_width"] = f"x{(link_sta >> 4) & 0x3F}"
+                    max_speed_code = link_cap & 0x0F
+                    max_width = (link_cap >> 4) & 0x3F
+                    curr_speed_code = link_sta & 0x0F
+                    curr_width = (link_sta >> 4) & 0x3F
+
+                    max_speed_str = speed_map.get(max_speed_code, f"Unknown ({max_speed_code})")
+                    curr_speed_str = speed_map.get(curr_speed_code, f"Unknown ({curr_speed_code})")
+
+                    is_degraded = False
+                    degradation_reason = ""
+                    guide = ""
+                    if max_speed_code > 0 and curr_speed_code > 0:
+                        if curr_speed_code < max_speed_code or curr_width < max_width:
+                            is_degraded = True
+                            degradation_reason = (
+                                f"PCIe Link Degraded: Operating at {curr_speed_str} x{curr_width} "
+                                f"(Max Capable: {max_speed_str} x{max_width})"
+                            )
+                            guide = (
+                                "【PCIe Link 降級排查指引】\n"
+                                "1. 檢查 PCIe 插槽金手指是否有髒污、金屬氧化或接觸不良，嘗試重新插拔或清潔插槽。\n"
+                                "2. 檢查 Riser 轉接卡與高速差分線路之訊號完整性 (SI Jitter / Loss)。\n"
+                                "3. 檢查主機供電 (12V / 3.3V AUX) 是否有瞬間壓降導致 PHY PLL 無法鎖定最高速率。\n"
+                                "4. 檢查 BIOS/UEFI PCIe Link Speed 設定是否被手動限制為較低世代 (Gen3/Gen2)。"
+                            )
+
+                    from .models import PCIeLinkInfo
+                    cfg.link_info = PCIeLinkInfo(
+                        max_speed_code=max_speed_code,
+                        max_speed_str=max_speed_str,
+                        max_width=max_width,
+                        current_speed_code=curr_speed_code,
+                        current_speed_str=curr_speed_str,
+                        current_width=curr_width,
+                        is_degraded=is_degraded,
+                        degradation_reason=degradation_reason,
+                        root_cause_guide=guide
+                    )
+
+                    decoded_details["max_link_speed"] = max_speed_str
+                    decoded_details["max_link_width"] = f"x{max_width}"
+                    decoded_details["current_link_speed"] = curr_speed_str
+                    decoded_details["current_link_width"] = f"x{curr_width}"
+                    decoded_details["is_link_degraded"] = is_degraded
                     decoded_details["link_retrain"] = bool(link_ctl & 0x0020)
 
                 elif cap_id == PCI_CAP_ID_MSI:
