@@ -56,8 +56,10 @@ class DeviceTreeGenerator:
         # Group devices by MUX channel 0..7
         channels: dict[int, list[dict[str, Any]]] = {ch: [] for ch in range(8)}
         for d in devs:
-            ch = d.get("channel", 0)
-            channels.setdefault(ch, []).append(d)
+            raw_ch = d.get("channel", 0)
+            ch = int(str(raw_ch), 0) if isinstance(raw_ch, str) else int(raw_ch)
+            ch = max(0, min(7, ch))
+            channels[ch].append(d)
 
         for ch in range(8):
             ch_devs = channels.get(ch, [])
@@ -66,10 +68,15 @@ class DeviceTreeGenerator:
             lines.append("            #size-cells = <0>;")
             lines.append(f"            reg = <{ch}>;")
             lines.append("")
+            seen_names: dict[str, int] = {}
             for d in ch_devs:
-                d_addr = d["addr"]
+                raw_addr = d["addr"]
+                d_addr = int(str(raw_addr), 0) if isinstance(raw_addr, str) else int(raw_addr)
                 d_type = d.get("type", "EEPROM")
-                d_name = d.get("name", "dev").replace(" ", "-").replace("_", "-").lower()
+                base_name = d.get("name", "dev").replace(" ", "-").replace("_", "-").lower()
+                seen_count = seen_names.get(base_name, 0)
+                seen_names[base_name] = seen_count + 1
+                d_name = base_name if seen_count == 0 else f"{base_name}_{seen_count}"
                 compat, extra = COMPATIBLE_MAP.get(d_type, ("generic,i2c-device", ""))
                 lines.append(f"            {d_name}@{d_addr:x} {{")
                 lines.append(f"                compatible = \"{compat}\";")

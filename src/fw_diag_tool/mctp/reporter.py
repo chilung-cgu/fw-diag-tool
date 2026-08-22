@@ -11,8 +11,7 @@ class ServerMgmtReporter:
     @staticmethod
     def render_terminal(report: ServerMgmtReport, console: Console | None = None) -> None:
         c = console or Console()
-        c.print(Panel(f"[bold cyan]⚡ Server Management Protocol Diagnostic Report[/]\
-{report.summary_text}"))
+        c.print(Panel(f"[bold cyan]⚡ Server Management Protocol Diagnostic Report[/]\n{report.summary_text}"))
 
         if report.mctp_packets:
             mctp_tbl = Table(title="MCTP Packets", show_header=True)
@@ -43,10 +42,8 @@ class ServerMgmtReporter:
 
     @staticmethod
     def to_markdown(report: ServerMgmtReport) -> str:
-        lines = ["# Server Management Protocol Diagnostic Report (MCTP / IPMB)\
-"]
-        lines.append(f"> **Summary**: {report.summary_text}\
-")
+        lines = ["# Server Management Protocol Diagnostic Report (MCTP / IPMB)\n"]
+        lines.append(f"> **Summary**: {report.summary_text}\n")
 
         if report.mctp_packets:
             lines.append("## 1. MCTP Packets (DSP0236)")
@@ -67,5 +64,4 @@ class ServerMgmtReporter:
                 lines.append(f"| #{idx} | `0x{f.rq_addr:02X}` | `0x{f.rs_addr:02X}` | {f.netfn_name} | {f.cmd_name} | `{data_str}` | {status_str} |")
             lines.append("")
 
-        return "\
-".join(lines)
+        return "\n".join(lines)

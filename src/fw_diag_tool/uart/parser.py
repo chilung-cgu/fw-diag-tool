@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from typing import Any
 
 from .models import (
     ARMHardFaultReport,
@@ -49,12 +48,12 @@ class UARTCrashParser:
         lines = text.splitlines()
         if "RIP:" in text or "RAX:" in text or "CR2:" in text or "RSP:" in text or "RBP:" in text or "EIP:" in text:
             arch = "x86_64"
-        elif any(k in text for k in ("FAR_EL1", "elr_el1", "ESR_EL1", "x0:", "x0 :", "pstate:", "sp :")) or ("pc :" in text and ("ffff" in text.lower() or "0000" in text)):
+        elif any(k in text for k in ("epc :", "epc:", "ra :", "sstatus:", "scause:", "sepc:")):
+            arch = "RISC-V"
+        elif any(k in text for k in ("FAR_EL1", "elr_el1", "ESR_EL1", "x0:", "x0 :", "pstate:", "sp :")) or (re.search(r"\bpc\s*:", text) and ("ffff" in text.lower() or "0000" in text)):
             arch = "ARM64"
         elif "PC is at" in text or "r0:" in text or "cpsr:" in text or "ARM32" in text:
             arch = "ARM32"
-        elif any(k in text for k in ("epc :", "epc:", "ra :", "sstatus:", "scause:", "sepc:")):
-            arch = "RISC-V"
         else:
             arch = "Generic"
         reason = "Fatal Kernel Exception / Panic"
@@ -85,17 +84,17 @@ class UARTCrashParser:
                 mod_part = line_s.replace("Modules linked in:", "").strip()
                 modules_linked = [m.strip() for m in mod_part.split() if m.strip()]
 
-            m_rip = re.search(r"(?:RIP|EIP|PC|pc|epc):\s*(?:[0-9a-fA-F]+:)?\s*(?:\[?<([0-9a-fA-F]+)>\]?|\[([0-9a-fA-F]+)\])?\s*([A-Za-z0-9_]+)\+([0-9a-fA-Fx]+)/([0-9a-fA-Fx]+)(?:\s*\[([A-Za-z0-9_]+)\])?", line_s)
+            m_rip = re.search(r"(?:RIP|EIP|PC|pc|epc)\s*:\s*(?:[0-9a-fA-F]+:)?\s*(?:\[?<?(?:0x)?([0-9a-fA-F]+)>?\]?)?\s*([A-Za-z0-9_]+)\+([0-9a-fA-Fx]+)/([0-9a-fA-Fx]+)(?:\s*\[([A-Za-z0-9_]+)\])?", line_s)
             if not m_rip:
                 m_rip = re.search(r"PC is at\s+([A-Za-z0-9_]+)\+([0-9a-fA-Fx]+)/([0-9a-fA-Fx]+)(?:\s*\[([A-Za-z0-9_]+)\])?", line_s)
                 if m_rip:
                     faulting_ip = "N/A"
                     faulting_func = m_rip.group(1)
                     regs["IP_FUNC"] = f"{faulting_func}+{m_rip.group(2)}" + (f" [{m_rip.group(4)}]" if m_rip.group(4) else "")
-            if m_rip:
-                faulting_ip = m_rip.group(1) or m_rip.group(2) or "N/A"
-                faulting_func = m_rip.group(3)
-                regs["IP_FUNC"] = f"{faulting_func}+{m_rip.group(4)}" + (f" [{m_rip.group(6)}]" if m_rip.group(6) else "")
+            if m_rip and faulting_ip is None:
+                faulting_ip = m_rip.group(1) or "N/A"
+                faulting_func = m_rip.group(2)
+                regs["IP_FUNC"] = f"{faulting_func}+{m_rip.group(3)}" + (f" [{m_rip.group(5)}]" if m_rip.group(5) else "")
 
             for m_reg in re.finditer(r"([A-Z0-9_]{2,4}):\s*([0-9a-fA-F]{8,16})", line_s):
                 r_name = m_reg.group(1)

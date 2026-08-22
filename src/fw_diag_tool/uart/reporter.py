@@ -11,8 +11,7 @@ class UARTReporter:
     @staticmethod
     def render_terminal(report: UARTReport, console: Console | None = None) -> None:
         c = console or Console()
-        c.print(Panel(f"[bold red]⚡ UART Crash & HardFault Diagnostic Report[/]\
-Type: [yellow]{report.crash_type.value}[/]"))
+        c.print(Panel(f"[bold red]⚡ UART Crash & HardFault Diagnostic Report[/]\nType: [yellow]{report.crash_type.value}[/]"))
 
         if report.kernel_panic:
             kp = report.kernel_panic
@@ -41,12 +40,8 @@ Type: [yellow]{report.crash_type.value}[/]"))
                     trace_tbl.add_row(str(frame.index), frame.function_name, frame.offset, frame.module or "[kernel]")
                 c.print(trace_tbl)
 
-            c.print(Panel(f"[bold yellow]Root Cause Analysis:[/]\
-{kp.root_cause_analysis}\
-\
-[bold green]Actionable Debug Checklist:[/]\
-" + "\
-".join(f"- ✔ {chk}" for chk in kp.actionable_checklist), border_style="red"))
+            chk_str = "\n".join(f"- ✔ {chk}" for chk in kp.actionable_checklist)
+            c.print(Panel(f"[bold yellow]Root Cause Analysis:[/]\n{kp.root_cause_analysis}\n\n[bold green]Actionable Debug Checklist:[/]\n{chk_str}", border_style="red"))
 
         elif report.arm_hardfault:
             hf = report.arm_hardfault
@@ -65,17 +60,12 @@ Type: [yellow]{report.crash_type.value}[/]"))
                 hf_tbl.add_row("MMFAR", f"0x{hf.mmfar_raw:08X}")
             c.print(hf_tbl)
 
-            c.print(Panel(f"[bold yellow]Root Cause Analysis:[/]\
-{hf.root_cause_analysis}\
-\
-[bold green]Actionable Checklist:[/]\
-" + "\
-".join(f"- ✔ {chk}" for chk in hf.actionable_checklist), border_style="red"))
+            chk_str = "\n".join(f"- ✔ {chk}" for chk in hf.actionable_checklist)
+            c.print(Panel(f"[bold yellow]Root Cause Analysis:[/]\n{hf.root_cause_analysis}\n\n[bold green]Actionable Checklist:[/]\n{chk_str}", border_style="red"))
 
     @staticmethod
     def to_markdown(report: UARTReport) -> str:
-        lines = [f"# UART Crash Dump Analysis: {report.crash_type.value}\
-"]
+        lines = [f"# UART Crash Dump Analysis: {report.crash_type.value}\n"]
         if report.kernel_panic:
             kp = report.kernel_panic
             lines.append("## 1. Crash Summary")
@@ -96,10 +86,7 @@ Type: [yellow]{report.crash_type.value}[/]"))
                     lines.append(f"| #{f.index} | `{f.function_name}` | `{f.offset}` | `{f.module or 'kernel'}` |")
                 lines.append("")
             lines.append("## 3. Root Cause Analysis & Debug Checklist")
-            lines.append(f"```text\
-{kp.root_cause_analysis}\
-```\
-")
+            lines.append(f"```text\n{kp.root_cause_analysis}\n```\n")
             for chk in kp.actionable_checklist:
                 lines.append(f"- [ ] {chk}")
         elif report.arm_hardfault:
@@ -117,12 +104,7 @@ Type: [yellow]{report.crash_type.value}[/]"))
             lines.append("## 2. Fault Flags & Root Cause")
             for fl in hf.fault_flags:
                 lines.append(f"- ⚠️ {fl}")
-            lines.append(f"\
-```text\
-{hf.root_cause_analysis}\
-```\
-")
+            lines.append(f"\n```text\n{hf.root_cause_analysis}\n```\n")
             for chk in hf.actionable_checklist:
                 lines.append(f"- [ ] {chk}")
-        return "\
-".join(lines)
+        return "\n".join(lines)

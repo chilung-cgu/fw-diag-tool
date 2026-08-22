@@ -102,3 +102,167 @@ def test_bitfield_bracket_and_reverse_range():
     bf2 = BitField(name="TEST2", bit_range="0:7")
     assert bf2.high_bit == 7 and bf2.low_bit == 0
     assert bf2.bit_mask == 0xFF
+
+from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
+from fw_diag_tool.i2c.models import AckType, I2CDirection, I2CTransaction
+from fw_diag_tool.i2c.waveform import I2CWaveformReconstructor
+from fw_diag_tool.i2c.waveform_diff import WaveformDiffEngine, WaveformDiffReport, DivergencePoint
+from fw_diag_tool.mctp.parser import ServerMgmtParser
+from fw_diag_tool.mctp.reporter import ServerMgmtReporter
+from fw_diag_tool.uart.models import CrashType
+from fw_diag_tool.uart.parser import UARTCrashParser
+from fw_diag_tool.uart.reporter import UARTReporter
+
+
+def test_uart_arm64_kernel_panic_parsing():
+    arm64_log = """Internal error: Oops: 96000005 [#1] SMP
+Modules linked in: nvme nvme_core pci_hyperv
+CPU: 2 PID: 1234 Comm: kworker/u8:2 Not tainted 5.15.0-arm64
+Hardware name: Wiwynn Yosemite V4 (DT)
+pstate: 60400005 (nZCv daif +PAN -UAO -TCO -DIT -SSBS BTYPE=--)
+pc : [<ffff800008123456>] nvme_pci_complete_rq+0x38/0x120 [nvme]
+lr : [<ffff800008123418>] nvme_irq_handler+0x8c/0x100 [nvme]
+sp : ffff80000a113bc0
+x0 : 0000000000000000 x1 : ffff000082345000 x2 : 0000000000000000
+FAR_EL1: 0000000000000010
+Call trace:
+ [<ffff800008123456>] nvme_pci_complete_rq+0x38/0x120 [nvme]
+ [<ffff800008123418>] nvme_irq_handler+0x8c/0x100 [nvme]
+ [<ffff800008012340>] handle_irq_event+0x4c/0x90
+---[ end trace 0000000000000000 ]---
+"""
+    report = UARTCrashParser.parse_log_text(arm64_log)
+    assert report.crash_type == CrashType.KERNEL_PANIC
+    assert report.kernel_panic is not None
+    assert report.kernel_panic.architecture == "ARM64"
+    assert report.kernel_panic.faulting_func == "nvme_pci_complete_rq"
+    assert report.kernel_panic.faulting_address == "0x0000000000000010"
+    assert "nvme" in report.kernel_panic.modules_linked
+    assert len(report.kernel_panic.call_trace) == 3
+    assert "NULL Pointer Dereference" in report.kernel_panic.root_cause_analysis
+    md = UARTReporter.to_markdown(report)
+    assert "ARM64" in md
+    assert "nvme, nvme_core, pci_hyperv" in md
+
+
+def test_uart_riscv_kernel_panic_parsing():
+    riscv_log = """Kernel panic - not syncing: Fatal exception in interrupt
+epc : [<ffffffe000012345>] faulting_driver_isr+0x14/0x30 [riscv_drv]
+ra : [<ffffffe000012300>] generic_irq_handler+0x20/0x40
+sstatus: 0000000200000100
+Call Trace:
+ [<ffffffe000012345>] faulting_driver_isr+0x14/0x30 [riscv_drv]
+ [<ffffffe000012300>] generic_irq_handler+0x20/0x40
+Code: 01 02 03 04
+"""
+    report = UARTCrashParser.parse_log_text(riscv_log)
+    assert report.crash_type == CrashType.KERNEL_PANIC
+    assert report.kernel_panic is not None
+    assert report.kernel_panic.architecture == "RISC-V"
+    assert report.kernel_panic.faulting_func == "faulting_driver_isr"
+
+
+def test_uart_arm_hardfault_all_flags_and_zero_address():
+    # CFSR: MMFSR has MMARVALID (0x80) and DACCVIOL (0x02) -> 0x82
+    # BFSR has BFARVALID (0x80) and PRECISERR (0x02) -> 0x82
+    # UFSR has DIVBYZERO (0x0200) and UNALIGNED (0x0100) -> 0x0300
+    # CFSR = 0x03008282
+    # MMFAR = 0x00000000, BFAR = 0x00000000
+    hardfault_log = """HardFault Exception!
+HFSR: 0x40000000
+CFSR: 0x03008282
+MMFAR: 0x00000000
+BFAR: 0x00000000
+Stacked PC: 0x08001000
+Stacked LR: 0xFFFFFFF9
+"""
+    report = UARTCrashParser.parse_log_text(hardfault_log)
+    assert report.crash_type == CrashType.ARM_HARDFAULT
+    assert report.arm_hardfault is not None
+    hf = report.arm_hardfault
+    assert hf.mmfar_raw == 0x00000000
+    assert hf.bfar_raw == 0x00000000
+    assert any("MMFSR.MMARVALID (Fault Address: 0x00000000)" in f for f in hf.fault_flags)
+    assert any("BFSR.BFARVALID (Fault Address: 0x00000000)" in f for f in hf.fault_flags)
+    assert any("DIVBYZERO" in f for f in hf.fault_flags)
+    assert any("UNALIGNED" in f for f in hf.fault_flags)
+    md = UARTReporter.to_markdown(report)
+    assert "0x00000000" in md
+    assert "MMFAR" in md
+
+
+def test_mctp_ipmb_checksum_corruption_disambiguation():
+    # IPMB frame with corrupted Checksum 1 (Chk1 = 0x00 instead of valid sum)
+    # rsSA=0x20, NetFn=0x18, Chk1=0x00 (Corrupted), rqSA=0x81, rqSeq=0x20, Cmd=0x01, Chk2=0x5E
+    hex_dump = "20 18 00 81 20 01 5E"
+    report = ServerMgmtParser.parse_text_dump(hex_dump)
+    assert len(report.ipmb_frames) == 1
+    assert len(report.mctp_packets) == 0
+    assert report.ipmb_frames[0].checksum1_valid is False
+    assert report.ipmb_frames[0].cmd_name == "Get Device ID"
+
+
+def test_mctp_som_zero_no_pldm_decode():
+    # Multi-packet continuation segment where SOM=0, Flags = 0x40 (SOM=0, EOM=1, Seq=0, Tag=0)
+    # Even if payload bytes resemble PLDM, it should NOT decode as PLDM command
+    hex_dump = "01 08 00 40 80 02 01 00"
+    report = ServerMgmtParser.parse_text_dump(hex_dump)
+    assert len(report.mctp_packets) == 1
+    pkt = report.mctp_packets[0]
+    assert pkt.som is False
+    assert pkt.pldm_command is None
+    assert pkt.msg_type_name == "Continuation Segment (SOM=0)"
+
+
+def test_dts_gen_empty_devices_list():
+    # Explicitly passing devices=[] should NOT fallback to default mock devices
+    dts = DeviceTreeGenerator.generate_dts_from_topology(bus_num=1, mux_addr=0x70, devices=[])
+    assert "&i2c1 {" in dts
+    assert "i2c-mux@70 {" in dts
+    assert 'compatible = "atmel,24c64";' not in dts
+    assert 'compatible = "national,lm75";' not in dts
+
+
+def test_dts_gen_string_hex_and_duplicate_nodes():
+    # Passing string addresses and multiple devices on the same channel
+    devices = [
+        {"addr": "0x50", "type": "EEPROM", "channel": "0", "name": "eeprom"},
+        {"addr": "0x50", "type": "EEPROM", "channel": "0", "name": "eeprom"},
+        {"addr": 0x48, "type": "Temperature Sensor", "channel": 1, "name": "temp-sensor"},
+    ]
+    dts = DeviceTreeGenerator.generate_dts_from_topology(bus_num=2, mux_addr="0x70", devices=devices)
+    assert "&i2c2 {" in dts
+    assert "i2c-mux@70 {" in dts
+    assert "eeprom@50 {" in dts
+    assert "eeprom_1@50 {" in dts
+
+
+def test_waveform_diff_identical_traces_figure():
+    tx = I2CTransaction(
+        id=1, start_time=0.0, end_time=0.0001, address_7bit=0x50, address_8bit=0xA0,
+        direction=I2CDirection.WRITE, data_bytes=[0x00], address_ack=AckType.ACK, has_stop=True
+    )
+    diff = WaveformDiffReport(is_identical=True, total_compared=1, divergence_points=[], summary="Identical", golden_first_tx=tx, failing_first_tx=tx)
+    fig = WaveformDiffEngine.create_comparison_figure(diff)
+    assert len(fig.data) >= 2  # Has traces in subplots
+
+
+def test_waveform_diff_missing_tx_figure():
+    tx = I2CTransaction(
+        id=1, start_time=0.0, end_time=0.0001, address_7bit=0x50, address_8bit=0xA0,
+        direction=I2CDirection.WRITE, data_bytes=[0x00], address_ack=AckType.ACK, has_stop=True
+    )
+    dp = DivergencePoint(tx_index=1, golden_tx=tx, failing_tx=None, mismatch_type="MISSING_TX", description="Premature termination", root_cause_hint="Check driver")
+    diff = WaveformDiffReport(is_identical=False, total_compared=1, divergence_points=[dp], summary="Diverged")
+    fig = WaveformDiffEngine.create_comparison_figure(diff)
+    assert fig is not None
+
+
+def test_waveform_reconstructor_zero_clock_guard():
+    tx = I2CTransaction(
+        id=1, start_time=0.0, end_time=0.0001, address_7bit=0x50, address_8bit=0xA0,
+        direction=I2CDirection.WRITE, data_bytes=[0x00], address_ack=AckType.ACK, has_stop=True
+    )
+    rec = I2CWaveformReconstructor(default_clock_khz=0.0)
+    wave = rec.reconstruct_transaction_waveform(tx, clock_khz=-10.0)
+    assert len(wave.time_us) > 0
