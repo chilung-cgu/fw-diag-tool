@@ -30,24 +30,21 @@ class I2CWaveformReconstructor:
     """Reconstructs microsecond-level SCL/SDA digital waveforms and protocol overlays."""
 
     ANNOTATION_COLORS = {
-        "START": "#00CC96",          # Emerald Green
-        "ADDRESS": "#636EFA",        # Electric Blue
-        "ACK": "#00FA9A",            # Medium Spring Green
-        "NACK": "#EF553B",           # Coral Red
-        "DATA": "#AB63FA",           # Royal Purple
-        "STRETCH": "#FFA15A",        # Amber Warning
-        "STOP": "#FF6692",           # Vibrant Pink
-        "IDLE": "#7F7F7F",           # Gray
+        "START": "#00CC96",  # Emerald Green
+        "ADDRESS": "#636EFA",  # Electric Blue
+        "ACK": "#00FA9A",  # Medium Spring Green
+        "NACK": "#EF553B",  # Coral Red
+        "DATA": "#AB63FA",  # Royal Purple
+        "STRETCH": "#FFA15A",  # Amber Warning
+        "STOP": "#FF6692",  # Vibrant Pink
+        "IDLE": "#7F7F7F",  # Gray
     }
 
     def __init__(self, default_clock_khz: float = 100.0):
         self.default_clock_khz = default_clock_khz
 
     def reconstruct_transaction_waveform(
-        self,
-        tx: I2CTransaction,
-        clock_khz: float | None = None,
-        t_offset_us: float = 0.0
+        self, tx: I2CTransaction, clock_khz: float | None = None, t_offset_us: float = 0.0
     ) -> I2CWaveformData:
         clk_khz = clock_khz if (clock_khz is not None and clock_khz > 0) else self.default_clock_khz
         clk_khz = max(1.0, clk_khz)
@@ -76,17 +73,25 @@ class I2CWaveformReconstructor:
         add_point(cur_t, 1, 0)
         cur_t += t_half_period_us * 0.5
         add_point(cur_t, 0, 0)
-        annotations.append(ProtocolAnnotation(
-            start_time=start_t_begin,
-            end_time=cur_t,
-            label="START" if not tx.is_repeated_start else "Sr",
-            annotation_type="START",
-            color=self.ANNOTATION_COLORS["START"],
-            details="I2C Start Condition (SDA falling edge while SCL is High)"
-        ))
+        annotations.append(
+            ProtocolAnnotation(
+                start_time=start_t_begin,
+                end_time=cur_t,
+                label="START" if not tx.is_repeated_start else "Sr",
+                annotation_type="START",
+                color=self.ANNOTATION_COLORS["START"],
+                details="I2C Start Condition (SDA falling edge while SCL is High)",
+            )
+        )
 
         # Helper to emit 8-bit byte + 1 ACK/NACK clock cycle
-        def emit_byte(byte_val: int, is_addr: bool, ack: AckType, stretch_ms: float = 0.0, label_override: str | None = None):
+        def emit_byte(
+            byte_val: int,
+            is_addr: bool,
+            ack: AckType,
+            stretch_ms: float = 0.0,
+            label_override: str | None = None,
+        ):
             nonlocal cur_t
             byte_begin_t = cur_t
 
@@ -112,14 +117,16 @@ class I2CWaveformReconstructor:
                 ann_label = label_override or f"0x{byte_val:02X}"
                 ann_type = "DATA"
 
-            annotations.append(ProtocolAnnotation(
-                start_time=byte_begin_t,
-                end_time=byte_end_t,
-                label=ann_label,
-                annotation_type=ann_type,
-                color=self.ANNOTATION_COLORS[ann_type],
-                details=f"Byte: 0x{byte_val:02X} (binary: {byte_val:08b})"
-            ))
+            annotations.append(
+                ProtocolAnnotation(
+                    start_time=byte_begin_t,
+                    end_time=byte_end_t,
+                    label=ann_label,
+                    annotation_type=ann_type,
+                    color=self.ANNOTATION_COLORS[ann_type],
+                    details=f"Byte: 0x{byte_val:02X} (binary: {byte_val:08b})",
+                )
+            )
 
             # Optional Clock Stretching before/during ACK
             if stretch_ms > 0:
@@ -128,14 +135,16 @@ class I2CWaveformReconstructor:
                 add_point(cur_t, 0, 1)
                 cur_t += stretch_us
                 add_point(cur_t, 0, 1)
-                annotations.append(ProtocolAnnotation(
-                    start_time=str_begin,
-                    end_time=cur_t,
-                    label=f"Stretch {stretch_ms:.1f}ms",
-                    annotation_type="STRETCH",
-                    color=self.ANNOTATION_COLORS["STRETCH"],
-                    details=f"Slave SCL Clock Stretching: {stretch_ms:.3f} ms"
-                ))
+                annotations.append(
+                    ProtocolAnnotation(
+                        start_time=str_begin,
+                        end_time=cur_t,
+                        label=f"Stretch {stretch_ms:.1f}ms",
+                        annotation_type="STRETCH",
+                        color=self.ANNOTATION_COLORS["STRETCH"],
+                        details=f"Slave SCL Clock Stretching: {stretch_ms:.3f} ms",
+                    )
+                )
 
             # 9th Clock Cycle: ACK / NACK
             ack_begin_t = cur_t
@@ -147,14 +156,18 @@ class I2CWaveformReconstructor:
             add_point(cur_t, 0, ack_bit)
 
             ack_type = "ACK" if ack == AckType.ACK else "NACK"
-            annotations.append(ProtocolAnnotation(
-                start_time=ack_begin_t,
-                end_time=cur_t,
-                label=ack_type,
-                annotation_type=ack_type,
-                color=self.ANNOTATION_COLORS[ack_type],
-                details="Acknowledge bit: 0 (ACK)" if ack == AckType.ACK else "Not-Acknowledge bit: 1 (NACK)"
-            ))
+            annotations.append(
+                ProtocolAnnotation(
+                    start_time=ack_begin_t,
+                    end_time=cur_t,
+                    label=ack_type,
+                    annotation_type=ack_type,
+                    color=self.ANNOTATION_COLORS[ack_type],
+                    details="Acknowledge bit: 0 (ACK)"
+                    if ack == AckType.ACK
+                    else "Not-Acknowledge bit: 1 (NACK)",
+                )
+            )
 
         # 3. Emit Address Byte (7-bit address + R/W bit)
         addr_8b = (tx.address_7bit << 1) | (1 if tx.direction == I2CDirection.READ else 0)
@@ -185,27 +198,24 @@ class I2CWaveformReconstructor:
             add_point(cur_t, 1, 1)
             cur_t += t_half_period_us
             add_point(cur_t, 1, 1)
-            annotations.append(ProtocolAnnotation(
-                start_time=stop_begin_t,
-                end_time=cur_t,
-                label="STOP",
-                annotation_type="STOP",
-                color=self.ANNOTATION_COLORS["STOP"],
-                details="I2C Stop Condition (SDA rising edge while SCL is High)"
-            ))
+            annotations.append(
+                ProtocolAnnotation(
+                    start_time=stop_begin_t,
+                    end_time=cur_t,
+                    label="STOP",
+                    annotation_type="STOP",
+                    color=self.ANNOTATION_COLORS["STOP"],
+                    details="I2C Stop Condition (SDA rising edge while SCL is High)",
+                )
+            )
 
-        return I2CWaveformData(
-            time_us=time_us,
-            scl=scl,
-            sda=sda,
-            annotations=annotations
-        )
+        return I2CWaveformData(time_us=time_us, scl=scl, sda=sda, annotations=annotations)
 
     @classmethod
     def create_plotly_figure(
         cls,
         waveform: I2CWaveformData,
-        title: str = "I2C Interactive Digital Waveform & Protocol Overlay"
+        title: str = "I2C Interactive Digital Waveform & Protocol Overlay",
     ) -> go.Figure:
         fig = make_subplots(
             rows=3,
@@ -213,7 +223,7 @@ class I2CWaveformReconstructor:
             shared_xaxes=True,
             vertical_spacing=0.06,
             row_heights=[0.35, 0.32, 0.33],
-            subplot_titles=("Protocol Annotation Track", "SDA (Serial Data)", "SCL (Serial Clock)")
+            subplot_titles=("Protocol Annotation Track", "SDA (Serial Data)", "SCL (Serial Clock)"),
         )
 
         # 1. Protocol Annotation Track (Horizontal colored boxes)
@@ -234,7 +244,8 @@ class I2CWaveformReconstructor:
                     hovertext=f"{ann.label} ({ann.annotation_type})<br>Time: {ann.start_time:.1f}µs - {ann.end_time:.1f}µs (Δ={(ann.end_time - ann.start_time):.1f}µs)<br>{ann.details}",
                     showlegend=False,
                 ),
-                row=1, col=1
+                row=1,
+                col=1,
             )
 
         # 2. SDA Digital Waveform (Step line)
@@ -247,7 +258,8 @@ class I2CWaveformReconstructor:
                 name="SDA",
                 hoverinfo="x+y",
             ),
-            row=2, col=1
+            row=2,
+            col=1,
         )
 
         # 3. SCL Digital Waveform (Step line)
@@ -260,7 +272,8 @@ class I2CWaveformReconstructor:
                 name="SCL",
                 hoverinfo="x+y",
             ),
-            row=3, col=1
+            row=3,
+            col=1,
         )
 
         fig.update_layout(
@@ -272,8 +285,12 @@ class I2CWaveformReconstructor:
             showlegend=False,
         )
 
-        fig.update_yaxes(range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["LOW (0V)", "HIGH (3.3V)"], row=2, col=1)
-        fig.update_yaxes(range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["LOW (0V)", "HIGH (3.3V)"], row=3, col=1)
+        fig.update_yaxes(
+            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["LOW (0V)", "HIGH (3.3V)"], row=2, col=1
+        )
+        fig.update_yaxes(
+            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["LOW (0V)", "HIGH (3.3V)"], row=3, col=1
+        )
         fig.update_yaxes(showticklabels=False, showgrid=False, range=[0.0, 1.0], row=1, col=1)
         fig.update_xaxes(title_text="Time (µs)", row=3, col=1)
 

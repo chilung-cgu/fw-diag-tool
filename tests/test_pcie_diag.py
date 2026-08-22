@@ -64,7 +64,7 @@ class TestPCIeAnalyzer(unittest.TestCase):
     def test_lspci_text_parsing(self):
         lines = ["0000:01:00.0 Processing accelerators: Xilinx Corporation Device 7024"]
         for offset in range(0, 512, 16):
-            chunk = self.raw_bytes[offset:offset+16]
+            chunk = self.raw_bytes[offset : offset + 16]
             hex_str = " ".join(f"{b:02x}" for b in chunk)
             lines.append(f"{offset:02x}: {hex_str}")
         lspci_dump = "\n".join(lines)
@@ -93,6 +93,7 @@ class TestPCIeAnalyzer(unittest.TestCase):
         self.assertIn("Malformed TLP", md)
         self.assertIn("Completion Timeout", md)
         self.assertIn("BAR0", md)
+
 
 if __name__ == "__main__":
     unittest.main()

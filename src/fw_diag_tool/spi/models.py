@@ -20,27 +20,27 @@ class SPIOpcode(int, Enum):
     DEVICE_ID = 0x90
     UNIQUE_ID = 0x4B
     SFDP = 0x5A
-    
+
     # Read
     READ_DATA = 0x03
     FAST_READ = 0x0B
     FAST_READ_DUAL_OUT = 0x3B
     FAST_READ_QUAD_OUT = 0x6B
-    
+
     # Write / Program
     WRITE_ENABLE = 0x06
     WRITE_DISABLE = 0x04
     VOLATILE_SR_WRITE_ENABLE = 0x50
     PAGE_PROGRAM = 0x02
     QUAD_PAGE_PROGRAM = 0x32
-    
+
     # Erase
     SECTOR_ERASE_4K = 0x20
     BLOCK_ERASE_32K = 0x52
     BLOCK_ERASE_64K = 0xD8
     CHIP_ERASE = 0xC7
     CHIP_ERASE_ALT = 0x60
-    
+
     # Status / Config Registers
     READ_STATUS_REG_1 = 0x05
     WRITE_STATUS_REG_1 = 0x01
@@ -48,7 +48,7 @@ class SPIOpcode(int, Enum):
     WRITE_STATUS_REG_2 = 0x31
     READ_STATUS_REG_3 = 0x15
     WRITE_STATUS_REG_3 = 0x11
-    
+
     # Power / Reset
     DEEP_POWER_DOWN = 0xB9
     RELEASE_POWER_DOWN = 0xAB
@@ -91,14 +91,14 @@ OPCODE_NAMES: dict[int, str] = {
 @dataclass
 class FlashStatusRegister1:
     raw_val: int
-    busy: bool          # Bit 0: 1 = Erase/Write in progress
-    wel: bool           # Bit 1: 1 = Write Enable Latch set
-    bp0: bool           # Bit 2: Block Protect 0
-    bp1: bool           # Bit 3: Block Protect 1
-    bp2: bool           # Bit 4: Block Protect 2
-    tb: bool            # Bit 5: Top/Bottom Protect
-    sec: bool           # Bit 6: Sector/Block Protect
-    srp0: bool          # Bit 7: Status Register Protect 0
+    busy: bool  # Bit 0: 1 = Erase/Write in progress
+    wel: bool  # Bit 1: 1 = Write Enable Latch set
+    bp0: bool  # Bit 2: Block Protect 0
+    bp1: bool  # Bit 3: Block Protect 1
+    bp2: bool  # Bit 4: Block Protect 2
+    tb: bool  # Bit 5: Top/Bottom Protect
+    sec: bool  # Bit 6: Sector/Block Protect
+    srp0: bool  # Bit 7: Status Register Protect 0
 
     @classmethod
     def decode(cls, val: int) -> FlashStatusRegister1:

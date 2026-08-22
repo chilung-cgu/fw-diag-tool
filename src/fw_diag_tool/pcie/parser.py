@@ -36,8 +36,8 @@ class PCIeAnalyzer:
         bdf_pattern = re.compile(r"^[0-9a-fA-F]{2,4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]")
         for line in text.splitlines():
             if bdf_pattern.match(line.strip()) and current_lines:
-                    chunks.append("\n".join(current_lines))
-                    current_lines = []
+                chunks.append("\n".join(current_lines))
+                current_lines = []
             current_lines.append(line)
         if current_lines:
             chunks.append("\n".join(current_lines))
@@ -86,11 +86,15 @@ class PCIeAnalyzer:
         all_tokens = re.findall(r"\b[0-9a-fA-F]{2}\b", text)
         if len(all_tokens) >= 64:
             return bytes([int(t, 16) for t in all_tokens])
-        raise ValueError("Invalid hex input: cannot extract at least 64 bytes of PCI configuration space.")
+        raise ValueError(
+            "Invalid hex input: cannot extract at least 64 bytes of PCI configuration space."
+        )
 
     @staticmethod
     def parse_lspci_text(lspci_text: str) -> tuple[str | None, bytes]:
-        bdf_match = re.search(r"([0-9a-fA-F]{2,4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7])", lspci_text)
+        bdf_match = re.search(
+            r"([0-9a-fA-F]{2,4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7])", lspci_text
+        )
         bdf = bdf_match.group(1) if bdf_match else None
         data = PCIeAnalyzer.parse_raw_hex(lspci_text)
         return bdf, data
@@ -98,12 +102,14 @@ class PCIeAnalyzer:
     @classmethod
     def decode_config_space(cls, raw_data: bytes, bdf: str | None = None) -> PCIeConfigSpace:
         if len(raw_data) < 64:
-            raise ValueError(f"Config space size {len(raw_data)} bytes is smaller than minimum 64 bytes.")
+            raise ValueError(
+                f"Config space size {len(raw_data)} bytes is smaller than minimum 64 bytes."
+            )
         if len(raw_data) < 4096:
             raw_data = raw_data + bytes(4096 - len(raw_data))
 
-        vendor_id, device_id, command, status, rev_id, prog_if, sub_class, base_class = struct.unpack_from(
-            "<HHHHBBBB", raw_data, 0x00
+        vendor_id, device_id, command, status, rev_id, prog_if, sub_class, base_class = (
+            struct.unpack_from("<HHHHBBBB", raw_data, 0x00)
         )
         cache_line, latency_timer, header_type_raw, bist = struct.unpack_from(
             "<BBBB", raw_data, 0x0C
@@ -151,38 +157,41 @@ class PCIeAnalyzer:
                     continue
                 if is_io:
                     base_addr = raw_bar & ~0x03
-                    cfg.bars.append(BARInfo(
-                        index=bar_idx,
-                        raw_value=raw_bar,
-                        is_io=True,
-                        base_address=base_addr
-                    ))
+                    cfg.bars.append(
+                        BARInfo(
+                            index=bar_idx, raw_value=raw_bar, is_io=True, base_address=base_addr
+                        )
+                    )
                     bar_idx += 1
                 else:
                     is_64bit = ((raw_bar >> 1) & 0x03) == 0x02
                     is_pref = bool(raw_bar & 0x08)
                     if is_64bit and bar_idx < 5:
                         raw_bar_high = struct.unpack_from("<I", raw_data, bar_offset + 4)[0]
-                        full_addr = ((raw_bar_high << 32) | (raw_bar & ~0x0F))
-                        cfg.bars.append(BARInfo(
-                            index=bar_idx,
-                            raw_value=raw_bar,
-                            is_io=False,
-                            is_64bit=True,
-                            is_prefetchable=is_pref,
-                            base_address=full_addr
-                        ))
+                        full_addr = (raw_bar_high << 32) | (raw_bar & ~0x0F)
+                        cfg.bars.append(
+                            BARInfo(
+                                index=bar_idx,
+                                raw_value=raw_bar,
+                                is_io=False,
+                                is_64bit=True,
+                                is_prefetchable=is_pref,
+                                base_address=full_addr,
+                            )
+                        )
                         bar_idx += 2
                     else:
                         base_addr = raw_bar & ~0x0F
-                        cfg.bars.append(BARInfo(
-                            index=bar_idx,
-                            raw_value=raw_bar,
-                            is_io=False,
-                            is_64bit=False,
-                            is_prefetchable=is_pref,
-                            base_address=base_addr
-                        ))
+                        cfg.bars.append(
+                            BARInfo(
+                                index=bar_idx,
+                                raw_value=raw_bar,
+                                is_io=False,
+                                is_64bit=False,
+                                is_prefetchable=is_pref,
+                                base_address=base_addr,
+                            )
+                        )
                         bar_idx += 1
 
             cfg.subsystem_vendor_id = struct.unpack_from("<H", raw_data, 0x2C)[0]
@@ -215,7 +224,7 @@ class PCIeAnalyzer:
                 mem_base=mem_base,
                 mem_limit=mem_limit,
                 pref_mem_base=pref_mem_base,
-                pref_mem_limit=pref_mem_limit
+                pref_mem_limit=pref_mem_limit,
             )
             cfg.capabilities_ptr = raw_data[0x34]
             cfg.interrupt_line = raw_data[0x3C]
@@ -246,7 +255,9 @@ class PCIeAnalyzer:
                         0x9: "Root Complex Integrated Endpoint",
                         0xA: "Root Complex Event Collector",
                     }
-                    decoded_details["device_type"] = dev_type_names.get(dev_type, f"Unknown (0x{dev_type:X})")
+                    decoded_details["device_type"] = dev_type_names.get(
+                        dev_type, f"Unknown (0x{dev_type:X})"
+                    )
                     decoded_details["cap_version"] = pcie_cap_reg & 0x0F
                     dev_ctl, dev_sta = struct.unpack_from("<HH", raw_data, ptr + 8)
                     decoded_details["dev_ctl"] = dev_ctl
@@ -262,7 +273,7 @@ class PCIeAnalyzer:
                         3: "8.0 GT/s (Gen3)",
                         4: "16.0 GT/s (Gen4)",
                         5: "32.0 GT/s (Gen5)",
-                        6: "64.0 GT/s (Gen6)"
+                        6: "64.0 GT/s (Gen6)",
                     }
                     max_speed_code = link_cap & 0x0F
                     max_width = (link_cap >> 4) & 0x3F
@@ -275,21 +286,26 @@ class PCIeAnalyzer:
                     is_degraded = False
                     degradation_reason = ""
                     guide = ""
-                    if max_speed_code > 0 and curr_speed_code > 0 and (curr_speed_code < max_speed_code or curr_width < max_width):
-                            is_degraded = True
-                            degradation_reason = (
-                                f"PCIe Link Degraded: Operating at {curr_speed_str} x{curr_width} "
-                                f"(Max Capable: {max_speed_str} x{max_width})"
-                            )
-                            guide = (
-                                "【PCIe Link 降級排查指引】\n"
-                                "1. 檢查 PCIe 插槽金手指是否有髒污、金屬氧化或接觸不良，嘗試重新插拔或清潔插槽。\n"
-                                "2. 檢查 Riser 轉接卡與高速差分線路之訊號完整性 (SI Jitter / Loss)。\n"
-                                "3. 檢查主機供電 (12V / 3.3V AUX) 是否有瞬間壓降導致 PHY PLL 無法鎖定最高速率。\n"
-                                "4. 檢查 BIOS/UEFI PCIe Link Speed 設定是否被手動限制為較低世代 (Gen3/Gen2)。"
-                            )
+                    if (
+                        max_speed_code > 0
+                        and curr_speed_code > 0
+                        and (curr_speed_code < max_speed_code or curr_width < max_width)
+                    ):
+                        is_degraded = True
+                        degradation_reason = (
+                            f"PCIe Link Degraded: Operating at {curr_speed_str} x{curr_width} "
+                            f"(Max Capable: {max_speed_str} x{max_width})"
+                        )
+                        guide = (
+                            "【PCIe Link 降級排查指引】\n"
+                            "1. 檢查 PCIe 插槽金手指是否有髒污、金屬氧化或接觸不良，嘗試重新插拔或清潔插槽。\n"
+                            "2. 檢查 Riser 轉接卡與高速差分線路之訊號完整性 (SI Jitter / Loss)。\n"
+                            "3. 檢查主機供電 (12V / 3.3V AUX) 是否有瞬間壓降導致 PHY PLL 無法鎖定最高速率。\n"
+                            "4. 檢查 BIOS/UEFI PCIe Link Speed 設定是否被手動限制為較低世代 (Gen3/Gen2)。"
+                        )
 
                     from .models import PCIeLinkInfo
+
                     cfg.link_info = PCIeLinkInfo(
                         max_speed_code=max_speed_code,
                         max_speed_str=max_speed_str,
@@ -299,7 +315,7 @@ class PCIeAnalyzer:
                         current_width=curr_width,
                         is_degraded=is_degraded,
                         degradation_reason=degradation_reason,
-                        root_cause_guide=guide
+                        root_cause_guide=guide,
                     )
 
                     decoded_details["max_link_speed"] = max_speed_str
@@ -327,8 +343,8 @@ class PCIeAnalyzer:
                     name=cap_name,
                     offset=ptr,
                     next_offset=next_ptr,
-                    raw_bytes=raw_data[ptr:ptr+16],
-                    decoded_info=decoded_details
+                    raw_bytes=raw_data[ptr : ptr + 16],
+                    decoded_info=decoded_details,
                 )
                 cfg.standard_capabilities.append(cap)
                 ptr = next_ptr
@@ -353,7 +369,7 @@ class PCIeAnalyzer:
                 decoded_ext["aer_summary"] = {
                     "active_fatal": aer_res.active_uncorr_fatal_count,
                     "active_nonfatal": aer_res.active_uncorr_nonfatal_count,
-                    "active_correctable": aer_res.active_corr_count
+                    "active_correctable": aer_res.active_corr_count,
                 }
 
             ext_cap = ExtendedCapability(
@@ -362,8 +378,8 @@ class PCIeAnalyzer:
                 name=cap_name,
                 offset=ext_ptr,
                 next_offset=next_ext_ptr,
-                raw_bytes=raw_data[ext_ptr:ext_ptr+32],
-                decoded_info=decoded_ext
+                raw_bytes=raw_data[ext_ptr : ext_ptr + 32],
+                decoded_info=decoded_ext,
             )
             cfg.extended_capabilities.append(ext_cap)
             if next_ext_ptr < 0x100:
@@ -470,7 +486,7 @@ class PCIeAnalyzer:
             last_dw_be=last_dw_be,
             byte_count=byte_count,
             lower_address=lower_address,
-            raw_dw=[dw0, dw1, dw2, dw3]
+            raw_dw=[dw0, dw1, dw2, dw3],
         )
 
     @classmethod
@@ -508,7 +524,7 @@ class PCIeAnalyzer:
                     is_active=is_active,
                     is_masked=is_masked,
                     severity=sev_str,
-                    root_cause_guide=guide
+                    root_cause_guide=guide,
                 )
             )
 
@@ -529,7 +545,7 @@ class PCIeAnalyzer:
                     short_code=short_code,
                     is_active=is_active,
                     is_masked=is_masked,
-                    root_cause_guide=guide
+                    root_cause_guide=guide,
                 )
             )
 
@@ -551,7 +567,7 @@ class PCIeAnalyzer:
             decoded_tlp=decoded_tlp,
             active_uncorr_fatal_count=fatal_count,
             active_uncorr_nonfatal_count=nonfatal_count,
-            active_corr_count=corr_count
+            active_corr_count=corr_count,
         )
 
     @classmethod
@@ -587,7 +603,9 @@ class PCIeAnalyzer:
             m_err = error_name_pattern.search(line)
             if m_err:
                 ts, bdf, sev, _err_type, _dev_id, err_name = m_err.groups()
-                guide = get_root_cause_guide(err_name) or f"Linux Kernel AER error event: {err_name}"
+                guide = (
+                    get_root_cause_guide(err_name) or f"Linux Kernel AER error event: {err_name}"
+                )
                 events.append(
                     DmesgAEREvent(
                         timestamp=ts,
@@ -596,7 +614,7 @@ class PCIeAnalyzer:
                         error_name=err_name,
                         tlp_header=None,
                         raw_line=line.strip(),
-                        root_cause_guide=guide
+                        root_cause_guide=guide,
                     )
                 )
                 continue
@@ -613,7 +631,7 @@ class PCIeAnalyzer:
                         error_name=err_name,
                         tlp_header=None,
                         raw_line=line.strip(),
-                        root_cause_guide=guide
+                        root_cause_guide=guide,
                     )
                 )
                 continue

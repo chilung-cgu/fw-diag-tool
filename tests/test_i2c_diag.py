@@ -55,11 +55,11 @@ def test_parse_helpers():
 def test_linear11_decoding():
     # 0xE200 -> Exponent=-4, Mantissa=512 -> 512 * 2^-4 = 32.0
     assert decode_linear11(0xE200) == 32.0
-    
+
     # 12V encoded: Exponent=-4, Mantissa=192 -> (11100b << 11) | 192 = 0xE0C0
     val_12 = decode_linear11(0xE0C0)
     assert val_12 == 12.0
-    
+
     # Negative value: -15.5°C
     neg_encoded = encode_linear11(-15.5)
     val_neg = decode_linear11(neg_encoded)
@@ -68,7 +68,7 @@ def test_linear11_decoding():
     # Round trip encode/decode
     encoded = encode_linear11(12.0)
     assert decode_linear11(encoded) == 12.0
-    
+
     encoded_46 = encode_linear11(46.0)
     assert abs(decode_linear11(encoded_46) - 46.0) < 0.1
 
@@ -110,7 +110,9 @@ def test_eeprom_decoding_and_rollover():
     assert "Page rollover hazard" in res_hazard["rollover_details"]
 
     # 2-byte word addressing (24C64 / 24C256)
-    res_2byte = decode_eeprom_write([0x01, 0x00, 0xAA, 0xBB], preferred_address_bytes=2, page_size=64)
+    res_2byte = decode_eeprom_write(
+        [0x01, 0x00, 0xAA, 0xBB], preferred_address_bytes=2, page_size=64
+    )
     assert res_2byte["offset"] == 0x0100
     assert res_2byte["payload_len"] == 2
 
@@ -171,11 +173,23 @@ def test_text_trace_parser():
 def test_raw_records_analysis():
     records = [
         {"timestamp": 0.001, "event_type": "START"},
-        {"timestamp": 0.001025, "event_type": "ADDRESS", "address": 0x58, "direction": "WRITE", "ack": "ACK"},
+        {
+            "timestamp": 0.001025,
+            "event_type": "ADDRESS",
+            "address": 0x58,
+            "direction": "WRITE",
+            "ack": "ACK",
+        },
         {"timestamp": 0.001050, "event_type": "DATA", "data": 0x88, "ack": "ACK"},
         {"timestamp": 0.001075, "event_type": "STOP"},
         {"timestamp": 0.001200, "event_type": "START"},
-        {"timestamp": 0.001225, "event_type": "ADDRESS", "address": 0x58, "direction": "READ", "ack": "ACK"},
+        {
+            "timestamp": 0.001225,
+            "event_type": "ADDRESS",
+            "address": 0x58,
+            "direction": "READ",
+            "ack": "ACK",
+        },
         {"timestamp": 0.001250, "event_type": "DATA", "data": 0x00, "ack": "ACK"},
         {"timestamp": 0.001275, "event_type": "DATA", "data": 0xE2, "ack": "NACK"},
         {"timestamp": 0.001300, "event_type": "STOP"},
@@ -277,7 +291,9 @@ def test_cli_runner(tmp_path):
     out_md = tmp_path / "report.md"
     out_json = tmp_path / "report.json"
 
-    result = runner.invoke(app, ["i2c", "analyze", str(csv_path), "--md", str(out_md), "--json", str(out_json)])
+    result = runner.invoke(
+        app, ["i2c", "analyze", str(csv_path), "--md", str(out_md), "--json", str(out_json)]
+    )
     assert result.exit_code == 0
     assert out_md.exists()
     assert out_json.exists()

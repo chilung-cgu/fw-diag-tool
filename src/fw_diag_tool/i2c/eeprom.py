@@ -14,6 +14,7 @@ from typing import Any
 @dataclass
 class EEPROMProfile:
     """EEPROM chip specification."""
+
     model: str
     capacity_kbits: int
     address_bytes: int  # 1 or 2
@@ -36,20 +37,21 @@ EEPROM_MODELS: dict[str, EEPROMProfile] = {
 
 
 def decode_eeprom_write(
-    data_bytes: list[int],
-    preferred_address_bytes: int = 1,
-    page_size: int = 16
+    data_bytes: list[int], preferred_address_bytes: int = 1, page_size: int = 16
 ) -> dict[str, Any]:
     """Decode an EEPROM write sequence, detecting word offset and page boundary hazard.
-    
+
     Args:
         data_bytes: Payload bytes transmitted following slave address byte.
         preferred_address_bytes: 1 for 24C01-24C16, 2 for 24C32-24C512.
         page_size: Page size in bytes for boundary check.
     """
     if not data_bytes:
-        return {"type": "Write Polling / Address Probe", "summary": "Write Polling probe (0 payload bytes)"}
-        
+        return {
+            "type": "Write Polling / Address Probe",
+            "summary": "Write Polling probe (0 payload bytes)",
+        }
+
     # Determine offset length: if user specified or data implies 2-byte
     addr_bytes_len = preferred_address_bytes
     if len(data_bytes) == 1:
@@ -62,9 +64,9 @@ def decode_eeprom_write(
     else:
         offset = data_bytes[0]
         payload = data_bytes[1:]
-        
+
     payload_len = len(payload)
-    
+
     # Check Page Boundary Rollover
     # If start offset + payload length crosses the page boundary, the EEPROM hardware counter wraps!
     safe_page_size = max(1, page_size)
@@ -72,7 +74,7 @@ def decode_eeprom_write(
     page_start = (offset // safe_page_size) * safe_page_size
     rollover_hazard = False
     rollover_details = ""
-    
+
     if payload_len > (safe_page_size - offset_in_page):
         rollover_hazard = True
         overflow_count = payload_len - (page_size - offset_in_page)
@@ -81,14 +83,20 @@ def decode_eeprom_write(
             f"page size {page_size}B). Payload length {payload_len}B exceeds remaining {safe_page_size - offset_in_page}B "
             f"in this page. {overflow_count} byte(s) will WRAP AROUND and overwrite offset 0x{page_start:04X}!"
         )
-        
-    write_type = "Byte Write" if payload_len == 1 else (f"Page Write ({payload_len} bytes)" if payload_len > 1 else "Dummy Write / Address Set")
-    
+
+    write_type = (
+        "Byte Write"
+        if payload_len == 1
+        else (
+            f"Page Write ({payload_len} bytes)" if payload_len > 1 else "Dummy Write / Address Set"
+        )
+    )
+
     summary = f"EEPROM {write_type} at Offset 0x{offset:04X}"
     if payload:
         preview = " ".join(f"{b:02X}" for b in payload[:8]) + ("..." if len(payload) > 8 else "")
         summary += f": [{preview}]"
-        
+
     return {
         "type": write_type,
         "offset": offset,
@@ -104,27 +112,32 @@ def decode_eeprom_write(
 
 
 def decode_eeprom_read(
-    data_bytes: list[int],
-    last_known_offset: int | None = None
+    data_bytes: list[int], last_known_offset: int | None = None
 ) -> dict[str, Any]:
     """Decode an EEPROM read transaction."""
     payload_len = len(data_bytes)
     if payload_len == 0:
         return {"type": "Read Probe", "summary": "Empty Read"}
-        
-    read_type = "Current Address Read (1 byte)" if payload_len == 1 else f"Sequential Read ({payload_len} bytes)"
+
+    read_type = (
+        "Current Address Read (1 byte)"
+        if payload_len == 1
+        else f"Sequential Read ({payload_len} bytes)"
+    )
     summary = f"EEPROM {read_type}"
     if last_known_offset is not None:
         summary += f" from 0x{last_known_offset:04X}"
-        
+
     preview = " ".join(f"{b:02X}" for b in data_bytes[:8]) + ("..." if len(data_bytes) > 8 else "")
     summary += f": [{preview}]"
-    
+
     return {
         "type": read_type,
         "payload_len": payload_len,
         "start_offset": last_known_offset,
-        "start_offset_hex": f"0x{last_known_offset:04X}" if last_known_offset is not None else "Unknown",
+        "start_offset_hex": f"0x{last_known_offset:04X}"
+        if last_known_offset is not None
+        else "Unknown",
         "data_bytes": [f"0x{b:02X}" for b in data_bytes],
         "summary": summary,
     }

@@ -88,7 +88,7 @@ class ServerMgmtParser:
             type_byte = raw_bytes[payload_start]
             msg_type = type_byte & 0x7F
             type_name = MCTP_MSG_TYPES.get(msg_type, f"Type 0x{msg_type:02X}")
-            payload = raw_bytes[payload_start + 1:]
+            payload = raw_bytes[payload_start + 1 :]
             # Decode PLDM payload if Type 0x01
             if msg_type == 0x01 and len(payload) >= 3:
                 is_rq = bool(payload[0] & 0x80)
@@ -97,7 +97,9 @@ class ServerMgmtParser:
                 pldm_cmd = payload[2]
                 pldm_t_name = PLDM_TYPES.get(pldm_type, f"Type 0x{pldm_type:02X}")
                 rq_str = "Request" if is_rq else "Response"
-                pldm_info = f"PLDM {pldm_t_name} {rq_str}: Cmd 0x{pldm_cmd:02X} (Instance {inst_id})"
+                pldm_info = (
+                    f"PLDM {pldm_t_name} {rq_str}: Cmd 0x{pldm_cmd:02X} (Instance {inst_id})"
+                )
                 if not is_rq and len(payload) >= 4:
                     cc_code = payload[3]
                     pldm_info += f" [CC: 0x{cc_code:02X}]"
@@ -122,7 +124,7 @@ class ServerMgmtParser:
             payload=payload,
             payload_hex=payload_hex,
             summary=summary,
-            pldm_command=pldm_info
+            pldm_command=pldm_info,
         )
 
     @classmethod
@@ -169,7 +171,7 @@ class ServerMgmtParser:
             cmd_name=cmd_name,
             data=data,
             checksum2_valid=chk2_valid,
-            summary=summary
+            summary=summary,
         )
 
     @classmethod
@@ -202,10 +204,12 @@ class ServerMgmtParser:
             if mctp:
                 mctp_list.append(mctp)
 
-        summary_str = f"Decoded {len(mctp_list)} MCTP packet(s) and {len(ipmb_list)} IPMB frame(s). "
+        summary_str = (
+            f"Decoded {len(mctp_list)} MCTP packet(s) and {len(ipmb_list)} IPMB frame(s). "
+        )
         return ServerMgmtReport(
             mctp_packets=mctp_list,
             ipmb_frames=ipmb_list,
             total_frames=len(mctp_list) + len(ipmb_list),
-            summary_text=summary_str
+            summary_text=summary_str,
         )

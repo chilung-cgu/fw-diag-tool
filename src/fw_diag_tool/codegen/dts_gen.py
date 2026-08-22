@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 COMPATIBLE_MAP = {
     "EEPROM": ("atmel,24c64", "pagesize = <32>;"),
     "Temperature Sensor": ("national,lm75", ""),
@@ -22,14 +21,18 @@ class DeviceTreeGenerator:
         bus_num: int = 1,
         mux_addr: int | str = 0x70,
         devices: list[dict[str, Any]] | None = None,
-        node_name: str = "i2c_bus"
+        node_name: str = "i2c_bus",
     ) -> str:
-        devs = devices if devices is not None else [
-            {"addr": 0x50, "type": "EEPROM", "channel": 0, "name": "eeprom"},
-            {"addr": 0x48, "type": "Temperature Sensor", "channel": 1, "name": "temp-sensor"},
-            {"addr": 0x40, "type": "Power Monitor", "channel": 2, "name": "power-monitor"},
-            {"addr": 0x58, "type": "PMBus", "channel": 3, "name": "vr-controller"},
-        ]
+        devs = (
+            devices
+            if devices is not None
+            else [
+                {"addr": 0x50, "type": "EEPROM", "channel": 0, "name": "eeprom"},
+                {"addr": 0x48, "type": "Temperature Sensor", "channel": 1, "name": "temp-sensor"},
+                {"addr": 0x40, "type": "Power Monitor", "channel": 2, "name": "power-monitor"},
+                {"addr": 0x58, "type": "PMBus", "channel": 3, "name": "vr-controller"},
+            ]
+        )
 
         m_addr = int(str(mux_addr), 0) if isinstance(mux_addr, str) else int(mux_addr)
 
@@ -41,11 +44,11 @@ class DeviceTreeGenerator:
             " */",
             "",
             f"&i2c{bus_num} {{",
-            "    status = \"okay\";",
+            '    status = "okay";',
             "    bus-frequency = <400000>;",
             "",
             f"    i2c-mux@{m_addr:x} {{",
-            "        compatible = \"nxp,pca9548\";",
+            '        compatible = "nxp,pca9548";',
             f"        reg = <0x{m_addr:02x}>;",
             "        #address-cells = <1>;",
             "        #size-cells = <0>;",
@@ -79,7 +82,7 @@ class DeviceTreeGenerator:
                 d_name = base_name if seen_count == 0 else f"{base_name}_{seen_count}"
                 compat, extra = COMPATIBLE_MAP.get(d_type, ("generic,i2c-device", ""))
                 lines.append(f"            {d_name}@{d_addr:x} {{")
-                lines.append(f"                compatible = \"{compat}\";")
+                lines.append(f'                compatible = "{compat}";')
                 lines.append(f"                reg = <0x{d_addr:02x}>;")
                 if extra:
                     for ex_line in extra.splitlines():

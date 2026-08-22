@@ -11,7 +11,11 @@ class UARTReporter:
     @staticmethod
     def render_terminal(report: UARTReport, console: Console | None = None) -> None:
         c = console or Console()
-        c.print(Panel(f"[bold red]⚡ UART Crash & HardFault Diagnostic Report[/]\nType: [yellow]{report.crash_type.value}[/]"))
+        c.print(
+            Panel(
+                f"[bold red]⚡ UART Crash & HardFault Diagnostic Report[/]\nType: [yellow]{report.crash_type.value}[/]"
+            )
+        )
 
         if report.kernel_panic:
             kp = report.kernel_panic
@@ -37,11 +41,21 @@ class UARTReporter:
                 trace_tbl.add_column("Offset", style="yellow")
                 trace_tbl.add_column("Module", style="green")
                 for frame in kp.call_trace:
-                    trace_tbl.add_row(str(frame.index), frame.function_name, frame.offset, frame.module or "[kernel]")
+                    trace_tbl.add_row(
+                        str(frame.index),
+                        frame.function_name,
+                        frame.offset,
+                        frame.module or "[kernel]",
+                    )
                 c.print(trace_tbl)
 
             chk_str = "\n".join(f"- ✔ {chk}" for chk in kp.actionable_checklist)
-            c.print(Panel(f"[bold yellow]Root Cause Analysis:[/]\n{kp.root_cause_analysis}\n\n[bold green]Actionable Debug Checklist:[/]\n{chk_str}", border_style="red"))
+            c.print(
+                Panel(
+                    f"[bold yellow]Root Cause Analysis:[/]\n{kp.root_cause_analysis}\n\n[bold green]Actionable Debug Checklist:[/]\n{chk_str}",
+                    border_style="red",
+                )
+            )
 
         elif report.arm_hardfault:
             hf = report.arm_hardfault
@@ -49,7 +63,10 @@ class UARTReporter:
             hf_tbl.add_column("Register", style="cyan")
             hf_tbl.add_column("Hex Value", style="bold white")
             hf_tbl.add_row("HFSR", f"0x{hf.hfsr_raw:08X}")
-            hf_tbl.add_row("CFSR (UFSR/BFSR/MMFSR)", f"0x{hf.cfsr_raw:08X} (U:0x{hf.ufsr_raw:04X} B:0x{hf.bfsr_raw:02X} M:0x{hf.mmfsr_raw:02X})")
+            hf_tbl.add_row(
+                "CFSR (UFSR/BFSR/MMFSR)",
+                f"0x{hf.cfsr_raw:08X} (U:0x{hf.ufsr_raw:04X} B:0x{hf.bfsr_raw:02X} M:0x{hf.mmfsr_raw:02X})",
+            )
             if hf.pc_faulting is not None:
                 hf_tbl.add_row("Faulting PC", f"0x{hf.pc_faulting:08X}")
             if hf.lr_exc_return is not None:
@@ -61,7 +78,12 @@ class UARTReporter:
             c.print(hf_tbl)
 
             chk_str = "\n".join(f"- ✔ {chk}" for chk in hf.actionable_checklist)
-            c.print(Panel(f"[bold yellow]Root Cause Analysis:[/]\n{hf.root_cause_analysis}\n\n[bold green]Actionable Checklist:[/]\n{chk_str}", border_style="red"))
+            c.print(
+                Panel(
+                    f"[bold yellow]Root Cause Analysis:[/]\n{hf.root_cause_analysis}\n\n[bold green]Actionable Checklist:[/]\n{chk_str}",
+                    border_style="red",
+                )
+            )
 
     @staticmethod
     def to_markdown(report: UARTReport) -> str:
@@ -83,7 +105,9 @@ class UARTReporter:
                 lines.append("| # | Function | Offset | Module |")
                 lines.append("|---|---|---|---|")
                 for f in kp.call_trace:
-                    lines.append(f"| #{f.index} | `{f.function_name}` | `{f.offset}` | `{f.module or 'kernel'}` |")
+                    lines.append(
+                        f"| #{f.index} | `{f.function_name}` | `{f.offset}` | `{f.module or 'kernel'}` |"
+                    )
                 lines.append("")
             lines.append("## 3. Root Cause Analysis & Debug Checklist")
             lines.append(f"```text\n{kp.root_cause_analysis}\n```\n")
@@ -93,7 +117,9 @@ class UARTReporter:
             hf = report.arm_hardfault
             lines.append("## 1. HardFault Registers")
             lines.append(f"- **HFSR**: `0x{hf.hfsr_raw:08X}`")
-            lines.append(f"- **CFSR**: `0x{hf.cfsr_raw:08X}` (UFSR: `0x{hf.ufsr_raw:04X}`, BFSR: `0x{hf.bfsr_raw:02X}`, MMFSR: `0x{hf.mmfsr_raw:02X}`)")
+            lines.append(
+                f"- **CFSR**: `0x{hf.cfsr_raw:08X}` (UFSR: `0x{hf.ufsr_raw:04X}`, BFSR: `0x{hf.bfsr_raw:02X}`, MMFSR: `0x{hf.mmfsr_raw:02X}`)"
+            )
             if hf.pc_faulting is not None:
                 lines.append(f"- **Faulting PC**: `0x{hf.pc_faulting:08X}`")
             if hf.bfar_raw is not None:

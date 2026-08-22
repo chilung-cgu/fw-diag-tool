@@ -1,4 +1,3 @@
-
 import pytest
 
 from fw_diag_tool.analyzers.register_mapper import BitField
@@ -26,6 +25,7 @@ def test_pcie_diagnostics_no_attribute_error():
     assert any(f["type"] == "AER_UNCORRECTABLE" for f in findings)
     assert any(f["type"] == "AER_CORRECTABLE" for f in findings)
 
+
 def test_pcie_config_tlp_dw2_ext_register():
     dw0 = 0x04000001
     dw1 = 0x0010010F
@@ -33,6 +33,7 @@ def test_pcie_config_tlp_dw2_ext_register():
     tlp = PCIeAnalyzer.decode_tlp_header(dw0, dw1, dw2, 0)
     assert tlp.type_name == "CfgRd0 (Config Read Type 0)"
     assert (tlp.address & 0xFFF) == 0x100
+
 
 def test_pmbus_linear16_signed_trim():
     raw_word = 0xFFE6  # -26 in 16-bit 2s complement
@@ -42,6 +43,7 @@ def test_pmbus_linear16_signed_trim():
     assert val_unsigned > 100.0
     res = decode_pmbus_payload(0x22, [0xE6, 0xFF], vout_exponent=-9)
     assert res["value"] < 0.0
+
 
 def test_pmbus_vout_mode_read_dynamic_update():
     csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
@@ -55,6 +57,7 @@ def test_pmbus_vout_mode_read_dynamic_update():
     tx_vout = report.transactions[-1]
     assert tx_vout.command_name == "READ_VOUT"
     assert tx_vout.decoded_values.get("value") == 1.0
+
 
 def test_spi_volatile_wren_and_chip_erase_alt():
     csv_data = """Time [s],MOSI,MISO,Enable
@@ -72,6 +75,7 @@ def test_spi_volatile_wren_and_chip_erase_alt():
     assert report.anomalies[0].code == "SPI_WRITE_NO_WREN"
     assert report.anomalies[0].transaction_id == 3
 
+
 def test_spi_jedec_line_fault():
     # MISO all 0xFF -> floating line
     csv_data = """Time [s],MOSI,MISO,Enable
@@ -85,9 +89,11 @@ def test_spi_jedec_line_fault():
     report = engine.analyze_csv_content(csv_data)
     assert any(a.code == "SPI_JEDEC_LINE_FAULT" for a in report.anomalies)
 
+
 def test_eeprom_zero_page_size_guard():
     res = decode_eeprom_write([0x00, 0x12, 0x34], page_size=0)
     assert res["page_size"] == 0 or res["offset"] == 0
+
 
 def test_linear11_nan_inf_guard():
     with pytest.raises(ValueError):
@@ -96,6 +102,7 @@ def test_linear11_nan_inf_guard():
         encode_linear11(float("inf"))
     assert encode_linear11(0.0) == 0x0000
 
+
 def test_bitfield_bracket_and_reverse_range():
     bf1 = BitField(name="TEST1", bit_range="[15:0]")
     assert bf1.high_bit == 15 and bf1.low_bit == 0
@@ -103,12 +110,12 @@ def test_bitfield_bracket_and_reverse_range():
     assert bf2.high_bit == 7 and bf2.low_bit == 0
     assert bf2.bit_mask == 0xFF
 
+
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
 from fw_diag_tool.i2c.models import AckType, I2CDirection, I2CTransaction
 from fw_diag_tool.i2c.waveform import I2CWaveformReconstructor
-from fw_diag_tool.i2c.waveform_diff import WaveformDiffEngine, WaveformDiffReport, DivergencePoint
+from fw_diag_tool.i2c.waveform_diff import DivergencePoint, WaveformDiffEngine, WaveformDiffReport
 from fw_diag_tool.mctp.parser import ServerMgmtParser
-from fw_diag_tool.mctp.reporter import ServerMgmtReporter
 from fw_diag_tool.uart.models import CrashType
 from fw_diag_tool.uart.parser import UARTCrashParser
 from fw_diag_tool.uart.reporter import UARTReporter
@@ -230,7 +237,9 @@ def test_dts_gen_string_hex_and_duplicate_nodes():
         {"addr": "0x50", "type": "EEPROM", "channel": "0", "name": "eeprom"},
         {"addr": 0x48, "type": "Temperature Sensor", "channel": 1, "name": "temp-sensor"},
     ]
-    dts = DeviceTreeGenerator.generate_dts_from_topology(bus_num=2, mux_addr="0x70", devices=devices)
+    dts = DeviceTreeGenerator.generate_dts_from_topology(
+        bus_num=2, mux_addr="0x70", devices=devices
+    )
     assert "&i2c2 {" in dts
     assert "i2c-mux@70 {" in dts
     assert "eeprom@50 {" in dts
@@ -239,29 +248,66 @@ def test_dts_gen_string_hex_and_duplicate_nodes():
 
 def test_waveform_diff_identical_traces_figure():
     tx = I2CTransaction(
-        id=1, start_time=0.0, end_time=0.0001, address_7bit=0x50, address_8bit=0xA0,
-        direction=I2CDirection.WRITE, data_bytes=[0x00], address_ack=AckType.ACK, has_stop=True
+        id=1,
+        start_time=0.0,
+        end_time=0.0001,
+        address_7bit=0x50,
+        address_8bit=0xA0,
+        direction=I2CDirection.WRITE,
+        data_bytes=[0x00],
+        address_ack=AckType.ACK,
+        has_stop=True,
     )
-    diff = WaveformDiffReport(is_identical=True, total_compared=1, divergence_points=[], summary="Identical", golden_first_tx=tx, failing_first_tx=tx)
+    diff = WaveformDiffReport(
+        is_identical=True,
+        total_compared=1,
+        divergence_points=[],
+        summary="Identical",
+        golden_first_tx=tx,
+        failing_first_tx=tx,
+    )
     fig = WaveformDiffEngine.create_comparison_figure(diff)
     assert len(fig.data) >= 2  # Has traces in subplots
 
 
 def test_waveform_diff_missing_tx_figure():
     tx = I2CTransaction(
-        id=1, start_time=0.0, end_time=0.0001, address_7bit=0x50, address_8bit=0xA0,
-        direction=I2CDirection.WRITE, data_bytes=[0x00], address_ack=AckType.ACK, has_stop=True
+        id=1,
+        start_time=0.0,
+        end_time=0.0001,
+        address_7bit=0x50,
+        address_8bit=0xA0,
+        direction=I2CDirection.WRITE,
+        data_bytes=[0x00],
+        address_ack=AckType.ACK,
+        has_stop=True,
     )
-    dp = DivergencePoint(tx_index=1, golden_tx=tx, failing_tx=None, mismatch_type="MISSING_TX", description="Premature termination", root_cause_hint="Check driver")
-    diff = WaveformDiffReport(is_identical=False, total_compared=1, divergence_points=[dp], summary="Diverged")
+    dp = DivergencePoint(
+        tx_index=1,
+        golden_tx=tx,
+        failing_tx=None,
+        mismatch_type="MISSING_TX",
+        description="Premature termination",
+        root_cause_hint="Check driver",
+    )
+    diff = WaveformDiffReport(
+        is_identical=False, total_compared=1, divergence_points=[dp], summary="Diverged"
+    )
     fig = WaveformDiffEngine.create_comparison_figure(diff)
     assert fig is not None
 
 
 def test_waveform_reconstructor_zero_clock_guard():
     tx = I2CTransaction(
-        id=1, start_time=0.0, end_time=0.0001, address_7bit=0x50, address_8bit=0xA0,
-        direction=I2CDirection.WRITE, data_bytes=[0x00], address_ack=AckType.ACK, has_stop=True
+        id=1,
+        start_time=0.0,
+        end_time=0.0001,
+        address_7bit=0x50,
+        address_8bit=0xA0,
+        direction=I2CDirection.WRITE,
+        data_bytes=[0x00],
+        address_ack=AckType.ACK,
+        has_stop=True,
     )
     rec = I2CWaveformReconstructor(default_clock_khz=0.0)
     wave = rec.reconstruct_transaction_waveform(tx, clock_khz=-10.0)

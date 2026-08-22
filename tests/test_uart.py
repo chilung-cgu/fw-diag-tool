@@ -23,6 +23,7 @@ Call Trace:
     md = UARTReporter.to_markdown(report)
     assert "nvme_pci_complete_rq" in md
 
+
 def test_arm_hardfault_parsing():
     hardfault_log = """HardFault Exception Occurred!
 HFSR: 0x40000000 (FORCED)

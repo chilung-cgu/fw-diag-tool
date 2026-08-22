@@ -27,7 +27,9 @@ app = typer.Typer(
     add_completion=False,
 )
 i2c_app = typer.Typer(name="i2c", help="I2C / SMBus / PMBus Trace & Protocol Diagnostic Tools")
-pcie_app = typer.Typer(name="pcie", help="PCIe Config Space, Capabilities, AER & TLP Header Diagnostics")
+pcie_app = typer.Typer(
+    name="pcie", help="PCIe Config Space, Capabilities, AER & TLP Header Diagnostics"
+)
 spi_app = typer.Typer(name="spi", help="SPI / QSPI Flash Protocol & Sequence Diagnostic Tools")
 uart_app = typer.Typer(name="uart", help="UART Serial Crash Dump & ARM HardFault Diagnostic Tools")
 mctp_app = typer.Typer(name="mctp", help="MCTP & IPMB Server Management Protocol Tools")
@@ -47,10 +49,18 @@ console = Console()
 
 @i2c_app.command("analyze")
 def analyze_i2c_trace(
-    file_path: Path = typer.Argument(..., help="Path to Saleae Logic 2 CSV, generic CSV, or text trace log"),
-    markdown_out: Path | None = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
-    json_out: Path | None = typer.Option(None, "--json", "-j", help="Export JSON structured report to file"),
-    smbus_timeout: float = typer.Option(25.0, "--smbus-timeout", help="SMBus clock stretching timeout in ms (default: 25.0)"),
+    file_path: Path = typer.Argument(
+        ..., help="Path to Saleae Logic 2 CSV, generic CSV, or text trace log"
+    ),
+    markdown_out: Path | None = typer.Option(
+        None, "--md", "-m", help="Export markdown diagnostic report to file"
+    ),
+    json_out: Path | None = typer.Option(
+        None, "--json", "-j", help="Export JSON structured report to file"
+    ),
+    smbus_timeout: float = typer.Option(
+        25.0, "--smbus-timeout", help="SMBus clock stretching timeout in ms (default: 25.0)"
+    ),
 ):
     """Analyze an I2C / SMBus / PMBus trace, decode transactions, check timing, and diagnose faults."""
     if not file_path.exists():
@@ -70,8 +80,12 @@ def analyze_i2c_trace(
 
 @pcie_app.command("analyze")
 def analyze_pcie(
-    file_or_dump: str = typer.Argument(..., help="Path to lspci text / hex dump file, dmesg log file, or raw hex string"),
-    markdown_out: Path | None = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
+    file_or_dump: str = typer.Argument(
+        ..., help="Path to lspci text / hex dump file, dmesg log file, or raw hex string"
+    ),
+    markdown_out: Path | None = typer.Option(
+        None, "--md", "-m", help="Export markdown diagnostic report to file"
+    ),
 ):
     """Analyze PCIe Config Space, Capability list, AER errors, and decode faulting TLP Headers."""
     content = file_or_dump
@@ -79,10 +93,18 @@ def analyze_pcie(
         p = Path(file_or_dump)
         if p.exists():
             content = p.read_text(encoding="utf-8")
-    if "PCIe Bus Error:" in content or ("AER:" in content and "lspci" not in content.lower() and not any(line.strip().startswith("00:") for line in content.splitlines())):
+    if "PCIe Bus Error:" in content or (
+        "AER:" in content
+        and "lspci" not in content.lower()
+        and not any(line.strip().startswith("00:") for line in content.splitlines())
+    ):
         events = PCIeAnalyzer.parse_dmesg_aer(content)
         report_md = PCIeReporter.format_dmesg_events(events)
-        console.print(Panel(f"[bold cyan]Kernel dmesg AER Diagnostic Report[/]\nFound {len(events)} AER event(s)"))
+        console.print(
+            Panel(
+                f"[bold cyan]Kernel dmesg AER Diagnostic Report[/]\nFound {len(events)} AER event(s)"
+            )
+        )
         console.print(report_md)
     else:
         devices = PCIeAnalyzer.parse_multi_lspci_text(content)
@@ -93,23 +115,39 @@ def analyze_pcie(
         for cfg in devices:
             report_md = PCIeReporter.to_markdown(cfg)
             all_mds.append(report_md)
-            console.print(Panel(f"[bold green]PCIe Device Config Space Decoded (BDF: {cfg.bdf or 'N/A'})[/]"))
+            console.print(
+                Panel(f"[bold green]PCIe Device Config Space Decoded (BDF: {cfg.bdf or 'N/A'})[/]")
+            )
             table = Table(title="Device Overview", show_header=True)
             table.add_column("Property", style="cyan")
             table.add_column("Value", style="yellow")
             table.add_row("Vendor / Device ID", f"0x{cfg.vendor_id:04X} / 0x{cfg.device_id:04X}")
-            table.add_row("Class", f"{cfg.class_name} (0x{cfg.base_class:02X}{cfg.sub_class:02X}{cfg.prog_if:02X})")
+            table.add_row(
+                "Class",
+                f"{cfg.class_name} (0x{cfg.base_class:02X}{cfg.sub_class:02X}{cfg.prog_if:02X})",
+            )
             table.add_row("Header Type", f"{cfg.header_type.name}")
             table.add_row("Standard Capabilities", str(len(cfg.standard_capabilities)))
             table.add_row("Extended Capabilities", str(len(cfg.extended_capabilities)))
             if cfg.link_info:
                 status_color = "red" if cfg.link_info.is_degraded else "green"
-                table.add_row("Link Negotiation", f"[{status_color}]{cfg.link_info.current_speed_str} x{cfg.link_info.current_width}[/] (Max: {cfg.link_info.max_speed_str} x{cfg.link_info.max_width})")
+                table.add_row(
+                    "Link Negotiation",
+                    f"[{status_color}]{cfg.link_info.current_speed_str} x{cfg.link_info.current_width}[/] (Max: {cfg.link_info.max_speed_str} x{cfg.link_info.max_width})",
+                )
             if cfg.aer_analysis:
-                table.add_row("AER Fatal / Non-Fatal / Corr", f"{cfg.aer_analysis.active_uncorr_fatal_count} / {cfg.aer_analysis.active_uncorr_nonfatal_count} / {cfg.aer_analysis.active_corr_count}")
+                table.add_row(
+                    "AER Fatal / Non-Fatal / Corr",
+                    f"{cfg.aer_analysis.active_uncorr_fatal_count} / {cfg.aer_analysis.active_uncorr_nonfatal_count} / {cfg.aer_analysis.active_corr_count}",
+                )
             console.print(table)
             if cfg.link_info and cfg.link_info.is_degraded:
-                console.print(Panel(f"[bold red]🚨 {cfg.link_info.degradation_reason}[/]\n\n{cfg.link_info.root_cause_guide}", border_style="red"))
+                console.print(
+                    Panel(
+                        f"[bold red]🚨 {cfg.link_info.degradation_reason}[/]\n\n{cfg.link_info.root_cause_guide}",
+                        border_style="red",
+                    )
+                )
         if markdown_out:
             markdown_out.write_text("\n\n---\n\n".join(all_mds), encoding="utf-8")
             console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
@@ -118,7 +156,9 @@ def analyze_pcie(
 @spi_app.command("analyze")
 def analyze_spi_trace(
     file_path: Path = typer.Argument(..., help="Path to Saleae Logic 2 SPI CSV export"),
-    markdown_out: Path | None = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
+    markdown_out: Path | None = typer.Option(
+        None, "--md", "-m", help="Export markdown diagnostic report to file"
+    ),
 ):
     """Analyze SPI / QSPI NOR Flash trace, decode JEDEC opcodes, and detect write/erase hazards."""
     if not file_path.exists():
@@ -134,8 +174,12 @@ def analyze_spi_trace(
 
 @uart_app.command("analyze")
 def analyze_uart_crash(
-    file_or_text: str = typer.Argument(..., help="Path to UART crash log file or raw crash dump string"),
-    markdown_out: Path | None = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
+    file_or_text: str = typer.Argument(
+        ..., help="Path to UART crash log file or raw crash dump string"
+    ),
+    markdown_out: Path | None = typer.Option(
+        None, "--md", "-m", help="Export markdown diagnostic report to file"
+    ),
 ):
     """Analyze Linux Kernel Panic or ARM Cortex-M HardFault crash dumps."""
     content = file_or_text
@@ -153,7 +197,9 @@ def analyze_uart_crash(
 @mctp_app.command("analyze")
 def analyze_mctp(
     file_or_dump: str = typer.Argument(..., help="Path to MCTP / IPMB hex dump file or text line"),
-    markdown_out: Path | None = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
+    markdown_out: Path | None = typer.Option(
+        None, "--md", "-m", help="Export markdown diagnostic report to file"
+    ),
 ):
     """Decode MCTP (DSP0236/PLDM/SPDM) packets and IPMB server management frames."""
     content = file_or_dump
@@ -183,7 +229,9 @@ def decode_register(
     try:
         val = int(raw_value, 0)
     except ValueError:
-        console.print(f"[bold red]Error: Invalid raw value '{raw_value}' (must be integer or hex format like 0x10)![/]")
+        console.print(
+            f"[bold red]Error: Invalid raw value '{raw_value}' (must be integer or hex format like 0x10)![/]"
+        )
         raise typer.Exit(code=1)
     result = catalog.decode_register(reg_name_or_offset, val)
     table = Table(title=f"Register Decode: {result.reg_name} ({result.hex_val})", show_header=True)
@@ -202,8 +250,12 @@ def decode_register(
 @gen_app.command("c-header")
 def generate_c_header(
     yaml_file: Path = typer.Argument(..., help="Path to register definition YAML file"),
-    output_header: Path | None = typer.Option(None, "--out", "-o", help="Output C header file path"),
-    module_name: str = typer.Option("CHIP_REGS", "--name", "-n", help="C header module name / guard prefix"),
+    output_header: Path | None = typer.Option(
+        None, "--out", "-o", help="Output C header file path"
+    ),
+    module_name: str = typer.Option(
+        "CHIP_REGS", "--name", "-n", help="C header module name / guard prefix"
+    ),
 ):
     """Generate MISRA-compliant C header definitions and RMW bitfield macros from YAML."""
     if not yaml_file.exists():
@@ -228,7 +280,9 @@ def generate_dts(
     try:
         m_addr = int(mux_addr, 0)
     except ValueError:
-        console.print(f"[bold red]Error: Invalid MUX address '{mux_addr}' (must be hex like 0x70)![/]")
+        console.print(
+            f"[bold red]Error: Invalid MUX address '{mux_addr}' (must be hex like 0x70)![/]"
+        )
         raise typer.Exit(code=1)
     dts_text = DeviceTreeGenerator.generate_dts_from_topology(bus_num=bus_num, mux_addr=m_addr)
     if output_dts:
@@ -239,17 +293,33 @@ def generate_dts(
 
 
 @app.command("gui")
-def launch_gui(port: int = typer.Option(8501, "--port", "-p"), host: str = typer.Option("127.0.0.1", "--host", "-h")):
+def launch_gui(
+    port: int = typer.Option(8501, "--port", "-p"),
+    host: str = typer.Option("127.0.0.1", "--host", "-h"),
+):
     """Launch the interactive Web GUI dashboard."""
     import subprocess
     import sys
+
     app_path = Path(__file__).parent / "gui" / "app.py"
     console.print(f"[bold green]🚀 Launching Web GUI on http://{host}:{port}...[/]")
-    subprocess.run([sys.executable, "-m", "streamlit", "run", str(app_path), f"--server.port={port}", f"--server.address={host}"], check=False)
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "streamlit",
+            "run",
+            str(app_path),
+            f"--server.port={port}",
+            f"--server.address={host}",
+        ],
+        check=False,
+    )
 
 
 def main():
     app()
+
 
 if __name__ == "__main__":
     main()

@@ -13,6 +13,7 @@ from typing import Any
 @dataclass
 class ChipProfile:
     """Known chip profile information."""
+
     name: str
     category: str
     protocol: str  # "I2C", "SMBus", "PMBus", "EEPROM", etc.
@@ -34,7 +35,7 @@ CHIP_DATABASE: list[ChipProfile] = [
         description="I2C Serial EEPROM (e.g. 24C02/04/08/16/32/64/128/256/512/M01)",
         addr_7bit_range=list(range(0x50, 0x58)),  # 0x50 - 0x57
         default_register_len=1,
-        extra_info={"page_size_bytes": 16, "write_cycle_ms": 5.0}
+        extra_info={"page_size_bytes": 16, "write_cycle_ms": 5.0},
     ),
     ChipProfile(
         name="DDC / EDID Display EEPROM",
@@ -45,7 +46,6 @@ CHIP_DATABASE: list[ChipProfile] = [
         addr_7bit_range=[0x50],
         default_register_len=1,
     ),
-    
     # 2. Temperature & Environmental Sensors
     ChipProfile(
         name="LM75 / TMP75 / TMP102 Temperature Sensor",
@@ -55,7 +55,7 @@ CHIP_DATABASE: list[ChipProfile] = [
         description="Digital Temperature Sensor with 9-bit to 12-bit Two's Complement resolution",
         addr_7bit_range=list(range(0x48, 0x50)),  # 0x48 - 0x4F
         default_register_len=1,
-        extra_info={"reg_temp": 0x00, "reg_config": 0x01, "reg_thyst": 0x02, "reg_tos": 0x03}
+        extra_info={"reg_temp": 0x00, "reg_config": 0x01, "reg_thyst": 0x02, "reg_tos": 0x03},
     ),
     ChipProfile(
         name="ADT7410 / ADT7420 High-Accuracy Temp Sensor",
@@ -75,7 +75,6 @@ CHIP_DATABASE: list[ChipProfile] = [
         addr_7bit_range=list(range(0x18, 0x20)),  # 0x18 - 0x1F
         default_register_len=1,
     ),
-    
     # 3. Voltage, Current, and Power Monitors
     ChipProfile(
         name="INA219 / INA226 / INA230 Current/Power Monitor",
@@ -92,7 +91,7 @@ CHIP_DATABASE: list[ChipProfile] = [
             "reg_power": 0x03,
             "reg_current": 0x04,
             "reg_cal": 0x05,
-        }
+        },
     ),
     ChipProfile(
         name="PAC1934 Multi-Channel Power Monitor",
@@ -103,7 +102,6 @@ CHIP_DATABASE: list[ChipProfile] = [
         addr_7bit_range=[0x10, 0x11, 0x12],
         default_register_len=1,
     ),
-    
     # 4. GPIO Expanders
     ChipProfile(
         name="PCA9555 / TCA9539 / PCA9535 16-bit GPIO Expander",
@@ -113,7 +111,14 @@ CHIP_DATABASE: list[ChipProfile] = [
         description="16-bit I2C/SMBus I/O Expander with Interrupt Output and Config Registers",
         addr_7bit_range=list(range(0x20, 0x28)),  # 0x20 - 0x27
         default_register_len=1,
-        extra_info={"reg_in0": 0x00, "reg_in1": 0x01, "reg_out0": 0x02, "reg_out1": 0x03, "reg_cfg0": 0x06, "reg_cfg1": 0x07}
+        extra_info={
+            "reg_in0": 0x00,
+            "reg_in1": 0x01,
+            "reg_out0": 0x02,
+            "reg_out1": 0x03,
+            "reg_cfg0": 0x06,
+            "reg_cfg1": 0x07,
+        },
     ),
     ChipProfile(
         name="PCF8574 / PCF8574A 8-bit Quasi-bidirectional GPIO Expander",
@@ -133,7 +138,6 @@ CHIP_DATABASE: list[ChipProfile] = [
         addr_7bit_range=list(range(0x20, 0x28)),
         default_register_len=1,
     ),
-    
     # 5. PMBus Power Controllers & Voltage Regulators (VR)
     ChipProfile(
         name="PMBus Power Controller / VR (XDPE / ISL / TPS / MP / MAX)",
@@ -153,7 +157,6 @@ CHIP_DATABASE: list[ChipProfile] = [
         addr_7bit_range=list(range(0x58, 0x60)),
         default_register_len=1,
     ),
-    
     # 6. Real-Time Clocks (RTC)
     ChipProfile(
         name="DS1307 / DS3231 / PCF8563 Real-Time Clock",
@@ -163,9 +166,8 @@ CHIP_DATABASE: list[ChipProfile] = [
         description="I2C Real-Time Clock / Calendar with Battery Backup",
         addr_7bit_range=[0x68, 0x51, 0x6F],
         default_register_len=1,
-        extra_info={"reg_seconds": 0x00, "reg_minutes": 0x01, "reg_hours": 0x02}
+        extra_info={"reg_seconds": 0x00, "reg_minutes": 0x01, "reg_hours": 0x02},
     ),
-    
     # 7. Displays
     ChipProfile(
         name="SSD1306 / SH1106 OLED Display Controller",
@@ -175,9 +177,8 @@ CHIP_DATABASE: list[ChipProfile] = [
         description="128x64 Dot Matrix OLED/PLED Segment/Common Driver with Controller",
         addr_7bit_range=[0x3C, 0x3D],
         default_register_len=1,
-        extra_info={"control_cmd": 0x00, "control_data": 0x40}
+        extra_info={"control_cmd": 0x00, "control_data": 0x40},
     ),
-    
     # 8. I2C Bus Multiplexers / Switches
     ChipProfile(
         name="PCA9548A / PCA9546A / TCA9548A I2C Multiplexer",
@@ -188,7 +189,6 @@ CHIP_DATABASE: list[ChipProfile] = [
         addr_7bit_range=list(range(0x70, 0x78)),  # 0x70 - 0x77
         default_register_len=0,
     ),
-    
     # 9. Special Addresses (I2C Spec & SMBus Spec)
     ChipProfile(
         name="General Call / START Byte",

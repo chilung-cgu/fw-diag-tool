@@ -35,6 +35,7 @@ def test_spi_jedec_id_and_wren_program():
     md = SPIReporter.to_markdown(report)
     assert "Winbond W25Q128" in md
 
+
 def test_spi_write_without_wren_anomaly():
     # Page program issued directly without 0x06
     csv_data = """Time [s],MOSI,MISO,Enable
@@ -51,12 +52,13 @@ def test_spi_write_without_wren_anomaly():
     assert report.anomalies[0].code == "SPI_WRITE_NO_WREN"
     assert report.anomalies[0].severity == SPISeverity.CRITICAL
 
+
 def test_spi_page_program_wrap_around_hazard():
     # Program starting at offset 0xF0 with 30 bytes (> 256 page wrap)
     tx1_csv = "0.001,0x06,0x00,0\n0.002,0x00,0x00,1\n"
     tx2_rows = ["0.010,0x02,0x00,0", "0.011,0x00,0x00,0", "0.012,0x00,0x00,0", "0.013,0xF0,0x00,0"]
     for i in range(30):
-        tx2_rows.append(f"0.0{20+i},0x{i:02X},0x00,0")
+        tx2_rows.append(f"0.0{20 + i},0x{i:02X},0x00,0")
     tx2_rows.append("0.060,0x00,0x00,1")
     csv_data = "Time [s],MOSI,MISO,Enable\n" + tx1_csv + "\n".join(tx2_rows)
 

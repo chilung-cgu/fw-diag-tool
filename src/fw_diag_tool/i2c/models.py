@@ -10,6 +10,7 @@ from typing import Any
 
 class I2CDirection(str, Enum):
     """I2C Bus Transfer Direction."""
+
     WRITE = "WRITE"
     READ = "READ"
 
@@ -20,13 +21,15 @@ class I2CDirection(str, Enum):
 
 class AckType(str, Enum):
     """Acknowledge bit state."""
-    ACK = "ACK"      # 0 on SDA (Acknowledge)
-    NACK = "NACK"    # 1 on SDA (Not Acknowledge)
-    NONE = "NONE"    # Missing or unknown (e.g. bus hang)
+
+    ACK = "ACK"  # 0 on SDA (Acknowledge)
+    NACK = "NACK"  # 1 on SDA (Not Acknowledge)
+    NONE = "NONE"  # Missing or unknown (e.g. bus hang)
 
 
 class I2CSpeedMode(str, Enum):
     """I2C / SMBus nominal clock frequency class."""
+
     STANDARD_100K = "Standard-mode (100 kHz)"
     FAST_400K = "Fast-mode (400 kHz)"
     FAST_PLUS_1M = "Fast-mode Plus (1 MHz)"
@@ -36,6 +39,7 @@ class I2CSpeedMode(str, Enum):
 
 class Severity(str, Enum):
     """Diagnostic anomaly severity level."""
+
     INFO = "INFO"
     WARNING = "WARNING"
     ERROR = "ERROR"
@@ -44,6 +48,7 @@ class Severity(str, Enum):
 
 class RawEventType(str, Enum):
     """Type of raw I2C physical/protocol event."""
+
     START = "START"
     REPEATED_START = "REPEATED_START"
     STOP = "STOP"
@@ -56,6 +61,7 @@ class RawEventType(str, Enum):
 @dataclass
 class RawI2CEvent:
     """Raw I2C event extracted directly from Logic Analyzer or trace."""
+
     timestamp: float
     event_type: RawEventType
     packet_id: int | None = None
@@ -72,6 +78,7 @@ class RawI2CEvent:
 @dataclass
 class I2CBytePacket:
     """Single byte transfer with timing and ACK context."""
+
     timestamp: float
     byte_val: int
     is_address: bool
@@ -86,6 +93,7 @@ class I2CBytePacket:
 @dataclass
 class I2CTransaction:
     """Complete logical I2C transaction bounded by Start/Repeated-Start and Stop."""
+
     id: int
     start_time: float
     end_time: float
@@ -99,7 +107,7 @@ class I2CTransaction:
     has_stop: bool = False
     is_aborted: bool = False
     duration_us: float = 0.0
-    
+
     # Peripheral & Protocol Semantic Decoding
     device_name: str | None = None
     device_category: str | None = None
@@ -108,7 +116,7 @@ class I2CTransaction:
     command_code: int | None = None
     semantic_summary: str | None = None
     decoded_values: dict[str, Any] = field(default_factory=dict)
-    
+
     # Diagnostics & Timing
     mux_topology: str | None = None
     mux_channels: list[int] = field(default_factory=list)
@@ -127,6 +135,7 @@ class I2CTransaction:
 @dataclass
 class I2CDiagnosticIssue:
     """Diagnostic issue identified with root-cause analysis and actionable advice."""
+
     code: str
     title: str
     severity: Severity
@@ -151,13 +160,16 @@ class I2CDiagnosticIssue:
             "description": self.description,
             "root_cause_analysis": self.root_cause_analysis,
             "actionable_advice": self.actionable_advice,
-            "affected_bytes": [f"0x{b:02X}" for b in self.affected_bytes] if self.affected_bytes else None,
+            "affected_bytes": [f"0x{b:02X}" for b in self.affected_bytes]
+            if self.affected_bytes
+            else None,
         }
 
 
 @dataclass
 class TimingStatistics:
     """Bus clock frequency and timing jitter profile."""
+
     avg_frequency_khz: float = 0.0
     min_frequency_khz: float = 0.0
     max_frequency_khz: float = 0.0
@@ -193,6 +205,7 @@ class TimingStatistics:
 @dataclass
 class I2CAnalysisReport:
     """Comprehensive structured report containing all transactions and diagnostic findings."""
+
     total_events: int
     total_transactions: int
     total_duration_s: float
@@ -209,37 +222,37 @@ class I2CAnalysisReport:
     def to_dict(self) -> dict[str, Any]:
         return {
             "summary": {
-                 "total_events": self.total_events,
-                 "total_transactions": self.total_transactions,
-                 "total_duration_s": round(self.total_duration_s, 6),
-                 "devices_count": len(self.devices_detected),
-                 "issues_count": len(self.issues),
-                 "summary_text": self.summary_text,
+                "total_events": self.total_events,
+                "total_transactions": self.total_transactions,
+                "total_duration_s": round(self.total_duration_s, 6),
+                "devices_count": len(self.devices_detected),
+                "issues_count": len(self.issues),
+                "summary_text": self.summary_text,
             },
             "timing_stats": self.timing_stats.to_dict(),
             "devices_detected": self.devices_detected,
             "issues": [issue.to_dict() for issue in self.issues],
             "transactions": [
-                 {
-                     "id": tx.id,
-                     "start_time": round(tx.start_time, 6),
-                     "end_time": round(tx.end_time, 6),
-                     "duration_us": round(tx.duration_us, 2),
-                     "address_7bit": f"0x{tx.address_7bit:02X}",
-                     "address_8bit": f"0x{tx.address_8bit:02X}",
-                     "direction": tx.direction.value,
-                     "address_ack": tx.address_ack.value,
-                     "data_hex": tx.hex_dump,
-                     "byte_count": len(tx.data_bytes),
-                     "has_stop": tx.has_stop,
-                     "is_repeated_start": tx.is_repeated_start,
-                     "device_name": tx.device_name,
-                     "protocol": tx.protocol,
-                     "semantic_summary": tx.semantic_summary,
-                     "decoded_values": tx.decoded_values,
-                     "anomalies": tx.anomalies,
-                 }
-                 for tx in self.transactions
+                {
+                    "id": tx.id,
+                    "start_time": round(tx.start_time, 6),
+                    "end_time": round(tx.end_time, 6),
+                    "duration_us": round(tx.duration_us, 2),
+                    "address_7bit": f"0x{tx.address_7bit:02X}",
+                    "address_8bit": f"0x{tx.address_8bit:02X}",
+                    "direction": tx.direction.value,
+                    "address_ack": tx.address_ack.value,
+                    "data_hex": tx.hex_dump,
+                    "byte_count": len(tx.data_bytes),
+                    "has_stop": tx.has_stop,
+                    "is_repeated_start": tx.is_repeated_start,
+                    "device_name": tx.device_name,
+                    "protocol": tx.protocol,
+                    "semantic_summary": tx.semantic_summary,
+                    "decoded_values": tx.decoded_values,
+                    "anomalies": tx.anomalies,
+                }
+                for tx in self.transactions
             ],
         }
 

@@ -20,6 +20,7 @@ def test_i2c_mux_topology_tracking():
     assert "MUX 0x70: Ch2" in tx_eeprom.mux_topology
     assert tx_eeprom.mux_channels == [2]
 
+
 def test_i2c_mux_multi_channel_hazard():
     # Write to Mux 0x70 with 0x05 (Ch0 and Ch2 enabled simultaneously)
     csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK

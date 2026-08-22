@@ -34,19 +34,17 @@ def test_waveform_reconstruction_and_plotly():
     assert fig is not None
     assert len(fig.data) >= 3
 
+
 def test_driver_code_generator():
     snippets = I2CDriverCodeGenerator.generate_all_snippets(
-        addr_7bit=0x50,
-        reg_offset=0x10,
-        data_bytes=[0xAB, 0xCD],
-        is_read=False,
-        bus_num=2
+        addr_7bit=0x50, reg_offset=0x10, data_bytes=[0xAB, 0xCD], is_read=False, bus_num=2
     )
     assert "Linux Userspace (i2c-dev)" in snippets
     assert "0x50" in snippets["Linux Userspace (i2c-dev)"]
     assert "i2cset -y -f 2 0x50 0x10 0xAB b" in snippets["OpenBMC / Linux CLI (i2c-tools)"]
     assert "HAL_I2C_Mem_Write" in snippets["STM32 HAL C Driver"]
     assert "Wire.beginTransmission(0x50)" in snippets["Arduino / Wire.h"]
+
 
 def test_timing_charts_and_health_radar():
     csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK

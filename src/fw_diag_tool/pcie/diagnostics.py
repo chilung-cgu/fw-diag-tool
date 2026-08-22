@@ -18,7 +18,7 @@ ROOT_CAUSE_GUIDES: dict[str, str] = {
     "ReceiverError": "Receiver Error: Physical layer 8b/10b or 128b/130b decode error or framing error.",
     "Receiver Error": "Receiver Error: Physical layer 8b/10b or 128b/130b decode error or framing error.",
     "BadTLP": "Bad TLP: LCRC check failed in Data Link layer, triggering replay.",
-    "Bad TLP": "Bad TLP: LCRC check failed in Data Link layer, triggering replay."
+    "Bad TLP": "Bad TLP: LCRC check failed in Data Link layer, triggering replay.",
 }
 
 
@@ -35,44 +35,54 @@ def diagnose_pcie_device(dev: PCIeConfigSpace) -> list[dict[str, Any]]:
     if aer:
         for err in aer.uncorr_errors:
             if err.is_active:
-                findings.append({
-                    "type": "AER_UNCORRECTABLE",
-                    "severity": "CRITICAL" if err.severity == "Fatal" else "ERROR",
-                    "name": err.name,
-                    "guide": err.root_cause_guide or get_root_cause_guide(err.name)
-                })
+                findings.append(
+                    {
+                        "type": "AER_UNCORRECTABLE",
+                        "severity": "CRITICAL" if err.severity == "Fatal" else "ERROR",
+                        "name": err.name,
+                        "guide": err.root_cause_guide or get_root_cause_guide(err.name),
+                    }
+                )
         for err in aer.corr_errors:
             if err.is_active:
-                findings.append({
-                    "type": "AER_CORRECTABLE",
-                    "severity": "WARNING",
-                    "name": err.name,
-                    "guide": err.root_cause_guide or get_root_cause_guide(err.name)
-                })
+                findings.append(
+                    {
+                        "type": "AER_CORRECTABLE",
+                        "severity": "WARNING",
+                        "name": err.name,
+                        "guide": err.root_cause_guide or get_root_cause_guide(err.name),
+                    }
+                )
 
     mem_enable = bool(dev.command & (1 << 1))
     bus_master = bool(dev.command & (1 << 2))
     if not mem_enable:
-        findings.append({
-            "type": "CONFIG_WARNING",
-            "severity": "INFO",
-            "name": "Memory Space Disabled",
-            "guide": "Command Register Bit 1 (MSE) is 0."
-        })
+        findings.append(
+            {
+                "type": "CONFIG_WARNING",
+                "severity": "INFO",
+                "name": "Memory Space Disabled",
+                "guide": "Command Register Bit 1 (MSE) is 0.",
+            }
+        )
     if not bus_master:
-        findings.append({
-            "type": "CONFIG_WARNING",
-            "severity": "INFO",
-            "name": "Bus Master Disabled",
-            "guide": "Command Register Bit 2 (BME) is 0."
-        })
+        findings.append(
+            {
+                "type": "CONFIG_WARNING",
+                "severity": "INFO",
+                "name": "Bus Master Disabled",
+                "guide": "Command Register Bit 2 (BME) is 0.",
+            }
+        )
 
     if dev.link_info and dev.link_info.is_degraded:
-        findings.append({
-            "type": "LINK_DEGRADED",
-            "severity": "WARNING",
-            "name": "PCIe Link Degraded",
-            "guide": dev.link_info.degradation_reason + "\n" + dev.link_info.root_cause_guide
-        })
+        findings.append(
+            {
+                "type": "LINK_DEGRADED",
+                "severity": "WARNING",
+                "name": "PCIe Link Degraded",
+                "guide": dev.link_info.degradation_reason + "\n" + dev.link_info.root_cause_guide,
+            }
+        )
 
     return findings

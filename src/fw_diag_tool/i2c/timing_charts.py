@@ -32,7 +32,7 @@ class I2CTimingCharts:
             nbins=30,
             title=f"<b>SCL Clock Frequency Distribution</b> (Avg: {report.timing_stats.avg_frequency_khz:.1f} kHz, Jitter: {report.timing_stats.frequency_jitter_pct:.1f}%)",
             template="plotly_dark",
-            color_discrete_sequence=["#00CC96"]
+            color_discrete_sequence=["#00CC96"],
         )
         fig.update_layout(height=320, margin=dict(l=40, r=20, t=50, b=30))
         return fig
@@ -44,15 +44,17 @@ class I2CTimingCharts:
             status = "ACK" if tx.address_ack == AckType.ACK else "ADDR NAK"
             if any(p.ack == AckType.NACK for p in tx.byte_packets if not p.is_address):
                 status = "DATA NAK"
-            data.append({
-                "Transaction ID": f"#{tx.id}",
-                "Device": tx.device_name or f"0x{tx.address_7bit:02X}",
-                "Start Time (s)": tx.start_time,
-                "Duration (ms)": max(0.01, tx.duration_us / 1000.0),
-                "Direction": tx.direction.value,
-                "Status": status,
-                "Bytes": len(tx.data_bytes),
-            })
+            data.append(
+                {
+                    "Transaction ID": f"#{tx.id}",
+                    "Device": tx.device_name or f"0x{tx.address_7bit:02X}",
+                    "Start Time (s)": tx.start_time,
+                    "Duration (ms)": max(0.01, tx.duration_us / 1000.0),
+                    "Direction": tx.direction.value,
+                    "Status": status,
+                    "Bytes": len(tx.data_bytes),
+                }
+            )
 
         df = pd.DataFrame(data)
         if df.empty:
@@ -80,7 +82,12 @@ class I2CTimingCharts:
         for addr_str, dev in report.devices_detected.items():
             addr_int = int(addr_str, 16)
             dev_txs = [t for t in report.transactions if t.address_7bit == addr_int]
-            nack_count = sum(1 for t in dev_txs if t.address_ack == AckType.NACK or any(p.ack == AckType.NACK for p in t.byte_packets if not p.is_address))
+            nack_count = sum(
+                1
+                for t in dev_txs
+                if t.address_ack == AckType.NACK
+                or any(p.ack == AckType.NACK for p in t.byte_packets if not p.is_address)
+            )
             stretch_count = sum(len(t.clock_stretching_events) for t in dev_txs)
             total_tx = len(dev_txs)
             success_rate = (total_tx - nack_count) / total_tx * 100.0 if total_tx > 0 else 0.0
@@ -93,15 +100,17 @@ class I2CTimingCharts:
             elif success_rate < 95.0 or stretch_count > 0:
                 grade = "B (Minor Jitter / Retries)"
 
-            summary_rows.append({
-                "Slave Address": addr_str,
-                "Device Name": dev.get("name", "Unknown"),
-                "Category": dev.get("category", "General I2C"),
-                "Total Transactions": total_tx,
-                "NACK Count": nack_count,
-                "Success Rate": f"{success_rate:.1f} %",
-                "Clock Stretches": stretch_count,
-                "Health Grade": grade,
-            })
+            summary_rows.append(
+                {
+                    "Slave Address": addr_str,
+                    "Device Name": dev.get("name", "Unknown"),
+                    "Category": dev.get("category", "General I2C"),
+                    "Total Transactions": total_tx,
+                    "NACK Count": nack_count,
+                    "Success Rate": f"{success_rate:.1f} %",
+                    "Clock Stretches": stretch_count,
+                    "Health Grade": grade,
+                }
+            )
 
         return pd.DataFrame(summary_rows)

@@ -40,7 +40,7 @@ class SPIAnomalyDetector:
                                 "2. 檢查 MISO 線路是否斷路或處於高阻抗 (High-Z) 狀態（因上拉電阻讀回全 1）。\n"
                                 "3. 檢查 CS# (Chip Select) 是否未正確拉低以選中目標晶片。"
                             ),
-                            details={"miso_bytes": [f"0x{b:02X}" for b in miso_id_bytes]}
+                            details={"miso_bytes": [f"0x{b:02X}" for b in miso_id_bytes]},
                         )
                     )
                 elif all(b == 0x00 for b in miso_id_bytes):
@@ -57,7 +57,7 @@ class SPIAnomalyDetector:
                                 "1. 檢查 MISO 線路是否對地短路 (Short-to-GND) 或被其他元件持續拉低。\n"
                                 "2. 檢查 SPI Clock 極性與相位 (CPOL/CPHA) 是否設定錯誤。"
                             ),
-                            details={"miso_bytes": [f"0x{b:02X}" for b in miso_id_bytes]}
+                            details={"miso_bytes": [f"0x{b:02X}" for b in miso_id_bytes]},
                         )
                     )
 
@@ -105,7 +105,7 @@ class SPIAnomalyDetector:
                                 "1. 寫入記憶體陣列 (Program/Erase) 前必須發送單獨的 0x06 WREN 封包（0x50 僅能修改狀態暫存器）。\n"
                                 "2. 注意：每次 Program 或 Erase 完成後，WEL 會自動歸零，下一次寫入必須重新發送 0x06！"
                             ),
-                            details={"opcode": f"0x{op:02X}", "wel_state": False}
+                            details={"opcode": f"0x{op:02X}", "wel_state": False},
                         )
                     )
                 wel_latched = False
@@ -122,14 +122,17 @@ class SPIAnomalyDetector:
                             transaction_id=tx.index,
                             description=f"Status Register write {tx.opcode_name} issued without 0x06 (WREN) or 0x50 (Volatile WREN).",
                             root_cause_guide="【Root Cause 排查建議】寫入狀態暫存器前需發送 0x06 或 0x50 指令。\n",
-                            details={"opcode": f"0x{op:02X}"}
+                            details={"opcode": f"0x{op:02X}"},
                         )
                     )
                 wel_latched = False
                 volatile_wel_latched = False
 
             # 4. Page Program Wrap-around Hazard
-            if op in (SPIOpcode.PAGE_PROGRAM, SPIOpcode.QUAD_PAGE_PROGRAM) and tx.decoded_details.get("page_wrap_hazard"):
+            if op in (
+                SPIOpcode.PAGE_PROGRAM,
+                SPIOpcode.QUAD_PAGE_PROGRAM,
+            ) and tx.decoded_details.get("page_wrap_hazard"):
                 start_off = tx.decoded_details.get("page_start_offset", 0)
                 p_len = tx.data_payload_len
                 issues.append(
@@ -149,7 +152,7 @@ class SPIAnomalyDetector:
                             "2. 跨 Page 寫入時位址指標會 Wrap-around 回 0x00 offset，覆蓋同一頁開頭資料！\n"
                             "3. 修正方案：韌體中封裝 Page Write 驅動時，計算 chunk = min(length, 256 - (addr & 0xFF))。"
                         ),
-                        details={"page_offset": start_off, "payload_len": p_len, "page_size": 256}
+                        details={"page_offset": start_off, "payload_len": p_len, "page_size": 256},
                     )
                 )
 
@@ -173,7 +176,7 @@ class SPIAnomalyDetector:
                         transaction_id=tx.index,
                         description=f"Command {tx.opcode_name} requires at least 4 bytes (Opcode + 24-bit Address), but CS went high after {len(tx.mosi_bytes)} byte(s).",
                         root_cause_guide="【Root Cause 排查建議】檢查 CS# 線路是否有訊號雜訊或 DMA 長度配置不足。\n",
-                        details={"received_bytes": len(tx.mosi_bytes), "expected_min": 4}
+                        details={"received_bytes": len(tx.mosi_bytes), "expected_min": 4},
                     )
                 )
 

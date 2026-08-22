@@ -27,43 +27,93 @@ class I2CReporter:
     def render_terminal(cls, report: I2CAnalysisReport, console: Console | None = None) -> None:
         """Render colorized diagnostic report in the terminal using Rich."""
         console = console or Console()
-        
+
         # 1. Header Banner
-        status_color = "green" if not report.issues else ("red" if any(i.severity in (Severity.CRITICAL, Severity.ERROR) for i in report.issues) else "yellow")
+        status_color = (
+            "green"
+            if not report.issues
+            else (
+                "red"
+                if any(i.severity in (Severity.CRITICAL, Severity.ERROR) for i in report.issues)
+                else "yellow"
+            )
+        )
         title_text = Text("I2C / SMBus / PMBus Protocol Diagnostic Report", style="bold cyan")
         subtitle_text = Text(report.summary_text, style="dim")
-        console.print(Panel(Text.assemble(title_text, "\n", subtitle_text), border_style=status_color, expand=False))
-        
+        console.print(
+            Panel(
+                Text.assemble(title_text, "\n", subtitle_text),
+                border_style=status_color,
+                expand=False,
+            )
+        )
+
         # 2. Timing & Bus Health Summary Table
-        timing_tbl = Table(title="Bus Timing & Health Metrics", show_header=True, header_style="bold magenta")
+        timing_tbl = Table(
+            title="Bus Timing & Health Metrics", show_header=True, header_style="bold magenta"
+        )
         timing_tbl.add_column("Metric", style="cyan")
         timing_tbl.add_column("Value", style="bold white")
         timing_tbl.add_column("Standard / Evaluation", style="dim")
-        
+
         t = report.timing_stats
         timing_tbl.add_row("Nominal Speed Mode", t.speed_mode.value, "Spec Class")
-        timing_tbl.add_row("Avg SCL Clock Frequency", f"{t.avg_frequency_khz:.2f} kHz", f"Min: {t.min_frequency_khz:.1f}k, Max: {t.max_frequency_khz:.1f}k")
-        
-        jitter_style = "red" if t.frequency_jitter_pct > 35 else ("yellow" if t.frequency_jitter_pct > 15 else "green")
-        timing_tbl.add_row("Clock Frequency Jitter", f"[{jitter_style}]{t.frequency_jitter_pct:.1f} %[/]", "< 15% is stable; > 35% indicates high capacitance/ISR")
-        
-        stretch_style = "red" if t.max_clock_stretch_ms >= 25.0 else ("yellow" if t.clock_stretch_count > 0 else "green")
-        timing_tbl.add_row("Clock Stretching Events", f"[{stretch_style}]{t.clock_stretch_count} event(s) (Max: {t.max_clock_stretch_ms:.3f} ms)[/]", "SMBus limit: 25ms timeout")
-        timing_tbl.add_row("Avg Inter-byte Delay", f"{t.avg_inter_byte_delay_us:.2f} µs", f"Max: {t.max_inter_byte_delay_us:.2f} µs (ISR latency)")
-        timing_tbl.add_row("Avg Inter-transaction Delay", f"{t.avg_inter_transaction_delay_ms:.2f} ms", f"Max: {t.max_inter_transaction_delay_ms:.2f} ms")
-        timing_tbl.add_row("Bus Utilization", f"{t.bus_utilization_pct:.2f} %", "Active transfer time / total duration")
+        timing_tbl.add_row(
+            "Avg SCL Clock Frequency",
+            f"{t.avg_frequency_khz:.2f} kHz",
+            f"Min: {t.min_frequency_khz:.1f}k, Max: {t.max_frequency_khz:.1f}k",
+        )
+
+        jitter_style = (
+            "red"
+            if t.frequency_jitter_pct > 35
+            else ("yellow" if t.frequency_jitter_pct > 15 else "green")
+        )
+        timing_tbl.add_row(
+            "Clock Frequency Jitter",
+            f"[{jitter_style}]{t.frequency_jitter_pct:.1f} %[/]",
+            "< 15% is stable; > 35% indicates high capacitance/ISR",
+        )
+
+        stretch_style = (
+            "red"
+            if t.max_clock_stretch_ms >= 25.0
+            else ("yellow" if t.clock_stretch_count > 0 else "green")
+        )
+        timing_tbl.add_row(
+            "Clock Stretching Events",
+            f"[{stretch_style}]{t.clock_stretch_count} event(s) (Max: {t.max_clock_stretch_ms:.3f} ms)[/]",
+            "SMBus limit: 25ms timeout",
+        )
+        timing_tbl.add_row(
+            "Avg Inter-byte Delay",
+            f"{t.avg_inter_byte_delay_us:.2f} µs",
+            f"Max: {t.max_inter_byte_delay_us:.2f} µs (ISR latency)",
+        )
+        timing_tbl.add_row(
+            "Avg Inter-transaction Delay",
+            f"{t.avg_inter_transaction_delay_ms:.2f} ms",
+            f"Max: {t.max_inter_transaction_delay_ms:.2f} ms",
+        )
+        timing_tbl.add_row(
+            "Bus Utilization",
+            f"{t.bus_utilization_pct:.2f} %",
+            "Active transfer time / total duration",
+        )
         console.print(timing_tbl)
         console.print()
-        
+
         # 3. Peripheral Device Map Table
-        dev_tbl = Table(title="Detected Peripheral Device Map", show_header=True, header_style="bold blue")
+        dev_tbl = Table(
+            title="Detected Peripheral Device Map", show_header=True, header_style="bold blue"
+        )
         dev_tbl.add_column("7-bit Addr", style="yellow")
         dev_tbl.add_column("8-bit (W/R)", style="dim")
         dev_tbl.add_column("Identified Device / Chip Profile", style="bold white")
         dev_tbl.add_column("Category", style="cyan")
         dev_tbl.add_column("Protocol", style="green")
         dev_tbl.add_column("Transactions", justify="right")
-        
+
         for dev in report.devices_detected.values():
             dev_tbl.add_row(
                 dev["address_7bit"],
@@ -75,9 +125,13 @@ class I2CReporter:
             )
         console.print(dev_tbl)
         console.print()
-        
+
         # 4. Decoded Transaction Table
-        tx_tbl = Table(title="Transaction Sequence & Decoded Telemetry", show_header=True, header_style="bold green")
+        tx_tbl = Table(
+            title="Transaction Sequence & Decoded Telemetry",
+            show_header=True,
+            header_style="bold green",
+        )
         tx_tbl.add_column("#", justify="right", style="dim")
         tx_tbl.add_column("Time (s)", style="dim")
         tx_tbl.add_column("Addr", style="yellow")
@@ -85,11 +139,11 @@ class I2CReporter:
         tx_tbl.add_column("Raw Hex Bytes", style="white")
         tx_tbl.add_column("Decoded Semantic Meaning / Telemetry", style="bold cyan")
         tx_tbl.add_column("Status", justify="center")
-        
+
         for tx in report.transactions:
             rw_color = "cyan" if tx.direction == I2CDirection.READ else "magenta"
             rw_text = f"[{rw_color}]{tx.direction.value}[/]"
-            
+
             status_text = "[green]ACK[/]"
             if tx.address_ack == AckType.NACK:
                 status_text = "[red]ADDR NAK[/]"
@@ -100,11 +154,11 @@ class I2CReporter:
                     status_text = "[red]DATA NAK[/]"
             elif not tx.has_stop and not tx.is_repeated_start:
                 status_text = "[bold red]HANG/NO STOP[/]"
-                
+
             summary_str = tx.semantic_summary or "-"
             if tx.decoded_values.get("rollover_hazard"):
                 summary_str = f"[bold red]⚠️ {summary_str}[/]"
-                
+
             tx_tbl.add_row(
                 str(tx.id),
                 f"{tx.start_time:.6f}",
@@ -116,10 +170,18 @@ class I2CReporter:
             )
         console.print(tx_tbl)
         console.print()
-        
+
         # 5. Diagnostic Findings & Junior Engineer Troubleshooting Advice
         if report.issues:
-            console.print(Panel(Text("Diagnostic Anomalies & Step-by-Step Debugging Advice", style="bold white on red"), expand=False))
+            console.print(
+                Panel(
+                    Text(
+                        "Diagnostic Anomalies & Step-by-Step Debugging Advice",
+                        style="bold white on red",
+                    ),
+                    expand=False,
+                )
+            )
             for issue in report.issues:
                 sev_color = {
                     Severity.CRITICAL: "bold red",
@@ -127,23 +189,32 @@ class I2CReporter:
                     Severity.WARNING: "yellow",
                     Severity.INFO: "blue",
                 }.get(issue.severity, "white")
-                
-                header = Text(f"[{issue.severity.value}] {issue.code}: {issue.title}", style=sev_color)
-                
+
+                header = Text(
+                    f"[{issue.severity.value}] {issue.code}: {issue.title}", style=sev_color
+                )
+
                 body = Text()
                 body.append(f"\n● 異常現象描述:\n  {issue.description}\n", style="white")
                 body.append("\n● 根本原因分析 (Root Cause):\n", style="bold yellow")
                 for rc_line in issue.root_cause_analysis.split("\n"):
                     if rc_line.strip():
                         body.append(f"  {rc_line.strip()}\n", style="yellow")
-                        
+
                 body.append("\n● 新手排查行動清單 (Actionable Checklist):\n", style="bold green")
                 for advice in issue.actionable_advice:
                     body.append(f"  ✔ {advice}\n", style="green")
-                    
-                console.print(Panel(body, title=header.plain, title_align="left", border_style=sev_color))
+
+                console.print(
+                    Panel(body, title=header.plain, title_align="left", border_style=sev_color)
+                )
         else:
-            console.print(Panel("[bold green]✔ No Protocol or Timing Anomalies Detected. All Transactions Passed Cleanly.[/]", border_style="green"))
+            console.print(
+                Panel(
+                    "[bold green]✔ No Protocol or Timing Anomalies Detected. All Transactions Passed Cleanly.[/]",
+                    border_style="green",
+                )
+            )
 
     @classmethod
     def generate_markdown(cls, report: I2CAnalysisReport) -> str:
@@ -153,33 +224,47 @@ class I2CReporter:
         lines.append("")
         lines.append(f"> **Summary**: {report.summary_text}")
         lines.append("")
-        
+
         # Summary Card
         lines.append("## 1. Bus Timing & Physical Health")
         lines.append("")
         t = report.timing_stats
         lines.append(f"- **Nominal Speed Mode**: `{t.speed_mode.value}`")
-        lines.append(f"- **Average Clock Frequency**: `{t.avg_frequency_khz:.2f} kHz` (Min: `{t.min_frequency_khz:.1f} kHz`, Max: `{t.max_frequency_khz:.1f} kHz`)")
+        lines.append(
+            f"- **Average Clock Frequency**: `{t.avg_frequency_khz:.2f} kHz` (Min: `{t.min_frequency_khz:.1f} kHz`, Max: `{t.max_frequency_khz:.1f} kHz`)"
+        )
         lines.append(f"- **Clock Frequency Jitter**: `{t.frequency_jitter_pct:.1f} %`")
-        lines.append(f"- **Clock Stretching Events**: `{t.clock_stretch_count}` (Max duration: `{t.max_clock_stretch_ms:.3f} ms`)")
-        lines.append(f"- **Average Inter-byte Delay**: `{t.avg_inter_byte_delay_us:.2f} µs` (Max: `{t.max_inter_byte_delay_us:.2f} µs`)")
-        lines.append(f"- **Average Inter-transaction Delay**: `{t.avg_inter_transaction_delay_ms:.2f} ms`")
+        lines.append(
+            f"- **Clock Stretching Events**: `{t.clock_stretch_count}` (Max duration: `{t.max_clock_stretch_ms:.3f} ms`)"
+        )
+        lines.append(
+            f"- **Average Inter-byte Delay**: `{t.avg_inter_byte_delay_us:.2f} µs` (Max: `{t.max_inter_byte_delay_us:.2f} µs`)"
+        )
+        lines.append(
+            f"- **Average Inter-transaction Delay**: `{t.avg_inter_transaction_delay_ms:.2f} ms`"
+        )
         lines.append(f"- **Bus Utilization**: `{t.bus_utilization_pct:.2f} %`")
         lines.append("")
-        
+
         # Device Map Table
         lines.append("## 2. Detected Peripheral Device Map")
         lines.append("")
-        lines.append("| 7-bit Addr | 8-bit (W/R) | Identified Device / Chip Profile | Category | Protocol | Transactions |")
+        lines.append(
+            "| 7-bit Addr | 8-bit (W/R) | Identified Device / Chip Profile | Category | Protocol | Transactions |"
+        )
         lines.append("|---|---|---|---|---|---|")
         for dev in report.devices_detected.values():
-            lines.append(f"| `{dev['address_7bit']}` | `{dev['address_8bit']}` | **{dev['name']}** | {dev['category']} | {dev['protocol']} | {dev['transaction_count']} |")
+            lines.append(
+                f"| `{dev['address_7bit']}` | `{dev['address_8bit']}` | **{dev['name']}** | {dev['category']} | {dev['protocol']} | {dev['transaction_count']} |"
+            )
         lines.append("")
-        
+
         # Transaction Sequence Table
         lines.append("## 3. Transaction Sequence & Decoded Telemetry")
         lines.append("")
-        lines.append("| # | Time (s) | Addr | R/W | Raw Hex Bytes | Decoded Semantic Meaning / Telemetry | Status |")
+        lines.append(
+            "| # | Time (s) | Addr | R/W | Raw Hex Bytes | Decoded Semantic Meaning / Telemetry | Status |"
+        )
         lines.append("|---|---|---|---|---|---|---|")
         for tx in report.transactions:
             status = "ACK"
@@ -189,19 +274,23 @@ class I2CReporter:
                 status = "READ NAK" if tx.direction == I2CDirection.READ else "**DATA NAK**"
             elif not tx.has_stop and not tx.is_repeated_start:
                 status = "**NO STOP**"
-                
+
             summary = tx.semantic_summary or "-"
             if tx.decoded_values.get("rollover_hazard"):
                 summary = f"⚠️ **{summary}**"
-                
-            lines.append(f"| {tx.id} | {tx.start_time:.6f} | `0x{tx.address_7bit:02X}` | `{tx.direction.value}` | `{tx.hex_dump}` | {summary} | {status} |")
+
+            lines.append(
+                f"| {tx.id} | {tx.start_time:.6f} | `0x{tx.address_7bit:02X}` | `{tx.direction.value}` | `{tx.hex_dump}` | {summary} | {status} |"
+            )
         lines.append("")
-        
+
         # Diagnostic Issues & Advice
         lines.append("## 4. Diagnostic Issues & Junior Debugging Advice")
         lines.append("")
         if not report.issues:
-            lines.append("✔ **All transactions completed cleanly with no protocol or timing violations.**")
+            lines.append(
+                "✔ **All transactions completed cleanly with no protocol or timing violations.**"
+            )
         else:
             for idx, issue in enumerate(report.issues, 1):
                 lines.append(f"### 4.{idx} [{issue.severity.value}] {issue.code}: {issue.title}")
@@ -220,7 +309,7 @@ class I2CReporter:
                 for advice in issue.actionable_advice:
                     lines.append(f"- [ ] {advice}")
                 lines.append("")
-                
+
         return "\n".join(lines)
 
 

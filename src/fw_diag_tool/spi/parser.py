@@ -50,7 +50,11 @@ class SPIParser:
             except ValueError:
                 return None
         try:
-            return int(s, 16) if len(s) == 2 and re.match(r"^[0-9a-fA-F]{2}$", s) else int(s, 10) & 0xFF
+            return (
+                int(s, 16)
+                if len(s) == 2 and re.match(r"^[0-9a-fA-F]{2}$", s)
+                else int(s, 10) & 0xFF
+            )
         except ValueError:
             return None
 
@@ -106,8 +110,12 @@ class SPIParser:
             miso_val = cls.parse_hex_byte(row[miso_idx]) if miso_idx < len(row) else None
 
             # Check CS state if column present
-            cs_state = str(row[cs_idx]).strip().lower() if (cs_idx != -1 and cs_idx < len(row)) else None
-            cs_asserted = (cs_state in ("0", "low", "false", "asserted")) if cs_state is not None else True
+            cs_state = (
+                str(row[cs_idx]).strip().lower() if (cs_idx != -1 and cs_idx < len(row)) else None
+            )
+            cs_asserted = (
+                (cs_state in ("0", "low", "false", "asserted")) if cs_state is not None else True
+            )
 
             if cs_asserted:
                 if not in_tx:
@@ -125,11 +133,7 @@ class SPIParser:
                     in_tx = False
                     if cur_mosi or cur_miso:
                         tx = cls.decode_single_transaction(
-                            len(transactions) + 1,
-                            t_start,
-                            t_end,
-                            cur_mosi,
-                            cur_miso
+                            len(transactions) + 1, t_start, t_end, cur_mosi, cur_miso
                         )
                         transactions.append(tx)
                     cur_mosi = []
@@ -137,11 +141,7 @@ class SPIParser:
 
         if in_tx and (cur_mosi or cur_miso):
             tx = cls.decode_single_transaction(
-                len(transactions) + 1,
-                t_start,
-                t_end,
-                cur_mosi,
-                cur_miso
+                len(transactions) + 1, t_start, t_end, cur_mosi, cur_miso
             )
             transactions.append(tx)
 
@@ -149,17 +149,14 @@ class SPIParser:
 
     @classmethod
     def decode_single_transaction(
-        cls,
-        index: int,
-        start_time: float,
-        end_time: float,
-        mosi: list[int],
-        miso: list[int]
+        cls, index: int, start_time: float, end_time: float, mosi: list[int], miso: list[int]
     ) -> SPITransaction:
         dur_us = max(0.0, (end_time - start_time) * 1_000_000.0)
         opcode = mosi[0] if mosi else None
-        opcode_name = OPCODE_NAMES.get(opcode, f"Unknown Opcode (0x{opcode:02X})" if opcode is not None else "No Data")
-        
+        opcode_name = OPCODE_NAMES.get(
+            opcode, f"Unknown Opcode (0x{opcode:02X})" if opcode is not None else "No Data"
+        )
+
         address = None
         details: dict[str, Any] = {}
         payload_len = 0
@@ -171,12 +168,14 @@ class SPIParser:
                     mfr_id = miso[1]
                     mem_type = miso[2]
                     cap_id = miso[3]
-                    chip_name = JEDEC_DATABASE.get((mfr_id, mem_type, cap_id), "Unknown Manufacturer / Model")
+                    chip_name = JEDEC_DATABASE.get(
+                        (mfr_id, mem_type, cap_id), "Unknown Manufacturer / Model"
+                    )
                     details["mfr_id"] = f"0x{mfr_id:02X}"
                     details["mem_type"] = f"0x{mem_type:02X}"
                     details["capacity_id"] = f"0x{cap_id:02X}"
                     details["identified_chip"] = chip_name
-            
+
             # 2. Read Commands (0x03, 0x0B)
             elif opcode in (SPIOpcode.READ_DATA, SPIOpcode.FAST_READ):
                 addr_len = 3
@@ -201,18 +200,22 @@ class SPIParser:
                         details["page_wrap_hazard"] = True
 
             # 4. Erase Commands (0x20, 0x52, 0xD8, 0xC7)
-            elif opcode in (SPIOpcode.SECTOR_ERASE_4K, SPIOpcode.BLOCK_ERASE_32K, SPIOpcode.BLOCK_ERASE_64K):
+            elif opcode in (
+                SPIOpcode.SECTOR_ERASE_4K,
+                SPIOpcode.BLOCK_ERASE_32K,
+                SPIOpcode.BLOCK_ERASE_64K,
+            ):
                 if len(mosi) >= 4:
                     address = (mosi[1] << 16) | (mosi[2] << 8) | mosi[3]
                     details["erase_address"] = f"0x{address:06X}"
 
             # 5. Read Status Register 1 (0x05)
             elif opcode == SPIOpcode.READ_STATUS_REG_1 and len(miso) >= 2:
-                    sr1 = FlashStatusRegister1.decode(miso[1])
-                    details["sr1_raw"] = f"0x{sr1.raw_val:02X}"
-                    details["busy"] = sr1.busy
-                    details["wel"] = sr1.wel
-                    details["block_protect"] = (sr1.bp2 << 2) | (sr1.bp1 << 1) | sr1.bp0
+                sr1 = FlashStatusRegister1.decode(miso[1])
+                details["sr1_raw"] = f"0x{sr1.raw_val:02X}"
+                details["busy"] = sr1.busy
+                details["wel"] = sr1.wel
+                details["block_protect"] = (sr1.bp2 << 2) | (sr1.bp1 << 1) | sr1.bp0
 
         return SPITransaction(
             index=index,
@@ -225,5 +228,5 @@ class SPIParser:
             opcode_name=opcode_name,
             address=address,
             data_payload_len=payload_len,
-            decoded_details=details
+            decoded_details=details,
         )

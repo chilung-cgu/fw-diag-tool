@@ -11,6 +11,7 @@ def test_gui_app_syntax():
     assert "I2CDiagnosticEngine" in code
     assert "PCIeAnalyzer" in code
 
+
 def test_builtin_register_yamls():
     data_dir = Path("src/fw_diag_tool/data")
     assert (data_dir / "pmbus_standard.yaml").exists()

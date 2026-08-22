@@ -32,6 +32,7 @@ def test_pcie_link_degradation_detection():
     md = PCIeReporter.to_markdown(cfg)
     assert "DEGRADED" in md
 
+
 def test_multi_lspci_parsing():
     text = """0000:00:00.0 Host bridge: Intel Corporation Device 1234
 00: 86 80 34 12 06 00 10 00 00 00 00 06 00 00 00 00

@@ -30,13 +30,27 @@ class SPIDiagnosticEngine:
             op = tx.opcode
             if op is None:
                 continue
-            if op in (SPIOpcode.READ_DATA, SPIOpcode.FAST_READ, SPIOpcode.FAST_READ_DUAL_OUT, SPIOpcode.FAST_READ_QUAD_OUT):
+            if op in (
+                SPIOpcode.READ_DATA,
+                SPIOpcode.FAST_READ,
+                SPIOpcode.FAST_READ_DUAL_OUT,
+                SPIOpcode.FAST_READ_QUAD_OUT,
+            ):
                 read_count += 1
             elif op in (SPIOpcode.PAGE_PROGRAM, SPIOpcode.QUAD_PAGE_PROGRAM):
                 write_count += 1
-            elif op in (SPIOpcode.SECTOR_ERASE_4K, SPIOpcode.BLOCK_ERASE_32K, SPIOpcode.BLOCK_ERASE_64K, SPIOpcode.CHIP_ERASE):
+            elif op in (
+                SPIOpcode.SECTOR_ERASE_4K,
+                SPIOpcode.BLOCK_ERASE_32K,
+                SPIOpcode.BLOCK_ERASE_64K,
+                SPIOpcode.CHIP_ERASE,
+            ):
                 erase_count += 1
-            elif op in (SPIOpcode.READ_STATUS_REG_1, SPIOpcode.READ_STATUS_REG_2, SPIOpcode.READ_STATUS_REG_3):
+            elif op in (
+                SPIOpcode.READ_STATUS_REG_1,
+                SPIOpcode.READ_STATUS_REG_2,
+                SPIOpcode.READ_STATUS_REG_3,
+            ):
                 status_count += 1
             elif op == SPIOpcode.JEDEC_ID and not detected_chip:
                 chip_name = tx.decoded_details.get("identified_chip")
@@ -53,11 +67,7 @@ class SPIDiagnosticEngine:
             detected_flash_chip=detected_chip,
         )
 
-        return SPIReport(
-            summary=summary,
-            transactions=transactions,
-            anomalies=anomalies
-        )
+        return SPIReport(summary=summary, transactions=transactions, anomalies=anomalies)
 
     def analyze_csv_file(self, file_path: str | Path) -> SPIReport:
         p = Path(file_path)
