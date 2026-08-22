@@ -1,17 +1,16 @@
 from pathlib import Path
-
+import streamlit as st
 import pandas as pd
 import plotly.express as px
-import streamlit as st
 
-from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
-from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.reporter import I2CReporter
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.spi.reporter import SPIReporter
+from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
+from fw_diag_tool.codegen.c_header import CHeaderGenerator
 
 st.set_page_config(page_title="FW Diagnostic Toolkit", page_icon="⚡", layout="wide")
 st.title("⚡ Firmware Signal & Protocol Diagnostic Toolkit")
@@ -30,6 +29,9 @@ menu = st.sidebar.radio(
     ]
 )
 
+# -------------------------------------------------------------
+# 1. I2C / PMBus
+# -------------------------------------------------------------
 if menu == "📊 I2C / PMBus 波形診斷":
     st.header("I2C / SMBus / PMBus 波形異常與協定分析")
     col1, col2 = st.columns([2, 1])
@@ -38,6 +40,7 @@ if menu == "📊 I2C / PMBus 波形診斷":
     with col2:
         smbus_timeout = st.number_input("SMBus Clock Stretching Timeout (ms)", min_value=1.0, max_value=100.0, value=25.0, step=1.0)
         use_sample = st.button("載入內建測試波形")
+
     csv_content = None
     if uploaded_file is not None:
         csv_content = uploaded_file.getvalue().decode("utf-8")
@@ -46,36 +49,65 @@ if menu == "📊 I2C / PMBus 波形診斷":
         if sample_path.exists():
             csv_content = sample_path.read_text(encoding="utf-8")
             st.info("已載入內建範例 CSV！")
+
     if csv_content:
         engine = I2CDiagnosticEngine(smbus_timeout_ms=smbus_timeout)
         report = engine.analyze_csv_content(csv_content)
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-        kpi1.metric("總傳輸次數", report.summary.total_transactions)
-        kpi2.metric("異常事件數", report.summary.anomaly_count)
-        kpi3.metric("Address NACK", report.summary.addr_nack_count)
-        kpi4.metric("Data NACK", report.summary.data_nack_count)
+        kpi1.metric("總傳輸次數", report.total_transactions)
+        kpi2.metric("異常事件數", len(report.issues), delta=f"-{len(report.issues)}" if report.issues else "0", delta_color="inverse")
+        kpi3.metric("平均時鐘頻率", f"{report.timing_stats.avg_frequency_khz:.1f} kHz")
+        kpi4.metric("時鐘抖動 (Jitter)", f"{report.timing_stats.frequency_jitter_pct:.1f} %")
         st.divider()
-        tab1, tab2, tab3, tab4 = st.tabs(["🚨 異常診斷", "📈 時序與統計", "📜 交易列表", "📝 Markdown 報告"])
+
+        tab1, tab2, tab3, tab4 = st.tabs(["🚨 異常診斷", "📈 時序與設備地圖", "📜 交易列表", "📝 Markdown 報告"])
         with tab1:
-            if not report.anomalies:
+            if not report.issues:
                 st.success("🎉 未偵測到任何 I2C/SMBus 時序與通訊異常！")
             else:
-                for idx, a in enumerate(report.anomalies, 1):
-                    with st.expander(f"[{a.severity.value}] #{idx}: {a.anomaly_type.value} @ Time: {a.timestamp_start:.6f}s (Addr: 0x{a.address:02X})", expanded=True):
-                        st.markdown(f"**描述**: {a.description}")
-                        st.markdown("**Root Cause 指引與排查建議**:\n" + a.recommendation)
+                for idx, issue in enumerate(report.issues, 1):
+                    addr_str = f"0x{issue.address_7bit:02X}" if issue.address_7bit is not None else "N/A"
+                    with st.expander(f"[{issue.severity.value}] #{idx}: {issue.code} - {issue.title} (Addr: {addr_str})", expanded=True):
+                        st.markdown(f"**現象描述**: {issue.description}")
+                        st.markdown(f"**根本原因 (Root Cause)**:\n{issue.root_cause_analysis}")
+                        st.markdown("**排查行動清單**:")
+                        for adv in issue.actionable_advice:
+                            st.markdown(f"- ✔ {adv}")
+
         with tab2:
-            if report.summary.address_stats:
-                df_addr = pd.DataFrame([{"Address": f"0x{addr:02X}", "Read": stats.read_packets, "Write": stats.write_packets, "NACKs": stats.nack_packets} for addr, stats in report.summary.address_stats.items()])
-                st.plotly_chart(px.bar(df_addr, x="Address", y=["Read", "Write", "NACKs"], title="各 Slave 位址讀寫與 NACK 統計", barmode="group"), use_container_width=True)
+            if report.devices_detected:
+                st.subheader("偵測到的週邊設備分佈")
+                dev_df = pd.DataFrame(list(report.devices_detected.values()))
+                st.dataframe(dev_df, use_container_width=True)
+            st.subheader("匯流排時序與健康指標")
+            st.write(f"- 速度模式: `{report.timing_stats.speed_mode.value}`")
+            st.write(f"- Clock Stretching 次數: `{report.timing_stats.clock_stretch_count}` (最大時長: `{report.timing_stats.max_clock_stretch_ms:.3f} ms`)")
+            st.write(f"- 匯流排使用率 (Bus Utilization): `{report.timing_stats.bus_utilization_pct:.2f} %`")
+
         with tab3:
-            tx_data = [{"Index": t.index, "Time (s)": f"{t.start_time:.6f}", "Address": f"0x{t.address:02X}", "Op": t.operation.value, "ACK": t.address_ack, "Topology": t.mux_topology or "-", "Bytes": len(t.data_bytes), "Data": " ".join(f"{b:02X}" for b in t.data_bytes), "Semantic": str(t.decoded_semantic) if t.decoded_semantic else ""} for t in report.transactions]
+            tx_data = []
+            for t in report.transactions:
+                tx_data.append({
+                    "ID": t.id,
+                    "Time (s)": f"{t.start_time:.6f}",
+                    "Address": f"0x{t.address_7bit:02X}",
+                    "Direction": t.direction.value,
+                    "ACK": t.address_ack.value,
+                    "Topology": t.mux_topology or "-",
+                    "Bytes": len(t.data_bytes),
+                    "Data": t.hex_dump,
+                    "Semantic Meaning": t.semantic_summary or "-"
+                })
             st.dataframe(pd.DataFrame(tx_data), use_container_width=True)
+
         with tab4:
             md_out = I2CReporter.generate_markdown(report)
             st.code(md_out, language="markdown")
             st.download_button("下載 Markdown 報告", md_out, file_name="i2c_report.md")
 
+# -------------------------------------------------------------
+# 2. PCIe & AER
+# -------------------------------------------------------------
 elif menu == "🚀 PCIe Config & AER 診斷":
     st.header("PCIe 配置空間、Capability 鏈表與 AER 嚴重錯誤診斷")
     input_mode = st.radio("輸入方式", ["貼上 lspci -xxxx / Hex Dump", "貼上 Linux dmesg AER Error Log"])
@@ -102,6 +134,9 @@ elif menu == "🚀 PCIe Config & AER 診斷":
                     st.error(f"🚨 {cfg.link_info.degradation_reason}")
                 st.markdown(PCIeReporter.to_markdown(cfg))
 
+# -------------------------------------------------------------
+# 3. SPI Flash
+# -------------------------------------------------------------
 elif menu == "⚡ SPI Flash 協定診斷":
     st.header("SPI / QSPI Flash 協定解析與寫入異常診斷")
     uploaded_spi = st.file_uploader("選擇 Saleae SPI CSV 檔案", type=["csv", "txt"])
@@ -111,6 +146,7 @@ elif menu == "⚡ SPI Flash 協定診斷":
     if csv_text:
         engine = SPIDiagnosticEngine()
         rep = engine.analyze_csv_content(csv_text)
+        SPIReporter.render_terminal(rep)
         s1, s2, s3, s4 = st.columns(4)
         s1.metric("總傳輸次數", rep.summary.total_transactions)
         s2.metric("讀取次數", rep.summary.read_count)
@@ -120,9 +156,15 @@ elif menu == "⚡ SPI Flash 協定診斷":
             st.info(f"識別晶片型號: {rep.summary.detected_flash_chip}")
         st.markdown(SPIReporter.to_markdown(rep))
 
+# -------------------------------------------------------------
+# 4. Register Decoder & Bit-Flipper
+# -------------------------------------------------------------
 elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
     st.header("硬體 / 晶片暫存器 Bitfield 視覺化解碼器")
-    builtin_map = {"PMBus 標準狀態暫存器 (PMBus STATUS_WORD)": "pmbus_standard.yaml", "PCIe AER Uncorrectable Error 暫存器": "pcie_aer_registers.yaml"}
+    builtin_map = {
+        "PMBus 標準狀態暫存器 (PMBus STATUS_WORD)": "pmbus_standard.yaml",
+        "PCIe AER Uncorrectable Error 暫存器": "pcie_aer_registers.yaml"
+    }
     choice = st.selectbox("選擇預設暫存器定義檔", list(builtin_map.keys()))
     data_dir = Path(__file__).parent.parent / "data"
     yaml_file = data_dir / builtin_map[choice]
@@ -144,6 +186,9 @@ elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
         st.subheader(f"{res.reg_name} (0x{cur_val:08X})")
         st.table(pd.DataFrame([{"Bit Range": f.bit_range, "Field": f.name, "Value": f.hex_val, "Meaning": f"⚠ {f.meaning}" if f.is_warning else f.meaning} for f in res.fields]))
 
+# -------------------------------------------------------------
+# 5. C Code Generator
+# -------------------------------------------------------------
 elif menu == "🛠 C 語言 Register 巨集產生器":
     st.header("YAML 暫存器定義檔 -> C 語言 Header (#define / RMW 巨集) 自動生成")
     data_dir = Path(__file__).parent.parent / "data"
@@ -155,6 +200,9 @@ elif menu == "🛠 C 語言 Register 巨集產生器":
     st.code(c_header, language="c")
     st.download_button(f"下載 {mod_name.lower()}.h", c_header, file_name=f"{mod_name.lower()}.h")
 
+# -------------------------------------------------------------
+# 6. Junior FW Fault Lab
+# -------------------------------------------------------------
 elif menu == "🧪 Junior FW 故障模擬實驗室 (Fault Lab)":
     st.header("Junior Firmware 工程師硬韌體故障模擬演練場")
     st.write("點選任一常見硬體故障案例，模擬並檢驗排查邏輯：")
@@ -185,6 +233,16 @@ elif menu == "🧪 Junior FW 故障模擬實驗室 (Fault Lab)":
         st.info("【情境說明】向 SPI NOR Flash 發送 0x02 Page Program，但 Flash 內部數據完全沒變。")
         st.markdown("**【排查 SOP】**\n1. 每次 Page Program 前必須發送單獨的 0x06 WREN 封包。\n2. 檢查 Status Register 中的 WEL 位元是否為 1。")
 
+# -------------------------------------------------------------
+# 7. SOP & Guide
+# -------------------------------------------------------------
 elif menu == "📚 韌體除錯指南 & SOP":
     st.header("Junior Firmware 工程師硬韌體除錯指南與心智模型")
-    st.markdown("### 🎯 核心原則：Layer 分層診斷心智模型\n\n1. **L1 物理層 (PHY)**: 檢查上拉電阻 (Pull-up)、檢查 100MHz 差分時鐘、示波器 Eyes Diagram。\n2. **L2 資料鏈結層 (Data Link)**: I2C ACK/NACK, Clock Stretching, PCIe DLP Error (`fw-diag i2c analyze`)。\n3. **L3 傳輸/協定層 (Protocol)**: PMBus, PCIe AER, SPI Opcode (`fw-diag pcie analyze`, `fw-diag spi analyze`)。\n4. **L7 應用/驅動層 (Application)**: Linux Kernel Driver, OpenBMC (`fw-diag reg decode`, `fw-diag gen c-header`)。")
+    st.markdown("""
+### 🎯 核心原則：Layer 分層診斷心智模型
+
+1. **L1 物理層 (PHY)**: 檢查上拉電阻 (Pull-up)、檢查 100MHz 差分時鐘、示波器 Eyes Diagram。
+2. **L2 資料鏈結層 (Data Link)**: I2C ACK/NACK, Clock Stretching, PCIe DLP Error (`fw-diag i2c analyze`)。
+3. **L3 傳輸/協定層 (Protocol)**: PMBus, PCIe AER, SPI Opcode (`fw-diag pcie analyze`, `fw-diag spi analyze`)。
+4. **L7 應用/驅動層 (Application)**: Linux Kernel Driver, OpenBMC (`fw-diag reg decode`, `fw-diag gen c-header`)。
+""")
