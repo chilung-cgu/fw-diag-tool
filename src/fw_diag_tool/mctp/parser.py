@@ -185,7 +185,14 @@ class ServerMgmtParser:
                 continue
             # Check if this line is an IPMB frame
             # IPMB frames have length >= 7 and valid checksum 1 or IPMB slave address (0x20, 0x81, etc.)
-            is_ipmb_candidate = len(raw) >= 7 and (raw[0] in (0x20, 0x81, 0x2C, 0x82) or (((raw[0] + raw[1] + raw[2]) & 0xFF) == 0))
+            chk1_calc = ((raw[0] + raw[1] + raw[2]) & 0xFF) == 0 if len(raw) >= 3 else False
+            chk2_calc = ((sum(raw[3:-1]) + raw[-1]) & 0xFF) == 0 if len(raw) >= 7 else False
+            is_ipmb_candidate = len(raw) >= 7 and (
+                chk1_calc
+                or chk2_calc
+                or (raw[0] in (0x20, 0x81, 0x2C, 0x82, 0x24, 0x28, 0x2E, 0x30, 0x40))
+                or (raw[0] % 2 == 0 and raw[3] % 2 == 0 and raw[0] != 0x01)
+            )
             if is_ipmb_candidate:
                 ipmb = cls.decode_ipmb_frame(raw)
                 if ipmb:

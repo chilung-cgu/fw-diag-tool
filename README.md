@@ -1,108 +1,78 @@
-# FW Signal & Trace Diagnostic Toolkit (`fw_diag_tool`)
+# Firmware Diagnostic Suite (`fw_diag_tool`)
 
-專為 **Junior Firmware / Hardware Engineer** 設計的跨平台除錯、波形分析、協定診斷與 C 程式碼生成工具箱。
-無需額外購買硬體（如 Raspberry Pi），直接搭配公司現有的**邏輯分析儀 (Logic Analyzer, 如 Saleae)** 匯出的波形 Log、系統 **`lspci` / PCIe AER 日誌** 與 **晶片暫存器定義 (YAML)** 進行深度語意解碼與 Root Cause Analysis (RCA)。
+專為 **Junior 韌體 / 嵌入式 / 硬體工程師** 量身打造的旗艦級跨平台工作站。
+結合 **邏輯分析儀波形還原**、**5 大伺服器與嵌入式協定解析**（I2C/PMBus, PCIe AER, SPI Flash, UART Crash Dump, MCTP/IPMB）、**雙波形差分對比 (Waveform Diff)**、**Linux & OpenBMC Device Tree 自動生成** 以及 **20 大實戰除錯演練場**。
 
-提供 **CLI 命令列工具** 與 **macOS 輕量 Web GUI 視覺化介面**。
-
----
-
-## 核心功能模組
-
-### 1. 🖥 互動式視覺化 Web GUI (`fw-diag gui`)
-- **零原生視窗依賴**：基於 Streamlit + Plotly，純 Python 實作，macOS 一鍵啟動。
-- **多功能除錯看板**：
-  1. **📊 I2C / PMBus 波形診斷**：拖放 CSV / Log，即時渲染 Slave 位址統計、Clock Stretching 逾時警報與 MUX 拓撲路徑。
-  2. **🚀 PCIe Config & AER 診斷**：貼上 `lspci -xxxx` 或 `dmesg` 報錯，自動展開 4KB 配置空間、Link 降速/降寬警示與 4DW TLP Header 封包。
-  3. **⚡ SPI Flash 協定診斷**：解析 JEDEC 0x9F ID、Page Program 跨頁覆蓋預警、未發送 0x06 WREN 寫入無效偵測。
-  4. **🎛 晶片暫存器 Bitfield 解碼器**：內建 PMBus 與 PCIe 暫存器模板，輸入 Hex 數值即時展開各 Bit 欄位與異常標記。
-  5. **🛠 C 語言 Register 巨集產生器**：從 YAML 一鍵產生安全 MISRA-C `#define`、Mask 與 RMW (Read-Modify-Write) 巨集。
-  6. **🧪 Junior FW 故障模擬實驗室 (Fault Lab)**：內建 5 大經典硬體故障情境（I2C NACK、Clock Stretching、EEPROM Wrap、PCIe CTO、SPI WREN），供新人快速演練排查。
-  7. **📚 韌體除錯指南 & SOP**：整合 Junior 工程師必備的 L1~L7 分層排查心智模型與 I2C NACK 排查 SOP。
-
-### 2. I2C / SMBus / PMBus 智慧異常診斷 (`fw-diag i2c`)
-- **Saleae Logic 2 CSV / Raw Trace 匯入**：直接分析邏輯分析儀匯出的波形數據。
-- **PCA9548A / PCA9546 I2C MUX 拓撲追蹤**：自動識別 Channel 切換狀態，標註後續子交易拓撲路徑（如 `[MUX 0x70: Ch2] -> Slave 0x50`），並告警多通道同時開啟之衝突風險。
-- **EEPROM Page Boundary Rollover 偵測**：當連續寫入長度超過晶片 Page Size（如 24C64 的 32 bytes）時，精準告警位址迴轉覆蓋風險。
-- **時序與通訊異常告警**：
-  - **Address NACK vs Data NACK**：判斷是晶片未上電/位址錯誤，還是傳輸中被 Slave 拒絕。
-  - **Clock Stretching 逾時**：自動偵測 Slave 拉低 SCL 超過 SMBus 25ms 規範，預警 Bus Hang。
-  - **Missing STOP Condition**：標記 Bus 未正常釋放之異常。
-- **PMBus & 感測器自動解碼**：支援 Linear11、Linear16 浮點數轉換、STATUS_WORD 故障診斷，以及 LM75 / INA226 暫存器解析。
-
-### 3. PCIe Config Space、AER 與 Link 降級解碼 (`fw-diag pcie`)
-- **PCIe Link Speed / Width 降級智慧診斷**：自動比對 `Link Capabilities` 與 `Link Status`，若未達最高設計速率（如 Gen4 x16 降為 Gen3 x8）立即觸發警示並提供金手指/SI/供電排查建議。
-- **Multi-BDF 批次解析**：支援一次貼上包含多個 PCIe 設備的整機 `lspci -xxxx` 輸出。
-- **PCIe Config Space (4KB) 解析**：支援 Type 0 (Endpoint) 與 Type 1 (Bridge) Header、32/64-bit BAR 空間計算。
-- **AER (Advanced Error Reporting) 診斷**：
-  - 解碼 4DW Header Log（還原肇事的 Memory Read/Write, Config Request 或 Completion 封包、目標位址、Requester BDF 與 Length）。
-  - 自動提供韌體排查指引（如 Completion Timeout, Unsupported Request, Malformed TLP 等排查 SOP）。
-- **Kernel `dmesg` AER 日誌直接診斷**：直接輸入 Linux dmesg 錯誤日誌即可進行結構化分析。
-
-### 4. SPI / QSPI Flash 協定診斷 (`fw-diag spi`)
-- **JEDEC 0x9F 自動識別**：內建 Winbond, Macronix, Micron, GigaDevice 等主流 Flash 晶片資料庫。
-- **WREN 狀態追蹤**：偵測未發送 0x06 (Write Enable) 即發送 0x02/Erase 指令的無效寫入。
-- **Page Program 256-byte 溢位覆蓋預警**：計算寫入位址與長度，標記內部 Page Buffer Wrap-Around 風險。
-
-### 5. C 語言暫存器代碼自動生成器 (`fw-diag gen`)
-- **一鍵產出 C 語言 Header**：輸入 YAML 規範，自動產出含 Header Guards、Position、Mask、Get/Set 巨集與 Value Enums 的 C 標頭檔。
+👉 **完整新人圖文教學指南**：請參閱 [docs/JUNIOR_FW_GUIDE.md](docs/JUNIOR_FW_GUIDE.md)。
 
 ---
 
-## 安裝與啟動 (macOS / Linux)
+## 🚀 快速啟動 Web 視覺化工作站
 
-### 1. 建立虛擬環境與安裝
 ```bash
-# 進入專案目錄
-cd build_fw_tool
-
-# 建立 Python 虛擬環境 (Python 3.10+)
+# 1. 進入專案目錄並啟動虛擬環境 (Python 3.10+)
+cd ~/fw-diag-tool
 python3 -m venv .venv
 source .venv/bin/activate
-
-# 安裝套件 (Editable Mode)
 pip install -e .
-```
 
-### 2. 啟動 Web GUI 視覺化介面 (推薦)
-```bash
+# 2. 啟動 Web 視覺化工作站 (macOS / Linux 一鍵啟動)
 fw-diag gui
 ```
-*(會自動在 macOS 瀏覽器開啟 `http://127.0.0.1:8501`，支援拖放上傳與互動圖表)*
+*(瀏覽器將自動開啟 `http://127.0.0.1:8501`，支援滑鼠滾輪縮放波形、檔案拖放與互動分析)*
 
 ---
 
-## 常用 CLI 指令範例
+## 🌟 12 大核心功能模組一覽
 
-### 1. 診斷邏輯分析儀 I2C 波形
+| 功能模組 | 協定 / 功能 | 核心特色與排查重點 |
+|---|---|---|
+| **1. I2C / PMBus 診斷與波形檢視** | I2C, SMBus, PMBus | SCL/SDA 微秒級數位方波還原、彩色協定軌（START, Addr, ACK, Data, STOP）、時脈抖動直方圖。 |
+| **2. I2C 封包模擬與驅動產生** | C Driver CodeGen | 輸入 Slave Addr 與暫存器即時「造波形」，並產出 Linux `i2c-dev`、OpenBMC、STM32 HAL 與 Arduino C 代碼。 |
+| **3. 雙波形差分對比 (Waveform Diff)** | A/B 測試比對 | 同時載入 Golden (良品) 與 Failing (不良品) 波形，自動抓出第一筆通訊分歧點並繪製上下對比圖。 |
+| **4. UART Crash & HardFault 分析** | Linux Panic, ARM Cortex-M | 自動拆解 Kernel Panic (RIP/CR2/Call Trace) 與 ARM HardFault (HFSR/CFSR/DIVBYZERO/UNALIGNED)。 |
+| **5. MCTP / IPMB 伺服器協定解析** | DSP0236, PLDM, SPDM, IPMB | 解析 OpenBMC / GPU / NIC 之 MCTP 傳輸標頭、PLDM 感測器監控與 IPMB Checksum 1/2 校驗。 |
+| **6. Device Tree (.dts) 產生器** | Linux / OpenBMC BSP | 依據 I2C MUX 拓撲自動產出符合 Devicetree Spec v0.4 標準的 `.dtsi` 節點原始碼。 |
+| **7. PCIe Config & AER 診斷** | PCIe Gen1~Gen6, AER | 4KB 配置空間解析、AER 4DW TLP Header 拆解、Link 降速/降寬 (Gen4 x16 -> Gen1 x1) 與 Link Down 告警。 |
+| **8. SPI Flash 協定診斷** | SPI / QSPI NOR Flash | JEDEC 0x9F ID 自動識別、0x06 WREN 寫入保護狀態追蹤、256B Page Buffer 溢位覆蓋預警、MISO 線路故障偵測。 |
+| **9. 晶片暫存器 Bitfield 解碼器** | Hardware Registers | 支援 PMBus / PCIe 定義，輸入 Raw Hex 即時展開 Bit 欄位與異常警報。 |
+| **10. C 語言 Register 巨集產生器** | MISRA-C CodeGen | 從 YAML 自動產出 Position、Mask 與安全型別轉型的 `REG_..._GET` / `REG_..._SET` RMW 巨集。 |
+| **11. 20 大實戰故障實驗室 (Fault Arena)** | Junior FW 演練 | 內建 20 個來自矽谷與伺服器一線大廠的真實故障波形案例，快速建立除錯直覺。 |
+| **12. 韌體除錯指南 & SOP** | L1~L7 心智模型 | 整合硬體電氣訊號、協定層封包與驅動狀態機之標準排查 SOP。 |
+
+---
+
+## 🛠 常用 CLI 命令列指令速查
+
 ```bash
-fw-diag i2c analyze trace.csv --md i2c_report.md
-```
+# 1. 診斷邏輯分析儀 I2C 波形 (支援 Saleae CSV)
+fw-diag i2c analyze examples/data/i2c_golden.csv --md i2c_report.md
 
-### 2. 診斷邏輯分析儀 SPI Flash 波形
-```bash
-fw-diag spi analyze spi_trace.csv --md spi_report.md
-```
+# 2. 診斷邏輯分析儀 SPI Flash 波形
+fw-diag spi analyze examples/data/spi_w25q128_sample.csv --md spi_report.md
 
-### 3. 分析 PCIe 配置空間與 AER 錯誤
-```bash
-# 分析 lspci -xxxx 文字輸出或 4KB Hex Dump
-fw-diag pcie analyze lspci_dump.txt --md pcie_report.md
+# 3. 診斷 UART Serial Crash Dump (Linux Kernel Panic / ARM HardFault)
+fw-diag uart analyze examples/data/kernel_panic_nvme.log --md crash_report.md
+fw-diag uart analyze examples/data/arm_hardfault_stm32.log
 
-# 分析 Linux dmesg 中的 PCIe Bus Error / AER 紀錄
-fw-diag pcie analyze dmesg_aer.log
-```
+# 4. 解碼 MCTP 封包或 IPMB 伺服器管理訊框
+fw-diag mctp analyze examples/data/mctp_pldm_sample.hex
 
-### 4. 產生 C 語言暫存器標頭檔
-```bash
-fw-diag gen c-header src/fw_diag_tool/data/pmbus_standard.yaml --out pmbus.h --name PMBUS_REGS
+# 5. 分析 PCIe lspci Dump (支援 Link 降級與 AER 4DW TLP 拆解)
+fw-diag pcie analyze examples/data/pcie_aer_lspci.txt --md pcie_report.md
+
+# 6. 自動產出 Linux Device Tree (.dts) 原始碼
+fw-diag gen dts --bus 1 --mux 0x70 --out i2c_bus1.dtsi
+
+# 7. 產生 C 語言暫存器標頭檔與 RMW 巨集
+fw-diag gen c-header src/fw_diag_tool/data/pmbus_standard.yaml --out pmbus_regs.h --name PMBUS_REGS
 ```
 
 ---
 
-## 測試與驗證
+## 🧪 測試與驗證
 
-專案包含 37 項單元測試：
+全專案具備完整單元測試套件（56 項測試，100% 通過）：
 ```bash
 pytest -v
 ```

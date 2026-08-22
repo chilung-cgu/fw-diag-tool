@@ -25,6 +25,8 @@ class WaveformDiffReport:
     total_compared: int
     divergence_points: list[DivergencePoint] = field(default_factory=list)
     summary: str = ""
+    golden_first_tx: I2CTransaction | None = None
+    failing_first_tx: I2CTransaction | None = None
 
 
 class WaveformDiffEngine:
@@ -121,7 +123,9 @@ class WaveformDiffEngine:
             is_identical=is_id,
             total_compared=max_len,
             divergence_points=divergences,
-            summary=summary
+            summary=summary,
+            golden_first_tx=g_txs[0] if g_txs else None,
+            failing_first_tx=f_txs[0] if f_txs else None,
         )
 
     @classmethod
@@ -140,17 +144,32 @@ class WaveformDiffEngine:
 
         reconstructor = I2CWaveformReconstructor(default_clock_khz=100.0)
 
-        if diff_report.divergence_points and diff_report.divergence_points[0].golden_tx:
-            g_tx = diff_report.divergence_points[0].golden_tx
-            g_wave = reconstructor.reconstruct_transaction_waveform(g_tx)
-            fig.add_trace(go.Scatter(x=g_wave.time_us, y=g_wave.sda, mode="lines", line=dict(shape="hv", color="#00CC96", width=2), name="Golden SDA"), row=1, col=1)
-            fig.add_trace(go.Scatter(x=g_wave.time_us, y=g_wave.scl, mode="lines", line=dict(shape="hv", color="#FFFF00", width=2), name="Golden SCL"), row=1, col=1)
+        if diff_report.is_identical:
+            if diff_report.golden_first_tx:
+                g_wave = reconstructor.reconstruct_transaction_waveform(diff_report.golden_first_tx)
+                fig.add_trace(go.Scatter(x=g_wave.time_us, y=g_wave.sda, mode="lines", line=dict(shape="hv", color="#00CC96", width=2), name="Golden SDA"), row=1, col=1)
+                fig.add_trace(go.Scatter(x=g_wave.time_us, y=g_wave.scl, mode="lines", line=dict(shape="hv", color="#FFFF00", width=2), name="Golden SCL"), row=1, col=1)
+            if diff_report.failing_first_tx or diff_report.golden_first_tx:
+                target_tx = diff_report.failing_first_tx or diff_report.golden_first_tx
+                f_wave = reconstructor.reconstruct_transaction_waveform(target_tx)
+                fig.add_trace(go.Scatter(x=f_wave.time_us, y=f_wave.sda, mode="lines", line=dict(shape="hv", color="#00CC96", width=2), name="Failing (Identical) SDA"), row=2, col=1)
+                fig.add_trace(go.Scatter(x=f_wave.time_us, y=f_wave.scl, mode="lines", line=dict(shape="hv", color="#FFFF00", width=2), name="Failing (Identical) SCL"), row=2, col=1)
+        else:
+            if diff_report.divergence_points and diff_report.divergence_points[0].golden_tx:
+                g_tx = diff_report.divergence_points[0].golden_tx
+                g_wave = reconstructor.reconstruct_transaction_waveform(g_tx)
+                fig.add_trace(go.Scatter(x=g_wave.time_us, y=g_wave.sda, mode="lines", line=dict(shape="hv", color="#00CC96", width=2), name="Golden SDA"), row=1, col=1)
+                fig.add_trace(go.Scatter(x=g_wave.time_us, y=g_wave.scl, mode="lines", line=dict(shape="hv", color="#FFFF00", width=2), name="Golden SCL"), row=1, col=1)
+            else:
+                fig.add_trace(go.Scatter(x=[0, 10], y=[1, 1], mode="lines", line=dict(dash="dot", color="#7F7F7F"), name="No Transaction (Terminated)"), row=1, col=1)
 
-        if diff_report.divergence_points and diff_report.divergence_points[0].failing_tx:
-            f_tx = diff_report.divergence_points[0].failing_tx
-            f_wave = reconstructor.reconstruct_transaction_waveform(f_tx)
-            fig.add_trace(go.Scatter(x=f_wave.time_us, y=f_wave.sda, mode="lines", line=dict(shape="hv", color="#EF553B", width=2), name="Failing SDA"), row=2, col=1)
-            fig.add_trace(go.Scatter(x=f_wave.time_us, y=f_wave.scl, mode="lines", line=dict(shape="hv", color="#FFA15A", width=2), name="Failing SCL"), row=2, col=1)
+            if diff_report.divergence_points and diff_report.divergence_points[0].failing_tx:
+                f_tx = diff_report.divergence_points[0].failing_tx
+                f_wave = reconstructor.reconstruct_transaction_waveform(f_tx)
+                fig.add_trace(go.Scatter(x=f_wave.time_us, y=f_wave.sda, mode="lines", line=dict(shape="hv", color="#EF553B", width=2), name="Failing SDA"), row=2, col=1)
+                fig.add_trace(go.Scatter(x=f_wave.time_us, y=f_wave.scl, mode="lines", line=dict(shape="hv", color="#FFA15A", width=2), name="Failing SCL"), row=2, col=1)
+            else:
+                fig.add_trace(go.Scatter(x=[0, 10], y=[1, 1], mode="lines", line=dict(dash="dot", color="#7F7F7F"), name="No Transaction (Missing)"), row=2, col=1)
 
         fig.update_layout(
             title=dict(text=f"<b>{title}</b>", font=dict(size=15, color="#FFFFFF")),

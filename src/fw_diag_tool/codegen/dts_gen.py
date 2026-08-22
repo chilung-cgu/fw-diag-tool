@@ -20,16 +20,18 @@ class DeviceTreeGenerator:
     def generate_dts_from_topology(
         cls,
         bus_num: int = 1,
-        mux_addr: int = 0x70,
+        mux_addr: int | str = 0x70,
         devices: list[dict[str, Any]] | None = None,
         node_name: str = "i2c_bus"
     ) -> str:
-        devs = devices or [
+        devs = devices if devices is not None else [
             {"addr": 0x50, "type": "EEPROM", "channel": 0, "name": "eeprom"},
             {"addr": 0x48, "type": "Temperature Sensor", "channel": 1, "name": "temp-sensor"},
             {"addr": 0x40, "type": "Power Monitor", "channel": 2, "name": "power-monitor"},
             {"addr": 0x58, "type": "PMBus", "channel": 3, "name": "vr-controller"},
         ]
+
+        m_addr = int(str(mux_addr), 0) if isinstance(mux_addr, str) else int(mux_addr)
 
         lines = [
             "// SPDX-License-Identifier: GPL-2.0+ or MIT",
@@ -42,9 +44,9 @@ class DeviceTreeGenerator:
             "    status = \"okay\";",
             "    bus-frequency = <400000>;",
             "",
-            f"    i2c-mux@{mux_addr:x} {{",
+            f"    i2c-mux@{m_addr:x} {{",
             "        compatible = \"nxp,pca9548\";",
-            f"        reg = <0x{mux_addr:02x}>;",
+            f"        reg = <0x{m_addr:02x}>;",
             "        #address-cells = <1>;",
             "        #size-cells = <0>;",
             "        i2c-mux-idle-disconnect;",

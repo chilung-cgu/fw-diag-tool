@@ -180,7 +180,11 @@ def decode_register(
         raise typer.Exit(code=1)
     catalog = RegisterMapCatalog()
     catalog.load_from_yaml(yaml_file.read_text(encoding="utf-8"))
-    val = int(raw_value, 0)
+    try:
+        val = int(raw_value, 0)
+    except ValueError:
+        console.print(f"[bold red]Error: Invalid raw value '{raw_value}' (must be integer or hex format like 0x10)![/]")
+        raise typer.Exit(code=1)
     result = catalog.decode_register(reg_name_or_offset, val)
     table = Table(title=f"Register Decode: {result.reg_name} ({result.hex_val})", show_header=True)
     table.add_column("Bits", style="cyan", width=10)
@@ -221,7 +225,11 @@ def generate_dts(
     output_dts: Path | None = typer.Option(None, "--out", "-o", help="Output .dts file path"),
 ):
     """Generate Linux Kernel & OpenBMC compliant Device Tree Source (.dts) from topology."""
-    m_addr = int(mux_addr, 0)
+    try:
+        m_addr = int(mux_addr, 0)
+    except ValueError:
+        console.print(f"[bold red]Error: Invalid MUX address '{mux_addr}' (must be hex like 0x70)![/]")
+        raise typer.Exit(code=1)
     dts_text = DeviceTreeGenerator.generate_dts_from_topology(bus_num=bus_num, mux_addr=m_addr)
     if output_dts:
         output_dts.write_text(dts_text, encoding="utf-8")

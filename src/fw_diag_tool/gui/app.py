@@ -85,7 +85,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             if report.transactions:
                 tx_options = [f"Tx #{t.id}: 0x{t.address_7bit:02X} ({t.direction.value}) - {t.semantic_summary or t.hex_dump}" for t in report.transactions]
                 selected_tx_str = st.selectbox("選擇要檢視波形的交易", tx_options)
-                selected_idx = int(selected_tx_str.split(":")[0].replace("Tx #", "").strip()) - 1
+                selected_idx = tx_options.index(selected_tx_str) if selected_tx_str in tx_options else 0
                 selected_tx = report.transactions[selected_idx]
                 reconstructor = I2CWaveformReconstructor(default_clock_khz=max(10.0, report.timing_stats.avg_frequency_khz))
                 wave_data = reconstructor.reconstruct_transaction_waveform(selected_tx)

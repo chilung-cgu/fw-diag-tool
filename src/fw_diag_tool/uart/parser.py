@@ -47,26 +47,51 @@ class UARTCrashParser:
     @classmethod
     def parse_kernel_panic(cls, text: str) -> KernelPanicReport:
         lines = text.splitlines()
-        arch = "x86_64" if "RIP:" in text or "RAX:" in text else ("ARM64" if "PC is at" in text or "x0:" in text else "Generic")
+        if "RIP:" in text or "RAX:" in text or "CR2:" in text or "RSP:" in text or "RBP:" in text or "EIP:" in text:
+            arch = "x86_64"
+        elif any(k in text for k in ("FAR_EL1", "elr_el1", "ESR_EL1", "x0:", "x0 :", "pstate:", "sp :")) or ("pc :" in text and ("ffff" in text.lower() or "0000" in text)):
+            arch = "ARM64"
+        elif "PC is at" in text or "r0:" in text or "cpsr:" in text or "ARM32" in text:
+            arch = "ARM32"
+        elif any(k in text for k in ("epc :", "epc:", "ra :", "sstatus:", "scause:", "sepc:")):
+            arch = "RISC-V"
+        else:
+            arch = "Generic"
         reason = "Fatal Kernel Exception / Panic"
         faulting_ip = None
         faulting_func = None
         faulting_addr = None
         regs: dict[str, str] = {}
         call_trace: list[CallTraceFrame] = []
+        modules_linked: list[str] = []
         in_call_trace = False
 
         for line in lines:
             line_s = line.strip()
 
-            if "BUG: unable to handle" in line_s or "Kernel panic" in line_s or "Oops:" in line_s:
+            if any(line_s.startswith(pfx) or pfx in line_s for pfx in ("BUG: unable to handle", "Kernel panic", "Oops:", "Internal error:", "Unable to handle kernel")):
                 reason = line_s
-                m_addr = re.search(r"address:?\s*([0-9a-fA-Fx]+)", line_s)
+                m_addr = re.search(r"(?:address:?|virtual address|FAR_EL1:?|CR2:?)\s*(?:0x)?([0-9a-fA-F]+)", line_s, re.IGNORECASE)
                 if m_addr:
                     raw_fa = m_addr.group(1)
                     faulting_addr = raw_fa if raw_fa.startswith("0x") else f"0x{raw_fa}"
 
-            m_rip = re.search(r"(?:RIP|PC):\s*(?:[0-9a-fA-F]+:)?(?:\[?<([0-9a-fA-F]+)>\]?|\[([0-9a-fA-F]+)\])?\s*([A-Za-z0-9_]+)\+([0-9a-fA-Fx]+)/([0-9a-fA-Fx]+)(?:\s*\[([A-Za-z0-9_]+)\])?", line_s)
+            if line_s.startswith("CR2:") or line_s.startswith("FAR_EL1:"):
+                m_cr = re.search(r"(?:CR2|FAR_EL1):\s*(?:0x)?([0-9a-fA-F]+)", line_s, re.IGNORECASE)
+                if m_cr:
+                    faulting_addr = f"0x{m_cr.group(1)}"
+
+            if line_s.startswith("Modules linked in:"):
+                mod_part = line_s.replace("Modules linked in:", "").strip()
+                modules_linked = [m.strip() for m in mod_part.split() if m.strip()]
+
+            m_rip = re.search(r"(?:RIP|EIP|PC|pc|epc):\s*(?:[0-9a-fA-F]+:)?\s*(?:\[?<([0-9a-fA-F]+)>\]?|\[([0-9a-fA-F]+)\])?\s*([A-Za-z0-9_]+)\+([0-9a-fA-Fx]+)/([0-9a-fA-Fx]+)(?:\s*\[([A-Za-z0-9_]+)\])?", line_s)
+            if not m_rip:
+                m_rip = re.search(r"PC is at\s+([A-Za-z0-9_]+)\+([0-9a-fA-Fx]+)/([0-9a-fA-Fx]+)(?:\s*\[([A-Za-z0-9_]+)\])?", line_s)
+                if m_rip:
+                    faulting_ip = "N/A"
+                    faulting_func = m_rip.group(1)
+                    regs["IP_FUNC"] = f"{faulting_func}+{m_rip.group(2)}" + (f" [{m_rip.group(4)}]" if m_rip.group(4) else "")
             if m_rip:
                 faulting_ip = m_rip.group(1) or m_rip.group(2) or "N/A"
                 faulting_func = m_rip.group(3)
@@ -80,15 +105,17 @@ class UARTCrashParser:
                 elif r_name not in ("RIP", "EIP"):
                     regs[r_name] = f"0x{r_val}"
 
-            if "Call Trace:" in line_s:
+            if any(line_s.startswith(k) or k in line_s for k in ("Call Trace:", "Backtrace:", "Call trace:")):
                 in_call_trace = True
                 continue
 
             if in_call_trace:
-                if not line_s or line_s.startswith(("Code:", "Kernel panic", "CR2:")):
+                if not line_s or any(line_s.startswith(stop_k) for stop_k in ("Code:", "Kernel panic", "CR2:", "---[ end trace", "Modules linked in:", "Kernel offset:", "note:")):
                     in_call_trace = False
+                elif "<TASK>" in line_s or "</TASK>" in line_s:
+                    continue
                 else:
-                    m_frame = re.search(r"(?:\?|\[?<([0-9a-fA-F]+)>\]?|\[([0-9a-fA-F]+)\])?\s*([A-Za-z0-9_]+)\+([0-9a-fA-Fx]+)/([0-9a-fA-Fx]+)(?:\s*\[([A-Za-z0-9_]+)\])?", line_s)
+                    m_frame = re.search(r"(?:\[\s*\d+\.\d+\]\s*)?(?:\?|\[?<([0-9a-fA-F]+)>\]?|\[([0-9a-fA-F]+)\])?\s*([A-Za-z0-9_]+)\+([0-9a-fA-Fx]+)/([0-9a-fA-Fx]+)(?:\s*\[([A-Za-z0-9_]+)\])?", line_s)
                     if m_frame and m_frame.group(3):
                         addr_val = m_frame.group(1) or m_frame.group(2) or "0x0"
                         call_trace.append(CallTraceFrame(
@@ -127,6 +154,7 @@ class UARTCrashParser:
             faulting_address=faulting_addr,
             registers=regs,
             call_trace=call_trace,
+            modules_linked=modules_linked,
             root_cause_analysis="\n".join(rc_lines),
             actionable_checklist=checklist
         )
@@ -186,6 +214,12 @@ class UARTCrashParser:
         bfar_valid = bool(bfsr & (1 << 7))
         if bfar_valid and bfar is not None:
             fault_flags.append(f"BFSR.BFARVALID (Fault Address: 0x{bfar:08X})")
+        if bfsr & (1 << 5):
+            fault_flags.append("BFSR.LSPERR (BusFault during FP lazy state preservation)")
+        if bfsr & (1 << 4):
+            fault_flags.append("BFSR.STKERR (BusFault on stacking for exception)")
+        if bfsr & (1 << 3):
+            fault_flags.append("BFSR.UNSTKERR (BusFault on unstacking for exception)")
         if bfsr & (1 << 2):
             fault_flags.append("BFSR.IMPRECISERR (Imprecise Data Bus Error - asynchronous bus write fault)")
             rc_lines.append("💥 【非精確總線錯誤 (IMPRECISERR)】周邊匯流排寫入無效位址（例如存取了未開時鐘的周邊暫存器）。")
@@ -199,10 +233,23 @@ class UARTCrashParser:
             fault_flags.append("BFSR.IBUSERR (Instruction Bus Error on branch/prefetch)")
 
         # MMFSR flags
+        mmfar_valid = bool(mmfsr & (1 << 7))
+        if mmfar_valid and mmfar is not None:
+            fault_flags.append(f"MMFSR.MMARVALID (Fault Address: 0x{mmfar:08X})")
+        if mmfsr & (1 << 5):
+            fault_flags.append("MMFSR.MLSPERR (MemManage fault during FP lazy state preservation)")
+        if mmfsr & (1 << 4):
+            fault_flags.append("MMFSR.MSTKERR (MemManage fault on stacking for exception)")
+        if mmfsr & (1 << 3):
+            fault_flags.append("MMFSR.MUNSTKERR (MemManage fault on unstacking for exception)")
         if mmfsr & (1 << 1):
             fault_flags.append("MMFSR.DACCVIOL (Data Access Violation / MPU Fault)")
         if mmfsr & (1 << 0):
             fault_flags.append("MMFSR.IACCVIOL (Instruction Access Violation / MPU Fault)")
+
+        # UFSR flags
+        if ufsr & (1 << 2):
+            fault_flags.append("UFSR.INVPC (Invalid PC load / EXC_RETURN)")
 
         if pc is not None:
             checklist.append(f"使用 arm-none-eabi-addr2line -e firmware.elf 0x{pc:08X} 定位出錯源碼行號。")

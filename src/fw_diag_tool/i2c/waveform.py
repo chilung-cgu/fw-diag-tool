@@ -49,7 +49,8 @@ class I2CWaveformReconstructor:
         clock_khz: float | None = None,
         t_offset_us: float = 0.0
     ) -> I2CWaveformData:
-        clk_khz = clock_khz or self.default_clock_khz
+        clk_khz = clock_khz if (clock_khz is not None and clock_khz > 0) else self.default_clock_khz
+        clk_khz = max(1.0, clk_khz)
         t_half_period_us = max(0.5, 500.0 / clk_khz)  # 5µs for 100kHz, 1.25µs for 400kHz
 
         time_us: list[float] = []
