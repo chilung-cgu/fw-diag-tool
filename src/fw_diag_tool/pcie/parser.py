@@ -436,8 +436,9 @@ class PCIeAnalyzer:
             target_bus = (dw2 >> 24) & 0xFF
             target_dev = (dw2 >> 19) & 0x1F
             target_func = (dw2 >> 16) & 0x07
-            reg_num = (dw2 & 0xFC) | ((dw2 >> 24) & 0xF00)
-            address = (target_bus << 16) | (target_dev << 11) | (target_func << 8) | reg_num
+            ext_reg = (dw2 >> 8) & 0x0F
+            reg_num = (dw2 & 0xFC) | (ext_reg << 8)
+            address = (target_bus << 20) | (target_dev << 15) | (target_func << 12) | reg_num
         elif type_ in (0x0A, 0x0B):  # Completions
             completer_id = (dw1 >> 16) & 0xFFFF
             completion_status = (dw1 >> 13) & 0x07

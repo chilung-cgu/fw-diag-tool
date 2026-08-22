@@ -155,8 +155,13 @@ class I2CParser:
                 else:
                     addr_7bit = raw_addr
                     
-            # Parse data
-            raw_data = parse_hex_or_int(row[data_idx]) if data_idx is not None and data_idx < len(row) else None
+            # Parse data (support single byte or multi-byte space/comma separated)
+            raw_data_cell = str(row[data_idx]).strip() if data_idx is not None and data_idx < len(row) else ""
+            raw_data_tokens = []
+            if raw_data_cell and raw_data_cell.lower() not in ("-", "none", "null", ""):
+                raw_data_tokens = [parse_hex_or_int(tok) for tok in re.split(r"[ ,;]+", raw_data_cell) if tok.strip()]
+                raw_data_tokens = [tok for tok in raw_data_tokens if tok is not None]
+            raw_data = raw_data_tokens[0] if len(raw_data_tokens) == 1 else None
             
             # Parse ACK
             ack_val = parse_ack(row[ack_idx]) if ack_idx is not None and ack_idx < len(row) else AckType.ACK
@@ -190,18 +195,47 @@ class I2CParser:
             else:
                 ev_type = RawEventType.UNKNOWN
                 
-            events.append(RawI2CEvent(
-                timestamp=timestamp,
-                event_type=ev_type,
-                packet_id=packet_id,
-                address_7bit=addr_7bit,
-                direction=raw_rw,
-                data_byte=raw_data,
-                ack=ack_val,
-                duration_s=dur,
-                bit_rate_khz=bitrate,
-                raw_text=",".join(row),
-            ))
+            if len(raw_data_tokens) > 1:
+                # Multi-byte packet row: emit ADDRESS first then DATA for each byte
+                if addr_7bit is not None:
+                    events.append(RawI2CEvent(
+                        timestamp=timestamp,
+                        event_type=RawEventType.ADDRESS,
+                        packet_id=packet_id,
+                        address_7bit=addr_7bit,
+                        direction=raw_rw,
+                        data_byte=None,
+                        ack=AckType.ACK,
+                        duration_s=dur,
+                        bit_rate_khz=bitrate,
+                        raw_text=",".join(row),
+                    ))
+                for b_idx, b_val in enumerate(raw_data_tokens):
+                    events.append(RawI2CEvent(
+                        timestamp=timestamp + (b_idx + 1) * 0.00001,
+                        event_type=RawEventType.DATA,
+                        packet_id=packet_id,
+                        address_7bit=addr_7bit,
+                        direction=raw_rw,
+                        data_byte=b_val,
+                        ack=ack_val,
+                        duration_s=dur,
+                        bit_rate_khz=bitrate,
+                        raw_text=",".join(row),
+                    ))
+            else:
+                events.append(RawI2CEvent(
+                    timestamp=timestamp,
+                    event_type=ev_type,
+                    packet_id=packet_id,
+                    address_7bit=addr_7bit,
+                    direction=raw_rw,
+                    data_byte=raw_data,
+                    ack=ack_val,
+                    duration_s=dur,
+                    bit_rate_khz=bitrate,
+                    raw_text=",".join(row),
+                ))
             
         return events
 

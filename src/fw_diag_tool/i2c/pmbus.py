@@ -154,17 +154,14 @@ def encode_linear11(val: float) -> int:
     return (exp_5bit << 11) | mant_11bit
 
 
-def decode_linear16(raw_word: int, vout_mode_exponent: int = -9) -> float:
-    """Decode a 16-bit PMBus Linear16 output voltage value.
-    
-    Format:
-      - 16-bit unsigned integer (or signed depending on device).
-      - Exponent N is obtained from VOUT_MODE command (typically -9, -10, -12, etc.).
-      - Real Value = raw_word * 2^N
-    """
+def decode_linear16(raw_word: int, vout_mode_exponent: int = -9, signed: bool = False) -> float:
+    """Decode a 16-bit PMBus Linear16 output voltage value."""
     raw_word &= 0xFFFF
-    return float(raw_word * (2.0 ** vout_mode_exponent))
-
+    if signed and (raw_word & 0x8000):
+        val = raw_word - 65536
+    else:
+        val = raw_word
+    return float(val * (2.0 ** vout_mode_exponent))
 
 def parse_vout_mode_exponent(vout_mode_byte: int) -> int:
     """Extract 5-bit two's complement exponent from VOUT_MODE (0x20) register byte."""
@@ -277,7 +274,8 @@ def decode_pmbus_payload(
     # 2. Linear16 Output Voltage (READ_VOUT, VOUT_COMMAND, etc.)
     elif dtype == PMBusDataType.LINEAR16 and len(data_bytes) >= 2:
         raw_word = data_bytes[0] | (data_bytes[1] << 8)
-        val = decode_linear16(raw_word, vout_exponent)
+        is_signed = cmd_code in (0x22, 0x23)
+        val = decode_linear16(raw_word, vout_exponent, signed=is_signed)
         result["value"] = round(val, 4)
         result["unit"] = cmd_def.unit
         result["summary"] = f"{cmd_def.name} = {result['value']} {cmd_def.unit} (exp={vout_exponent})"

@@ -222,3 +222,6 @@ class I2CReporter:
                 lines.append("")
                 
         return "\n".join(lines)
+
+
+I2CReporter.to_markdown = I2CReporter.generate_markdown

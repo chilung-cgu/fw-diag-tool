@@ -166,7 +166,15 @@ class I2CDiagnosticEngine:
             if ev.event_type == RawEventType.DATA or ev.data_byte is not None:
                 data_val = ev.data_byte if ev.data_byte is not None else 0x00
                 
-                if current_tx is None:
+                pkt_changed = (ev.packet_id is not None and current_tx is not None and getattr(current_tx, "_packet_id", None) is not None and ev.packet_id != current_tx._packet_id)
+                dir_changed = (current_tx is not None and ev.direction is not None and ev.direction != current_tx.direction)
+                addr_changed = (current_tx is not None and ev.address_7bit is not None and ev.address_7bit != current_tx.address_7bit)
+                if current_tx is None or pkt_changed or dir_changed or addr_changed:
+                    if current_tx is not None and (current_tx.byte_packets or getattr(current_tx, "_has_address", False)):
+                        current_tx.end_time = ev.timestamp
+                        current_tx.duration_us = max(0.0, (current_tx.end_time - current_tx.start_time) * 1_000_000.0)
+                        current_tx.has_stop = True
+                        transactions.append(current_tx)
                     # Implicit transaction start without explicit START/ADDRESS event
                     addr_7b = ev.address_7bit or 0x00
                     rw = ev.direction or I2CDirection.WRITE
@@ -179,6 +187,7 @@ class I2CDiagnosticEngine:
                         direction=rw,
                         has_stop=(ev.packet_id is not None),
                     )
+                    current_tx._packet_id = ev.packet_id
                     current_tx._has_address = ev.address_7bit is not None
                     current_tx._is_placeholder = False
                     tx_counter += 1
@@ -266,6 +275,9 @@ class I2CDiagnosticEngine:
                 else:
                     cmd_code = ctx.get("last_cmd", 0x88)
                     tx.command_code = cmd_code
+                    if cmd_code == 0x20 and tx.data_bytes:
+                        from fw_diag_tool.i2c.pmbus import parse_vout_mode_exponent
+                        ctx["vout_exp"] = parse_vout_mode_exponent(tx.data_bytes[0])
                     decoded = decode_pmbus_payload(cmd_code, tx.data_bytes, vout_exponent=ctx["vout_exp"])
                     tx.command_name = decoded.get("command_name")
                     tx.semantic_summary = decoded.get("summary")
@@ -274,7 +286,9 @@ class I2CDiagnosticEngine:
             # 2. EEPROM Protocol Semantic Decoding
             elif tx.protocol == "EEPROM" or (chip and "EEPROM" in chip.category):
                 if tx.direction == I2CDirection.WRITE:
-                    decoded = decode_eeprom_write(tx.data_bytes, page_size=self.default_eeprom_page_size)
+                    eep_page_size = self.default_eeprom_page_size if self.default_eeprom_page_size != 16 else ((chip.extra_info.get("page_size_bytes") if chip and chip.extra_info else None) or self.default_eeprom_page_size)
+                    eep_addr_len = (chip.default_register_len if chip else None) or 1
+                    decoded = decode_eeprom_write(tx.data_bytes, preferred_address_bytes=eep_addr_len, page_size=eep_page_size)
                     tx.semantic_summary = decoded.get("summary")
                     tx.decoded_values = decoded
                     if decoded.get("offset") is not None:
