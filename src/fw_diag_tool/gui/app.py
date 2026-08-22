@@ -6,36 +6,44 @@ import streamlit as st
 from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.codegen.driver_gen import I2CDriverCodeGenerator
+from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.reporter import I2CReporter
 from fw_diag_tool.i2c.timing_charts import I2CTimingCharts
 from fw_diag_tool.i2c.waveform import I2CWaveformReconstructor
+from fw_diag_tool.i2c.waveform_diff import WaveformDiffEngine
+from fw_diag_tool.mctp.parser import ServerMgmtParser
+from fw_diag_tool.mctp.reporter import ServerMgmtReporter
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.spi.reporter import SPIReporter
+from fw_diag_tool.uart.parser import UARTCrashParser
+from fw_diag_tool.uart.reporter import UARTReporter
 
 st.set_page_config(page_title="FW Diagnostic Toolkit", page_icon="⚡", layout="wide")
-st.title("⚡ Firmware Signal & Protocol Diagnostic Toolkit")
-st.caption("Cross-platform Logic Analyzer & System Trace RCA Assistant for Junior Firmware Engineers")
+st.title("⚡ Firmware Signal & Protocol Diagnostic Suite")
+st.caption("Flagship Cross-Platform Logic Analyzer & Firmware Engineering Workstation for Junior Engineers")
 
 menu = st.sidebar.radio(
     "功能導覽",
     [
         "📊 I2C / PMBus 診斷與波形檢視",
         "🎨 I2C 封包模擬器與驅動產生",
+        "⚖️ 雙波形對比檢視 (Waveform Diff)",
+        "📟 UART Crash & HardFault 分析",
+        "🌐 MCTP / IPMB 伺服器協定解析",
+        "🌲 Device Tree (.dts) 產生器",
         "🚀 PCIe Config & AER 診斷",
         "⚡ SPI Flash 協定診斷",
         "🎛 晶片暫存器 Bitfield 解碼器",
         "🛠 C 語言 Register 巨集產生器",
-        "🧪 Junior FW 故障模擬實驗室 (Fault Lab)",
+        "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)",
         "📚 韌體除錯指南 & SOP"
     ]
 )
 
-# -------------------------------------------------------------
-# 1. I2C / PMBus Trace & Waveform Diagnostics
-# -------------------------------------------------------------
+# 1. I2C / PMBus
 if menu == "📊 I2C / PMBus 診斷與波形檢視":
     st.header("I2C / SMBus / PMBus 協定分析與數位波形檢視")
     col1, col2 = st.columns([2, 1])
@@ -76,10 +84,9 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             st.subheader("I2C 互動式數位方波與協定疊加 (SCL / SDA / Protocol Overlay)")
             if report.transactions:
                 tx_options = [f"Tx #{t.id}: 0x{t.address_7bit:02X} ({t.direction.value}) - {t.semantic_summary or t.hex_dump}" for t in report.transactions]
-                selected_tx_str = st.selectbox("選擇要檢視波形的交易 (Transaction)", tx_options)
+                selected_tx_str = st.selectbox("選擇要檢視波形的交易", tx_options)
                 selected_idx = int(selected_tx_str.split(":")[0].replace("Tx #", "").strip()) - 1
                 selected_tx = report.transactions[selected_idx]
-
                 reconstructor = I2CWaveformReconstructor(default_clock_khz=max(10.0, report.timing_stats.avg_frequency_khz))
                 wave_data = reconstructor.reconstruct_transaction_waveform(selected_tx)
                 fig = reconstructor.create_plotly_figure(wave_data, title=f"Tx #{selected_tx.id} Waveform: 0x{selected_tx.address_7bit:02X} {selected_tx.direction.value}")
@@ -102,28 +109,15 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
 
         with tab_timing:
             st.subheader("匯流排物理層健康評等")
-            health_df = I2CTimingCharts.get_device_health_summary(report)
-            st.table(health_df)
-            col_t1, col_t2 = st.columns(2)
-            with col_t1:
+            st.table(I2CTimingCharts.get_device_health_summary(report))
+            c_t1, c_t2 = st.columns(2)
+            with c_t1:
                 st.plotly_chart(I2CTimingCharts.create_frequency_distribution(report), use_container_width=True)
-            with col_t2:
+            with c_t2:
                 st.plotly_chart(I2CTimingCharts.create_bus_activity_timeline(report), use_container_width=True)
 
         with tab_tx:
-            tx_data = []
-            for t in report.transactions:
-                tx_data.append({
-                    "ID": t.id,
-                    "Time (s)": f"{t.start_time:.6f}",
-                    "Address": f"0x{t.address_7bit:02X}",
-                    "Direction": t.direction.value,
-                    "ACK": t.address_ack.value,
-                    "Topology": t.mux_topology or "-",
-                    "Bytes": len(t.data_bytes),
-                    "Data": t.hex_dump,
-                    "Semantic Meaning": t.semantic_summary or "-"
-                })
+            tx_data = [{"ID": t.id, "Time (s)": f"{t.start_time:.6f}", "Address": f"0x{t.address_7bit:02X}", "Direction": t.direction.value, "ACK": t.address_ack.value, "Topology": t.mux_topology or "-", "Bytes": len(t.data_bytes), "Data": t.hex_dump, "Semantic Meaning": t.semantic_summary or "-"} for t in report.transactions]
             st.dataframe(pd.DataFrame(tx_data), use_container_width=True)
 
         with tab_md:
@@ -131,13 +125,9 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             st.code(md_out, language="markdown")
             st.download_button("下載 Markdown 報告", md_out, file_name="i2c_report.md")
 
-# -------------------------------------------------------------
-# 2. I2C Packet Builder & Driver Generator
-# -------------------------------------------------------------
+# 2. Packet Builder & Driver CodeGen
 elif menu == "🎨 I2C 封包模擬器與驅動產生":
     st.header("I2C 封包自訂建構、理想波形生成與多平台 C 驅動產出")
-    st.write("自行指定目標 Slave 位址、暫存器與資料，系統將即時繪製理想波形並生成對應之 C 語言驅動程式碼。")
-
     b_col1, b_col2, b_col3, b_col4 = st.columns(4)
     with b_col1:
         builder_addr_str = st.text_input("Slave 7-bit Address", value="0x50")
@@ -146,51 +136,90 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
     with b_col3:
         builder_reg_str = st.text_input("Register Offset", value="0x00")
     with b_col4:
-        builder_data_str = st.text_input("Data Bytes (Hex, 空白分隔)", value="0x12 0x34")
-
+        builder_data_str = st.text_input("Data Bytes (Hex)", value="0x12 0x34")
     try:
         b_addr = int(builder_addr_str, 16)
         b_reg = int(builder_reg_str, 16)
         b_data = [int(tok, 16) for tok in builder_data_str.split() if tok]
         is_read_op = (builder_op == "Read")
-
-        # Generate mock transaction and reconstruct waveform
         from fw_diag_tool.i2c.models import AckType, I2CDirection, I2CTransaction
         mock_tx = I2CTransaction(
-            id=1,
-            start_time=0.0,
-            end_time=0.0001,
-            address_7bit=b_addr,
-            address_8bit=(b_addr << 1) | (1 if is_read_op else 0),
-            direction=I2CDirection.READ if is_read_op else I2CDirection.WRITE,
-            data_bytes=b_data if not is_read_op else ([b_reg] if b_reg is not None else []),
-            address_ack=AckType.ACK,
-            has_stop=True,
-            command_code=b_reg
+            id=1, start_time=0.0, end_time=0.0001, address_7bit=b_addr, address_8bit=(b_addr << 1) | (1 if is_read_op else 0),
+            direction=I2CDirection.READ if is_read_op else I2CDirection.WRITE, data_bytes=b_data if not is_read_op else ([b_reg] if b_reg is not None else []),
+            address_ack=AckType.ACK, has_stop=True, command_code=b_reg
         )
-
         reconstructor = I2CWaveformReconstructor(default_clock_khz=100.0)
         wave_data = reconstructor.reconstruct_transaction_waveform(mock_tx)
-        fig_builder = reconstructor.create_plotly_figure(wave_data, title=f"Ideal Waveform: {builder_op} 0x{b_addr:02X} Reg: 0x{b_reg:02X}")
-        st.plotly_chart(fig_builder, use_container_width=True)
-
+        st.plotly_chart(reconstructor.create_plotly_figure(wave_data, title=f"Ideal Waveform: {builder_op} 0x{b_addr:02X} Reg: 0x{b_reg:02X}"), use_container_width=True)
         st.subheader("一鍵生成多平台 C 語言驅動代碼")
-        snippets = I2CDriverCodeGenerator.generate_all_snippets(
-            addr_7bit=b_addr,
-            reg_offset=b_reg,
-            data_bytes=b_data,
-            is_read=is_read_op
-        )
+        snippets = I2CDriverCodeGenerator.generate_all_snippets(addr_7bit=b_addr, reg_offset=b_reg, data_bytes=b_data, is_read=is_read_op)
         for plat, code_txt in snippets.items():
             with st.expander(f"💻 {plat}", expanded=True):
                 st.code(code_txt, language="c" if "CLI" not in plat else "bash")
-
     except Exception as e:
         st.error(f"輸入格式錯誤: {e}")
 
-# -------------------------------------------------------------
-# 3. PCIe & AER
-# -------------------------------------------------------------
+# 3. Waveform Diff
+elif menu == "⚖️ 雙波形對比檢視 (Waveform Diff)":
+    st.header("Golden (正常板卡) vs Failing (故障板卡) 雙波形差分對比")
+    d_col1, d_col2 = st.columns(2)
+    with d_col1:
+        golden_file = st.file_uploader("上傳 Golden (正常) Trace CSV", type=["csv", "txt"])
+    with d_col2:
+        failing_file = st.file_uploader("上傳 Failing (故障) Trace CSV", type=["csv", "txt"])
+    if golden_file and failing_file:
+        g_text = golden_file.getvalue().decode("utf-8", errors="replace")
+        f_text = failing_file.getvalue().decode("utf-8", errors="replace")
+        eng = I2CDiagnosticEngine()
+        g_rep = eng.analyze_csv_content(g_text)
+        f_rep = eng.analyze_csv_content(f_text)
+        diff_res = WaveformDiffEngine.compare_reports(g_rep, f_rep)
+        if diff_res.is_identical:
+            st.success("🎉 Golden 與 Failing 兩份波形在協定層完全一致！")
+        else:
+            st.error(f"🚨 {diff_res.summary}")
+            for dp in diff_res.divergence_points:
+                with st.expander(f"分歧點: 交易 #{dp.tx_index} ({dp.mismatch_type})", expanded=True):
+                    st.markdown(f"**現象描述**: {dp.description}")
+                    st.markdown(f"**排查建議**: {dp.root_cause_hint}")
+            st.plotly_chart(WaveformDiffEngine.create_comparison_figure(diff_res), use_container_width=True)
+
+# 4. UART Crash Dump
+elif menu == "📟 UART Crash & HardFault 分析":
+    st.header("UART Serial Crash Dump & ARM Cortex-M HardFault 智慧診斷")
+    u_mode = st.radio("選擇輸入方式", ["貼上 UART Log / Crash Dump", "載入範例 Linux Kernel Panic Log", "載入範例 ARM HardFault Log"])
+    u_raw = ""
+    if u_mode == "貼上 UART Log / Crash Dump":
+        u_raw = st.text_area("請貼上 UART 輸出內容：", height=200)
+    elif u_mode == "載入範例 Linux Kernel Panic Log":
+        u_raw = """BUG: unable to handle page fault for address: 0000000000000010\nRIP: 0010:nvme_pci_complete_rq+0x38/0x120 [nvme]\nRAX: 0000000000000000 RBX: ffff888102345000 RCX: 0000000000000000\nCR2: 0000000000000010\nCall Trace:\n <TASK>\n [ffff888100123450] blk_mq_complete_request+0x24/0x50\n [ffff8881001234a0] nvme_irq_handler+0x8c/0x100 [nvme]\n </TASK>"""
+    else:
+        u_raw = """HardFault Exception Occurred!\nHFSR: 0x40000000 (FORCED)\nCFSR: 0x02000000 (DIVBYZERO)\nStacked R0: 0x00000000\nStacked R1: 0x0000000A\nStacked PC: 0x08001234\nStacked LR: 0x08000456\nStacked xPSR: 0x61000000"""
+    if st.button("執行 UART Crash 分析") and u_raw.strip():
+        u_report = UARTCrashParser.parse_log_text(u_raw)
+        st.markdown(UARTReporter.to_markdown(u_report))
+
+# 5. MCTP / IPMB
+elif menu == "🌐 MCTP / IPMB 伺服器協定解析":
+    st.header("MCTP (DSP0236/PLDM/SPDM) 與 IPMB 伺服器管理協定解碼")
+    m_raw = st.text_area("請輸入 MCTP 或 IPMB 封包 Hex Dump (每行一封包)：", height=150, value="08 00 80 01 00 02 01 00\n20 18 C8 81 20 01 56")
+    if st.button("執行伺服器協定解碼") and m_raw.strip():
+        m_report = ServerMgmtParser.parse_text_dump(m_raw)
+        st.markdown(ServerMgmtReporter.to_markdown(m_report))
+
+# 6. Device Tree Generator
+elif menu == "🌲 Device Tree (.dts) 產生器":
+    st.header("Linux Kernel & OpenBMC Device Tree Source (.dts) 自動生成")
+    dt_b1, dt_b2 = st.columns(2)
+    with dt_b1:
+        dts_bus = st.number_input("I2C Bus Number (&i2c...)", min_value=0, max_value=32, value=1)
+    with dt_b2:
+        dts_mux = st.text_input("PCA9548A MUX Address", value="0x70")
+    dts_code = DeviceTreeGenerator.generate_dts_from_topology(bus_num=dts_bus, mux_addr=int(dts_mux, 16))
+    st.code(dts_code, language="dts")
+    st.download_button("下載 i2c_bus.dtsi", dts_code, file_name=f"i2c_bus{dts_bus}.dtsi")
+
+# 7. PCIe
 elif menu == "🚀 PCIe Config & AER 診斷":
     st.header("PCIe 配置空間、Capability 鏈表與 AER 嚴重錯誤診斷")
     input_mode = st.radio("輸入方式", ["貼上 lspci -xxxx / Hex Dump", "貼上 Linux dmesg AER Error Log"])
@@ -217,9 +246,7 @@ elif menu == "🚀 PCIe Config & AER 診斷":
                     st.error(f"🚨 {cfg.link_info.degradation_reason}")
                 st.markdown(PCIeReporter.to_markdown(cfg))
 
-# -------------------------------------------------------------
-# 4. SPI Flash
-# -------------------------------------------------------------
+# 8. SPI Flash
 elif menu == "⚡ SPI Flash 協定診斷":
     st.header("SPI / QSPI Flash 協定解析與寫入異常診斷")
     uploaded_spi = st.file_uploader("選擇 Saleae SPI CSV 檔案", type=["csv", "txt"])
@@ -229,6 +256,7 @@ elif menu == "⚡ SPI Flash 協定診斷":
     if csv_text:
         engine = SPIDiagnosticEngine()
         rep = engine.analyze_csv_content(csv_text)
+        SPIReporter.render_terminal(rep)
         s1, s2, s3, s4 = st.columns(4)
         s1.metric("總傳輸次數", rep.summary.total_transactions)
         s2.metric("讀取次數", rep.summary.read_count)
@@ -238,15 +266,10 @@ elif menu == "⚡ SPI Flash 協定診斷":
             st.info(f"識別晶片型號: {rep.summary.detected_flash_chip}")
         st.markdown(SPIReporter.to_markdown(rep))
 
-# -------------------------------------------------------------
-# 5. Register Decoder & Bit-Flipper
-# -------------------------------------------------------------
+# 9. Register Decoder
 elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
     st.header("硬體 / 晶片暫存器 Bitfield 視覺化解碼器")
-    builtin_map = {
-        "PMBus 標準狀態暫存器 (PMBus STATUS_WORD)": "pmbus_standard.yaml",
-        "PCIe AER Uncorrectable Error 暫存器": "pcie_aer_registers.yaml"
-    }
+    builtin_map = {"PMBus 標準狀態暫存器 (PMBus STATUS_WORD)": "pmbus_standard.yaml", "PCIe AER Uncorrectable Error 暫存器": "pcie_aer_registers.yaml"}
     choice = st.selectbox("選擇預設暫存器定義檔", list(builtin_map.keys()))
     data_dir = Path(__file__).parent.parent / "data"
     yaml_file = data_dir / builtin_map[choice]
@@ -268,9 +291,7 @@ elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
         st.subheader(f"{res.reg_name} (0x{cur_val:08X})")
         st.table(pd.DataFrame([{"Bit Range": f.bit_range, "Field": f.name, "Value": f.hex_val, "Meaning": f"⚠ {f.meaning}" if f.is_warning else f.meaning} for f in res.fields]))
 
-# -------------------------------------------------------------
-# 6. C Code Generator
-# -------------------------------------------------------------
+# 10. C Codegen
 elif menu == "🛠 C 語言 Register 巨集產生器":
     st.header("YAML 暫存器定義檔 -> C 語言 Header (#define / RMW 巨集) 自動生成")
     data_dir = Path(__file__).parent.parent / "data"
@@ -282,42 +303,46 @@ elif menu == "🛠 C 語言 Register 巨集產生器":
     st.code(c_header, language="c")
     st.download_button(f"下載 {mod_name.lower()}.h", c_header, file_name=f"{mod_name.lower()}.h")
 
-# -------------------------------------------------------------
-# 7. Junior FW Fault Lab
-# -------------------------------------------------------------
-elif menu == "🧪 Junior FW 故障模擬實驗室 (Fault Lab)":
-    st.header("Junior Firmware 工程師硬韌體故障模擬演練場")
-    st.write("點選任一常見硬體故障案例，模擬並檢驗排查邏輯：")
-    scenario = st.selectbox(
-        "選擇演練案例",
-        [
-            "Case 1: I2C Address NACK (Slave 未上電 / 位址錯誤)",
-            "Case 2: I2C Clock Stretching 逾時 (> 25ms Bus Hang)",
-            "Case 3: I2C EEPROM Page Boundary 寫入覆蓋風險",
-            "Case 4: PCIe AER Completion Timeout 嚴重錯誤",
-            "Case 5: SPI NOR Flash 寫入無效 (未發送 0x06 WREN)"
-        ]
-    )
-    if "Case 1" in scenario:
-        st.info("【情境說明】韌體向 0x50 發出讀取指令，但硬體完全無 ACK (Address NACK)。")
-        st.code("START -> 0x50 (Write) -> NACK -> STOP", language="text")
-        st.markdown("**【排查 SOP】**\n1. 量測 Slave 供電電壓 (VCC/3.3V) 是否正常。\n2. 檢查晶片硬體 Address 引腳 (A0, A1, A2) 是否浮接。\n3. 檢查 I2C 7-bit 位址與 8-bit R/W 位址是否搞混。")
-    elif "Case 2" in scenario:
-        st.info("【情境說明】Slave MCU 在傳輸中拉低 SCL 超過 25ms，造成 Bus Hang。")
-        st.markdown("**【排查 SOP】**\n1. 檢查 Slave MCU 是否死鎖在中斷 (ISR) 或進入 HardFault。\n2. Master 韌體需啟動 SMBus Timeout 超時計時器並執行 SCL 9-Clock Reset。")
-    elif "Case 3" in scenario:
-        st.info("【情境說明】向 24C64 (32-byte page) 從 offset 0x18 連續寫入 16 bytes，跨越 0x20 邊界。")
-        st.markdown("**【排查 SOP】**\n1. EEPROM 位址指針發生 Page Rollover，覆蓋了 0x00~0x07 的資料！\n2. 韌體需以 Page Size 為單位進行 Chunk 寫入分段。")
-    elif "Case 4" in scenario:
-        st.info("【情境說明】PCIe Host 發出 Memory Read，目標設備超時未回傳 Completion。")
-        st.markdown("**【排查 SOP】**\n1. 檢查目標設備內部 AXI / State Machine 是否卡死。\n2. 檢查 Device Control 2 中的 CTO Timeout 設定。")
-    elif "Case 5" in scenario:
-        st.info("【情境說明】向 SPI NOR Flash 發送 0x02 Page Program，但 Flash 內部數據完全沒變。")
-        st.markdown("**【排查 SOP】**\n1. 每次 Page Program 前必須發送單獨的 0x06 WREN 封包。\n2. 檢查 Status Register 中的 WEL 位元是否為 1。")
+# 11. Fault Arena
+elif menu == "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)":
+    st.header("Junior Firmware 工程師 20 大經典硬韌體故障演練場")
+    arena_cases = [
+        "Case 01: I2C Address NACK (Slave 未上電 / Address Pin 浮接)",
+        "Case 02: I2C Data NACK (EEPROM 內部寫入週期 tWR 忙碌中)",
+        "Case 03: I2C Clock Stretching 逾時 (> 25ms SMBus Hang)",
+        "Case 04: I2C EEPROM 24C64 Page Boundary 跨頁覆蓋風險",
+        "Case 05: I2C PCA9548A MUX 多通道同時開啟引發匯流排衝突",
+        "Case 06: PMBus VOUT_TRIM 負值補碼計算溢位 (127V 誤報)",
+        "Case 07: PCIe Gen4 x16 降速至 Gen1 x1 (金手指髒污/SI劣化)",
+        "Case 08: PCIe AER Completion Timeout (目標設備 AXI 狀態機死鎖)",
+        "Case 09: PCIe AER Malformed TLP (封包長度違反 Max Payload Size)",
+        "Case 10: PCIe AER Poisoned TLP (上游主記憶體 ECC 錯誤)",
+        "Case 11: SPI NOR Flash Page Program 遺漏 0x06 WREN 寫入無效",
+        "Case 12: SPI NOR Flash Page Buffer 256B Wrap-Around 覆蓋",
+        "Case 13: SPI JEDEC 讀回全 0xFF (MISO 線路浮接 / 供電斷開)",
+        "Case 14: SPI JEDEC 讀回全 0x00 (MISO 對地短路 / 匯流排被鉗位)",
+        "Case 15: Linux Kernel Panic: NULL Pointer Dereference at Offset 0x10",
+        "Case 16: ARM Cortex-M HardFault: DIVBYZERO 除以零中斷陷阱",
+        "Case 17: ARM Cortex-M HardFault: UNALIGNED 未對齊 32-bit 指標存取",
+        "Case 18: ARM Cortex-M HardFault: IMPRECISERR 異步總線寫入錯誤",
+        "Case 19: MCTP PLDM 感測器數值傳輸異常與封包順序錯亂",
+        "Case 20: IPMB Checksum 1/2 校驗碼錯誤引發封包丟棄",
+    ]
+    sel_case = st.selectbox("選擇實戰演練案例", arena_cases)
+    st.info(f"【案例分析】{sel_case}")
+    st.markdown("**【標準排查 SOP & Root Cause 診斷】**:")
+    if "01:" in sel_case:
+        st.markdown("1. 檢查 Slave 晶片供電 (3.3V/1.8V)。\n2. 檢查硬體 A0/A1/A2 位址設定腳位。\n3. 檢查 7-bit 位址是否未左移。")
+    elif "07:" in sel_case:
+        st.markdown("1. 檢查 PCIe 插槽金手指與 Riser 卡接觸面。\n2. 檢查 100MHz 差分時脈 (REFCLK) 抖動。\n3. 檢查主機板 BIOS Link Speed 設定。")
+    elif "11:" in sel_case:
+        st.markdown("1. 每次 Page Program 或 Erase 前必須發送 0x06 (WREN)。\n2. 檢查 Status Register 1 WEL 位元是否為 1。")
+    elif "15:" in sel_case:
+        st.markdown("1. 檢查 probe 函式中 kzalloc 是否成功。\n2. 使用 addr2line -e vmlinux <RIP> 定位原始碼行號。")
+    else:
+        st.markdown("1. 參照分層 L1~L7 診斷模型，先確認硬體電氣訊號，再分析協定 Frame 格式，最後檢查驅動狀態機。")
 
-# -------------------------------------------------------------
-# 8. SOP & Guide
-# -------------------------------------------------------------
+# 12. SOP
 elif menu == "📚 韌體除錯指南 & SOP":
     st.header("Junior Firmware 工程師硬韌體除錯指南與心智模型")
     st.markdown("""

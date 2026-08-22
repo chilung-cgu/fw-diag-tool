@@ -9,27 +9,36 @@ from rich.table import Table
 
 from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
+from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.reporter import I2CReporter
+from fw_diag_tool.mctp.parser import ServerMgmtParser
+from fw_diag_tool.mctp.reporter import ServerMgmtReporter
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.spi.reporter import SPIReporter
+from fw_diag_tool.uart.parser import UARTCrashParser
+from fw_diag_tool.uart.reporter import UARTReporter
 
 app = typer.Typer(
     name="fw-diag",
-    help="Firmware Signal & Trace Diagnostic Toolkit for PCIe, I2C/PMBus, SPI Flash, and Register CodeGen",
+    help="Firmware Diagnostic Suite for I2C/PMBus, PCIe AER, SPI Flash, UART Crash Dump, MCTP, and CodeGen",
     add_completion=False,
 )
 i2c_app = typer.Typer(name="i2c", help="I2C / SMBus / PMBus Trace & Protocol Diagnostic Tools")
 pcie_app = typer.Typer(name="pcie", help="PCIe Config Space, Capabilities, AER & TLP Header Diagnostics")
 spi_app = typer.Typer(name="spi", help="SPI / QSPI Flash Protocol & Sequence Diagnostic Tools")
+uart_app = typer.Typer(name="uart", help="UART Serial Crash Dump & ARM HardFault Diagnostic Tools")
+mctp_app = typer.Typer(name="mctp", help="MCTP & IPMB Server Management Protocol Tools")
 reg_app = typer.Typer(name="reg", help="Hardware & Chip Register Bitfield Decoder")
-gen_app = typer.Typer(name="gen", help="Firmware C Header & RMW Macro Code Generator")
+gen_app = typer.Typer(name="gen", help="Firmware C Header, Device Tree & Driver Code Generator")
 
 app.add_typer(i2c_app)
 app.add_typer(pcie_app)
 app.add_typer(spi_app)
+app.add_typer(uart_app)
+app.add_typer(mctp_app)
 app.add_typer(reg_app)
 app.add_typer(gen_app)
 
@@ -47,17 +56,13 @@ def analyze_i2c_trace(
     if not file_path.exists():
         console.print(f"[bold red]Error: File {file_path} not found![/]")
         raise typer.Exit(code=1)
-        
     engine = I2CDiagnosticEngine(smbus_timeout_ms=smbus_timeout)
     report = engine.analyze_csv_file(str(file_path))
-    
     I2CReporter.render_terminal(report, console=console)
-    
     if markdown_out:
         md_text = I2CReporter.generate_markdown(report)
         markdown_out.write_text(md_text, encoding="utf-8")
         console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
-        
     if json_out:
         json_out.write_text(report.to_json(indent=2), encoding="utf-8")
         console.print(f"[green]✔ JSON report exported to {json_out}[/]")
@@ -74,24 +79,20 @@ def analyze_pcie(
         p = Path(file_or_dump)
         if p.exists():
             content = p.read_text(encoding="utf-8")
-
     if "PCIe Bus Error:" in content or ("AER:" in content and "lspci" not in content.lower() and not any(line.strip().startswith("00:") for line in content.splitlines())):
         events = PCIeAnalyzer.parse_dmesg_aer(content)
         report_md = PCIeReporter.format_dmesg_events(events)
         console.print(Panel(f"[bold cyan]Kernel dmesg AER Diagnostic Report[/]\nFound {len(events)} AER event(s)"))
         console.print(report_md)
     else:
-        # Check if multiple devices are present in dump
         devices = PCIeAnalyzer.parse_multi_lspci_text(content)
         if not devices:
             bdf, raw_bytes = PCIeAnalyzer.parse_lspci_text(content)
             devices = [PCIeAnalyzer.decode_config_space(raw_bytes, bdf=bdf)]
-
         all_mds = []
         for cfg in devices:
             report_md = PCIeReporter.to_markdown(cfg)
             all_mds.append(report_md)
-
             console.print(Panel(f"[bold green]PCIe Device Config Space Decoded (BDF: {cfg.bdf or 'N/A'})[/]"))
             table = Table(title="Device Overview", show_header=True)
             table.add_column("Property", style="cyan")
@@ -107,26 +108,10 @@ def analyze_pcie(
             if cfg.aer_analysis:
                 table.add_row("AER Fatal / Non-Fatal / Corr", f"{cfg.aer_analysis.active_uncorr_fatal_count} / {cfg.aer_analysis.active_uncorr_nonfatal_count} / {cfg.aer_analysis.active_corr_count}")
             console.print(table)
-
             if cfg.link_info and cfg.link_info.is_degraded:
                 console.print(Panel(f"[bold red]🚨 {cfg.link_info.degradation_reason}[/]\n\n{cfg.link_info.root_cause_guide}", border_style="red"))
-
-            if cfg.aer_analysis and cfg.aer_analysis.decoded_tlp:
-                tlp = cfg.aer_analysis.decoded_tlp
-                tlp_table = Table(title="[bold red]Faulting TLP Header Log[/]", show_header=True)
-                tlp_table.add_column("Field", style="cyan")
-                tlp_table.add_column("Decoded Value", style="magenta")
-                tlp_table.add_row("Type", tlp.type_name)
-                tlp_table.add_row("Length", f"{tlp.length} DW ({tlp.length * 4} Bytes)")
-                if tlp.address is not None:
-                    tlp_table.add_row("Target Address", f"0x{tlp.address:016X}")
-                if tlp.requester_id is not None:
-                    tlp_table.add_row("Requester BDF", f"0x{tlp.requester_id:04X}")
-                console.print(tlp_table)
-
         if markdown_out:
-            combined_md = "\n\n---\n\n".join(all_mds)
-            markdown_out.write_text(combined_md, encoding="utf-8")
+            markdown_out.write_text("\n\n---\n\n".join(all_mds), encoding="utf-8")
             console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
 
 
@@ -139,15 +124,47 @@ def analyze_spi_trace(
     if not file_path.exists():
         console.print(f"[bold red]Error: File {file_path} not found![/]")
         raise typer.Exit(code=1)
-
     engine = SPIDiagnosticEngine()
     report = engine.analyze_csv_file(file_path)
-
     SPIReporter.render_terminal(report, console=console)
-
     if markdown_out:
-        md_text = SPIReporter.to_markdown(report)
-        markdown_out.write_text(md_text, encoding="utf-8")
+        markdown_out.write_text(SPIReporter.to_markdown(report), encoding="utf-8")
+        console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
+
+
+@uart_app.command("analyze")
+def analyze_uart_crash(
+    file_or_text: str = typer.Argument(..., help="Path to UART crash log file or raw crash dump string"),
+    markdown_out: Path | None = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
+):
+    """Analyze Linux Kernel Panic or ARM Cortex-M HardFault crash dumps."""
+    content = file_or_text
+    if "\n" not in file_or_text and len(file_or_text) < 256:
+        p = Path(file_or_text)
+        if p.exists():
+            content = p.read_text(encoding="utf-8")
+    report = UARTCrashParser.parse_log_text(content)
+    UARTReporter.render_terminal(report, console=console)
+    if markdown_out:
+        markdown_out.write_text(UARTReporter.to_markdown(report), encoding="utf-8")
+        console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
+
+
+@mctp_app.command("analyze")
+def analyze_mctp(
+    file_or_dump: str = typer.Argument(..., help="Path to MCTP / IPMB hex dump file or text line"),
+    markdown_out: Path | None = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
+):
+    """Decode MCTP (DSP0236/PLDM/SPDM) packets and IPMB server management frames."""
+    content = file_or_dump
+    if "\n" not in file_or_dump and len(file_or_dump) < 256:
+        p = Path(file_or_dump)
+        if p.exists():
+            content = p.read_text(encoding="utf-8")
+    report = ServerMgmtParser.parse_text_dump(content)
+    ServerMgmtReporter.render_terminal(report, console=console)
+    if markdown_out:
+        markdown_out.write_text(ServerMgmtReporter.to_markdown(report), encoding="utf-8")
         console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
 
 
@@ -161,28 +178,21 @@ def decode_register(
     if not yaml_file.exists():
         console.print(f"[bold red]Error: YAML file {yaml_file} not found![/]")
         raise typer.Exit(code=1)
-
     catalog = RegisterMapCatalog()
     catalog.load_from_yaml(yaml_file.read_text(encoding="utf-8"))
-    
     val = int(raw_value, 0)
     result = catalog.decode_register(reg_name_or_offset, val)
-
     table = Table(title=f"Register Decode: {result.reg_name} ({result.hex_val})", show_header=True)
     table.add_column("Bits", style="cyan", width=10)
     table.add_column("Field Name", style="bold green", width=20)
     table.add_column("Value", style="yellow", width=12)
     table.add_column("Meaning / Status", style="magenta")
-    
     for f in result.fields:
         meaning_str = f.meaning
         if f.is_warning:
             meaning_str = f"[bold red]⚠ {meaning_str}[/]"
         table.add_row(f.bit_range, f.name, f.hex_val, meaning_str)
-        
     console.print(table)
-    if result.unmapped_bits:
-        console.print(f"[dim]Unmapped non-zero bits: 0x{result.unmapped_bits:08X}[/]")
 
 
 @gen_app.command("c-header")
@@ -195,10 +205,8 @@ def generate_c_header(
     if not yaml_file.exists():
         console.print(f"[bold red]Error: YAML file {yaml_file} not found![/]")
         raise typer.Exit(code=1)
-
     gen = CHeaderGenerator.from_yaml_file(yaml_file)
     header_text = gen.generate_header(module_name=module_name)
-
     if output_header:
         output_header.write_text(header_text, encoding="utf-8")
         console.print(f"[green]✔ C Header generated and saved to {output_header}[/]")
@@ -206,20 +214,34 @@ def generate_c_header(
         console.print(Panel(header_text, title=f"Generated C Header: {module_name}.h"))
 
 
+@gen_app.command("dts")
+def generate_dts(
+    bus_num: int = typer.Option(1, "--bus", "-b", help="I2C Bus index"),
+    mux_addr: str = typer.Option("0x70", "--mux", "-m", help="PCA9548A MUX I2C address"),
+    output_dts: Path | None = typer.Option(None, "--out", "-o", help="Output .dts file path"),
+):
+    """Generate Linux Kernel & OpenBMC compliant Device Tree Source (.dts) from topology."""
+    m_addr = int(mux_addr, 0)
+    dts_text = DeviceTreeGenerator.generate_dts_from_topology(bus_num=bus_num, mux_addr=m_addr)
+    if output_dts:
+        output_dts.write_text(dts_text, encoding="utf-8")
+        console.print(f"[green]✔ Device Tree generated and saved to {output_dts}[/]")
+    else:
+        console.print(Panel(dts_text, title="Generated Device Tree Source (.dts)"))
+
+
 @app.command("gui")
 def launch_gui(port: int = typer.Option(8501, "--port", "-p"), host: str = typer.Option("127.0.0.1", "--host", "-h")):
     """Launch the interactive Web GUI dashboard."""
     import subprocess
     import sys
-    from pathlib import Path
     app_path = Path(__file__).parent / "gui" / "app.py"
     console.print(f"[bold green]🚀 Launching Web GUI on http://{host}:{port}...[/]")
-    subprocess.run([sys.executable, "-m", "streamlit", "run", str(app_path), f"--server.port={port}", f"--server.address={host}"])
+    subprocess.run([sys.executable, "-m", "streamlit", "run", str(app_path), f"--server.port={port}", f"--server.address={host}"], check=False)
 
 
 def main():
     app()
-
 
 if __name__ == "__main__":
     main()

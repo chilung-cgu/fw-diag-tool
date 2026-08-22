@@ -1,0 +1,161 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+from .models import AckType, I2CAnalysisReport, I2CTransaction
+from .waveform import I2CWaveformReconstructor
+
+
+@dataclass
+class DivergencePoint:
+    tx_index: int
+    golden_tx: I2CTransaction | None
+    failing_tx: I2CTransaction | None
+    mismatch_type: str  # "NACK_MISMATCH", "DATA_MISMATCH", "DIRECTION_MISMATCH", "MISSING_TX"
+    description: str
+    root_cause_hint: str
+
+
+@dataclass
+class WaveformDiffReport:
+    is_identical: bool
+    total_compared: int
+    divergence_points: list[DivergencePoint] = field(default_factory=list)
+    summary: str = ""
+
+
+class WaveformDiffEngine:
+    # Compares Golden (Normal) vs Failing (Defective) I2C traces and pinpoints root divergence
+
+    @classmethod
+    def compare_reports(
+        cls,
+        golden: I2CAnalysisReport,
+        failing: I2CAnalysisReport,
+    ) -> WaveformDiffReport:
+        divergences: list[DivergencePoint] = []
+        g_txs = golden.transactions
+        f_txs = failing.transactions
+        max_len = max(len(g_txs), len(f_txs))
+
+        for idx in range(max_len):
+            g = g_txs[idx] if idx < len(g_txs) else None
+            f = f_txs[idx] if idx < len(f_txs) else None
+
+            if g is None and f is not None:
+                divergences.append(DivergencePoint(
+                    tx_index=idx + 1,
+                    golden_tx=None,
+                    failing_tx=f,
+                    mismatch_type="UNEXPECTED_EXTRA_TX",
+                    description=f"Failing trace has unexpected extra transaction #{f.id} to 0x{f.address_7bit:02X} {f.direction.value}",
+                    root_cause_hint="檢查韌體是否進入非預期重試迴圈 (Retry Loop)。"
+                ))
+                break
+            elif g is not None and f is None:
+                divergences.append(DivergencePoint(
+                    tx_index=idx + 1,
+                    golden_tx=g,
+                    failing_tx=None,
+                    mismatch_type="MISSING_TX",
+                    description=f"Failing trace terminated prematurely. Expected transaction #{g.id} to 0x{g.address_7bit:02X} was never sent.",
+                    root_cause_hint="通訊在上一筆交易失敗後中斷，檢查上一筆交易是否引發了 Bus Hang 或 Driver Exit。"
+                ))
+                break
+
+            # Both exist: compare address, ACK, direction, and data bytes
+            if g and f:
+                if g.address_7bit != f.address_7bit:
+                    divergences.append(DivergencePoint(
+                        tx_index=idx + 1,
+                        golden_tx=g,
+                        failing_tx=f,
+                        mismatch_type="ADDRESS_MISMATCH",
+                        description=f"Address mismatch: Golden sent 0x{g.address_7bit:02X}, Failing sent 0x{f.address_7bit:02X}",
+                        root_cause_hint="檢查晶片 Address Pin 硬體配置或驅動定址常數。"
+                    ))
+                    break
+
+                g_nack = (g.address_ack == AckType.NACK or any(p.ack == AckType.NACK for p in g.byte_packets))
+                f_nack = (f.address_ack == AckType.NACK or any(p.ack == AckType.NACK for p in f.byte_packets))
+                if g_nack != f_nack:
+                    divergences.append(DivergencePoint(
+                        tx_index=idx + 1,
+                        golden_tx=g,
+                        failing_tx=f,
+                        mismatch_type="NACK_MISMATCH",
+                        description=f"ACK mismatch on 0x{g.address_7bit:02X}: Golden NACK={g_nack}, Failing NACK={f_nack}",
+                        root_cause_hint="Slave 晶片在故障板卡上返回 NACK (可能未上電、被 Reset 或內部忙碌)。"
+                    ))
+                    break
+
+                if g.direction != f.direction:
+                    divergences.append(DivergencePoint(
+                        tx_index=idx + 1,
+                        golden_tx=g,
+                        failing_tx=f,
+                        mismatch_type="DIRECTION_MISMATCH",
+                        description=f"Direction mismatch: Golden={g.direction.value}, Failing={f.direction.value}",
+                        root_cause_hint="讀寫方向位元不同步。"
+                    ))
+                    break
+
+                if g.data_bytes != f.data_bytes:
+                    divergences.append(DivergencePoint(
+                        tx_index=idx + 1,
+                        golden_tx=g,
+                        failing_tx=f,
+                        mismatch_type="DATA_MISMATCH",
+                        description=f"Data payload divergence on 0x{g.address_7bit:02X}: Golden={g.hex_dump}, Failing={f.hex_dump}",
+                        root_cause_hint="資料內容不一致，檢查暫存器初始值或 EEPROM 儲存內容是否受損。"
+                    ))
+                    break
+
+        is_id = len(divergences) == 0
+        summary = "Golden and Failing traces are 100% identical in protocol sequence." if is_id else f"Found {len(divergences)} divergence point(s). First mismatch at Transaction #{divergences[0].tx_index}."
+
+        return WaveformDiffReport(
+            is_identical=is_id,
+            total_compared=max_len,
+            divergence_points=divergences,
+            summary=summary
+        )
+
+    @classmethod
+    def create_comparison_figure(
+        cls,
+        diff_report: WaveformDiffReport,
+        title: str = "Golden vs Failing Trace Waveform Comparison"
+    ) -> go.Figure:
+        fig = make_subplots(
+            rows=2,
+            cols=1,
+            shared_xaxes=False,
+            vertical_spacing=0.12,
+            subplot_titles=("Golden (Normal Board) Waveform", "Failing (Defective Board) Waveform")
+        )
+
+        reconstructor = I2CWaveformReconstructor(default_clock_khz=100.0)
+
+        if diff_report.divergence_points and diff_report.divergence_points[0].golden_tx:
+            g_tx = diff_report.divergence_points[0].golden_tx
+            g_wave = reconstructor.reconstruct_transaction_waveform(g_tx)
+            fig.add_trace(go.Scatter(x=g_wave.time_us, y=g_wave.sda, mode="lines", line=dict(shape="hv", color="#00CC96", width=2), name="Golden SDA"), row=1, col=1)
+            fig.add_trace(go.Scatter(x=g_wave.time_us, y=g_wave.scl, mode="lines", line=dict(shape="hv", color="#FFFF00", width=2), name="Golden SCL"), row=1, col=1)
+
+        if diff_report.divergence_points and diff_report.divergence_points[0].failing_tx:
+            f_tx = diff_report.divergence_points[0].failing_tx
+            f_wave = reconstructor.reconstruct_transaction_waveform(f_tx)
+            fig.add_trace(go.Scatter(x=f_wave.time_us, y=f_wave.sda, mode="lines", line=dict(shape="hv", color="#EF553B", width=2), name="Failing SDA"), row=2, col=1)
+            fig.add_trace(go.Scatter(x=f_wave.time_us, y=f_wave.scl, mode="lines", line=dict(shape="hv", color="#FFA15A", width=2), name="Failing SCL"), row=2, col=1)
+
+        fig.update_layout(
+            title=dict(text=f"<b>{title}</b>", font=dict(size=15, color="#FFFFFF")),
+            template="plotly_dark",
+            height=450,
+            margin=dict(l=40, r=20, t=50, b=30),
+        )
+        return fig
