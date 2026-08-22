@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
+
 COMPATIBLE_MAP = {
     "EEPROM": ("atmel,24c64", "pagesize = <32>;"),
     "Temperature Sensor": ("national,lm75", ""),
     "Power Monitor": ("ti,ina226", "shunt-resistor = <1000>; /* 1 mOhm */"),
-    "PMBus": ("pmbus", ""),
+    "PMBus": ("pmbus-device", ""),
     "GPIO Expander": ("nxp,pca9555", "gpio-controller;\n                #gpio-cells = <2>;"),
     "I2C Multiplexer": ("nxp,pca9548", ""),
 }
@@ -25,9 +26,9 @@ class DeviceTreeGenerator:
     ) -> str:
         devs = devices or [
             {"addr": 0x50, "type": "EEPROM", "channel": 0, "name": "eeprom"},
-            {"addr": 0x48, "type": "Temperature Sensor", "channel": 1, "name": "temp_sensor"},
-            {"addr": 0x40, "type": "Power Monitor", "channel": 2, "name": "power_monitor"},
-            {"addr": 0x58, "type": "PMBus", "channel": 3, "name": "vr_controller"},
+            {"addr": 0x48, "type": "Temperature Sensor", "channel": 1, "name": "temp-sensor"},
+            {"addr": 0x40, "type": "Power Monitor", "channel": 2, "name": "power-monitor"},
+            {"addr": 0x58, "type": "PMBus", "channel": 3, "name": "vr-controller"},
         ]
 
         lines = [
@@ -66,7 +67,7 @@ class DeviceTreeGenerator:
             for d in ch_devs:
                 d_addr = d["addr"]
                 d_type = d.get("type", "EEPROM")
-                d_name = d.get("name", "dev").replace(" ", "_").lower()
+                d_name = d.get("name", "dev").replace(" ", "-").replace("_", "-").lower()
                 compat, extra = COMPATIBLE_MAP.get(d_type, ("generic,i2c-device", ""))
                 lines.append(f"            {d_name}@{d_addr:x} {{")
                 lines.append(f"                compatible = \"{compat}\";")

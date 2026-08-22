@@ -165,10 +165,9 @@ class I2CWaveformReconstructor:
 
         # 4. Emit Data Bytes
         if tx.address_ack == AckType.ACK:
+            data_pkts = [p for p in tx.byte_packets if not p.is_address]
             for idx, data_b in enumerate(tx.data_bytes):
-                pkt_ack = AckType.ACK
-                if idx < len(tx.byte_packets):
-                    pkt_ack = tx.byte_packets[idx].ack
+                pkt_ack = data_pkts[idx].ack if idx < len(data_pkts) else AckType.ACK
                 # Label detail
                 lbl = f"0x{data_b:02X}"
                 if idx == 0 and tx.command_code is not None:

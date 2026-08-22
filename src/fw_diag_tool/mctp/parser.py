@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from .models import IPMBFrame, MCTPPacket, ServerMgmtReport
 
@@ -8,9 +9,11 @@ MCTP_MSG_TYPES = {
     0x00: "MCTP Control Message (DSP0236)",
     0x01: "PLDM (Platform Level Data Model, DSP0240)",
     0x02: "NC-SI over MCTP (DSP0222)",
-    0x04: "SPDM (Security Protocol and Data Model, DSP0274)",
-    0x05: "VDPCI (Vendor-Defined PCI)",
-    0x06: "NVMe-MI over MCTP (NVM Express)",
+    0x03: "Ethernet over MCTP (DSP0261)",
+    0x04: "NVMe-MI over MCTP (NVM Express)",
+    0x05: "SPDM (Security Protocol and Data Model, DSP0274)",
+    0x7E: "VDPCI (Vendor-Defined PCI, DSP0236)",
+    0x7F: "VDIANA (Vendor-Defined IANA, DSP0236)",
 }
 
 PLDM_TYPES = {
@@ -20,6 +23,7 @@ PLDM_TYPES = {
     0x03: "BIOS Control & Configuration",
     0x04: "FRU Data",
     0x05: "Firmware Update (DSP0267)",
+    0x06: "Redfish Device Enablement",
 }
 
 IPMB_NETFNS = {
@@ -58,30 +62,52 @@ class ServerMgmtParser:
     def decode_mctp_packet(cls, raw_bytes: list[int]) -> MCTPPacket | None:
         if len(raw_bytes) < 4:
             return None
-        dest_eid = raw_bytes[0]
-        src_eid = raw_bytes[1]
-        hdr_flags = raw_bytes[2]
+
+        # Check if raw starts with DSP0236 Header Version (0x01)
+        if len(raw_bytes) >= 5 and (raw_bytes[0] & 0x0F) == 0x01:
+            dest_eid = raw_bytes[1]
+            src_eid = raw_bytes[2]
+            hdr_flags = raw_bytes[3]
+            payload_start = 4
+        else:
+            dest_eid = raw_bytes[0]
+            src_eid = raw_bytes[1]
+            hdr_flags = raw_bytes[2]
+            payload_start = 3
+
         som = bool(hdr_flags & (1 << 7))
         eom = bool(hdr_flags & (1 << 6))
         pkt_seq = (hdr_flags >> 4) & 0x03
         to = bool(hdr_flags & (1 << 3))
         msg_tag = hdr_flags & 0x07
 
-        type_byte = raw_bytes[3]
-        msg_type = type_byte & 0x7F
-        type_name = MCTP_MSG_TYPES.get(msg_type, f"Unknown Type (0x{msg_type:02X})")
-
-        payload = raw_bytes[4:]
-        payload_hex = " ".join(f"{b:02X}" for b in payload)
-
+        msg_type = 0
+        type_name = "Continuation Segment (SOM=0)"
         pldm_info = None
-        summary = f"MCTP: EID 0x{src_eid:02X} -> 0x{dest_eid:02X} [{type_name}] Tag:0x{msg_tag:X}"
 
-        if msg_type == 0x01 and len(payload) >= 3:
-            pldm_type = payload[1] & 0x3F
-            pldm_cmd = payload[2]
-            pldm_t_name = PLDM_TYPES.get(pldm_type, f"Type 0x{pldm_type:02X}")
-            pldm_info = f"PLDM {pldm_t_name}: Command 0x{pldm_cmd:02X}"
+        if som and len(raw_bytes) > payload_start:
+            type_byte = raw_bytes[payload_start]
+            msg_type = type_byte & 0x7F
+            type_name = MCTP_MSG_TYPES.get(msg_type, f"Type 0x{msg_type:02X}")
+            payload = raw_bytes[payload_start + 1:]
+            # Decode PLDM payload if Type 0x01
+            if msg_type == 0x01 and len(payload) >= 3:
+                is_rq = bool(payload[0] & 0x80)
+                inst_id = payload[0] & 0x1F
+                pldm_type = payload[1] & 0x3F
+                pldm_cmd = payload[2]
+                pldm_t_name = PLDM_TYPES.get(pldm_type, f"Type 0x{pldm_type:02X}")
+                rq_str = "Request" if is_rq else "Response"
+                pldm_info = f"PLDM {pldm_t_name} {rq_str}: Cmd 0x{pldm_cmd:02X} (Instance {inst_id})"
+                if not is_rq and len(payload) >= 4:
+                    cc_code = payload[3]
+                    pldm_info += f" [CC: 0x{cc_code:02X}]"
+        else:
+            payload = raw_bytes[payload_start:]
+
+        payload_hex = " ".join(f"{b:02X}" for b in payload)
+        summary = f"MCTP: EID 0x{src_eid:02X} -> 0x{dest_eid:02X} [{type_name}] Tag:0x{msg_tag:X}"
+        if pldm_info:
             summary += f" ({pldm_info})"
 
         return MCTPPacket(
@@ -120,10 +146,16 @@ class ServerMgmtParser:
         chk2 = raw_bytes[-1]
         chk2_valid = ((sum(raw_bytes[3:-1]) + chk2) & 0xFF) == 0
 
-        netfn_name = IPMB_NETFNS.get(netfn, f"NetFn 0x{netfn:02X}")
-        cmd_name = IPMB_COMMANDS.get((netfn, cmd), f"Cmd 0x{cmd:02X}")
+        # Support both Request (even NetFn) and Response (odd NetFn = Request + 1)
+        is_response = bool(netfn & 0x01)
+        base_netfn = netfn & ~0x01
+        base_netfn_name = IPMB_NETFNS.get(base_netfn, f"NetFn 0x{netfn:02X}")
+        netfn_name = base_netfn_name + (" (Response)" if is_response else " (Request)")
+        cmd_name = IPMB_COMMANDS.get((base_netfn, cmd), f"Cmd 0x{cmd:02X}")
 
         summary = f"IPMB: 0x{rq_addr:02X} -> 0x{rs_addr:02X} [{netfn_name}: {cmd_name}]"
+        if is_response and data:
+            summary += f" [CC: 0x{data[0]:02X}]"
 
         return IPMBFrame(
             rs_addr=rs_addr,
@@ -151,16 +183,20 @@ class ServerMgmtParser:
             raw = cls.parse_hex_tokens(line)
             if len(raw) < 4:
                 continue
-            if len(raw) >= 7 and (((raw[0] + raw[1] + raw[2]) & 0xFF) == 0):
+            # Check if this line is an IPMB frame
+            # IPMB frames have length >= 7 and valid checksum 1 or IPMB slave address (0x20, 0x81, etc.)
+            is_ipmb_candidate = len(raw) >= 7 and (raw[0] in (0x20, 0x81, 0x2C, 0x82) or (((raw[0] + raw[1] + raw[2]) & 0xFF) == 0))
+            if is_ipmb_candidate:
                 ipmb = cls.decode_ipmb_frame(raw)
                 if ipmb:
                     ipmb_list.append(ipmb)
-            else:
-                mctp = cls.decode_mctp_packet(raw)
-                if mctp:
-                    mctp_list.append(mctp)
+                    continue
 
-        summary_str = f"Decoded {len(mctp_list)} MCTP packet(s) and {len(ipmb_list)} IPMB frame(s)."
+            mctp = cls.decode_mctp_packet(raw)
+            if mctp:
+                mctp_list.append(mctp)
+
+        summary_str = f"Decoded {len(mctp_list)} MCTP packet(s) and {len(ipmb_list)} IPMB frame(s). "
         return ServerMgmtReport(
             mctp_packets=mctp_list,
             ipmb_frames=ipmb_list,
