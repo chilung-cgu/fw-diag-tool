@@ -67,17 +67,18 @@ def decode_eeprom_write(
     
     # Check Page Boundary Rollover
     # If start offset + payload length crosses the page boundary, the EEPROM hardware counter wraps!
-    offset_in_page = offset % page_size
-    page_start = (offset // page_size) * page_size
+    safe_page_size = max(1, page_size)
+    offset_in_page = offset % safe_page_size
+    page_start = (offset // safe_page_size) * safe_page_size
     rollover_hazard = False
     rollover_details = ""
     
-    if payload_len > (page_size - offset_in_page):
+    if payload_len > (safe_page_size - offset_in_page):
         rollover_hazard = True
         overflow_count = payload_len - (page_size - offset_in_page)
         rollover_details = (
             f"Page rollover hazard: Write started at offset 0x{offset:04X} (page base 0x{page_start:04X}, "
-            f"page size {page_size}B). Payload length {payload_len}B exceeds remaining {page_size - offset_in_page}B "
+            f"page size {page_size}B). Payload length {payload_len}B exceeds remaining {safe_page_size - offset_in_page}B "
             f"in this page. {overflow_count} byte(s) will WRAP AROUND and overwrite offset 0x{page_start:04X}!"
         )
         

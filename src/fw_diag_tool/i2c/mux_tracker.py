@@ -17,7 +17,8 @@ class I2CMuxTracker:
             addr = tx.address_7bit
 
             if addr in MUX_ADDRESSES:
-                if tx.direction == I2CDirection.WRITE and tx.data_bytes and tx.address_ack == AckType.ACK:
+                data_acked = all(p.ack == AckType.ACK for p in tx.byte_packets if not p.is_address) if tx.byte_packets else True
+                if tx.direction == I2CDirection.WRITE and tx.data_bytes and tx.address_ack == AckType.ACK and data_acked:
                     ctrl_byte = tx.data_bytes[0]
                     self.mux_states[addr] = ctrl_byte
                     self.last_active_mux = addr

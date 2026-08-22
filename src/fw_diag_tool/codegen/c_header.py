@@ -67,7 +67,7 @@ class CHeaderGenerator:
                 lines.append(f"#define REG_{r_name}_{f_name}_POS        ({pos}U)")
                 lines.append(f"#define REG_{r_name}_{f_name}_MSK        (0x{mask:08X}U)")
                 lines.append(f"#define REG_{r_name}_{f_name}_GET(val)   (((val) & REG_{r_name}_{f_name}_MSK) >> REG_{r_name}_{f_name}_POS)")
-                lines.append(f"#define REG_{r_name}_{f_name}_SET(reg, val) (((reg) & ~REG_{r_name}_{f_name}_MSK) | (((val) << REG_{r_name}_{f_name}_POS) & REG_{r_name}_{f_name}_MSK))")
+                lines.append(f"#define REG_{r_name}_{f_name}_SET(reg, val) (((reg) & ~REG_{r_name}_{f_name}_MSK) | (((uint32_t)(val) << REG_{r_name}_{f_name}_POS) & REG_{r_name}_{f_name}_MSK))")
 
                 if f.values:
                     lines.append(f"/* Values for {r_name}.{f_name} */")

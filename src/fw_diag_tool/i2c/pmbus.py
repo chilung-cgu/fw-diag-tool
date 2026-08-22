@@ -130,6 +130,11 @@ def decode_linear11(raw_word: int) -> float:
 
 def encode_linear11(val: float) -> int:
     """Encode a float value into a 16-bit PMBus Linear11 integer."""
+    import math
+    if math.isnan(val) or math.isinf(val):
+        raise ValueError(f"Cannot encode NaN or Infinity in Linear11: {val}")
+    if val == 0.0:
+        return 0x0000
     # Find suitable exponent N in [-16, 15] such that mantissa fits in [-1024, 1023]
     if val == 0.0:
         return 0x0000

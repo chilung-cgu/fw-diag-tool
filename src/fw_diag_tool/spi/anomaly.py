@@ -15,20 +15,64 @@ class SPIAnomalyDetector:
     def analyze(self, transactions: list[SPITransaction]) -> list[SPIDiagnosticIssue]:
         issues: list[SPIDiagnosticIssue] = []
         wel_latched = False
+        volatile_wel_latched = False
 
         for tx in transactions:
             op = tx.opcode
             if op is None:
                 continue
 
-            # Track Write Enable Latch (0x06 WREN or 0x50 Volatile SR Write Enable)
-            if op in (SPIOpcode.WRITE_ENABLE, SPIOpcode.VOLATILE_SR_WRITE_ENABLE):
+            # 1. JEDEC ID Line Fault Check (Floating or Shorted MISO)
+            if op == SPIOpcode.JEDEC_ID and len(tx.miso_bytes) >= 4:
+                miso_id_bytes = tx.miso_bytes[1:4]
+                if all(b == 0xFF for b in miso_id_bytes):
+                    issues.append(
+                        SPIDiagnosticIssue(
+                            code="SPI_JEDEC_LINE_FAULT",
+                            title=f"JEDEC ID Read Returned All 0xFF (Floating MISO / No Power) @ Tx #{tx.index}",
+                            severity=SPISeverity.CRITICAL,
+                            timestamp=tx.start_time,
+                            transaction_id=tx.index,
+                            description="JEDEC ID command (0x9F) returned [0xFF, 0xFF, 0xFF]. Flash device did not drive MISO line.",
+                            root_cause_guide=(
+                                "【Root Cause 排查建議】\n"
+                                "1. 檢查 SPI Flash 供電電壓 (VCC/3.3V/1.8V) 是否未開啟或接地不良。\n"
+                                "2. 檢查 MISO 線路是否斷路或處於高阻抗 (High-Z) 狀態（因上拉電阻讀回全 1）。\n"
+                                "3. 檢查 CS# (Chip Select) 是否未正確拉低以選中目標晶片。"
+                            ),
+                            details={"miso_bytes": [f"0x{b:02X}" for b in miso_id_bytes]}
+                        )
+                    )
+                elif all(b == 0x00 for b in miso_id_bytes):
+                    issues.append(
+                        SPIDiagnosticIssue(
+                            code="SPI_JEDEC_LINE_FAULT",
+                            title=f"JEDEC ID Read Returned All 0x00 (MISO Short to GND / Bus Clamped) @ Tx #{tx.index}",
+                            severity=SPISeverity.CRITICAL,
+                            timestamp=tx.start_time,
+                            transaction_id=tx.index,
+                            description="JEDEC ID command (0x9F) returned [0x00, 0x00, 0x00]. MISO line is clamped to GND.",
+                            root_cause_guide=(
+                                "【Root Cause 排查建議】\n"
+                                "1. 檢查 MISO 線路是否對地短路 (Short-to-GND) 或被其他元件持續拉低。\n"
+                                "2. 檢查 SPI Clock 極性與相位 (CPOL/CPHA) 是否設定錯誤。"
+                            ),
+                            details={"miso_bytes": [f"0x{b:02X}" for b in miso_id_bytes]}
+                        )
+                    )
+
+            # 2. Track Write Enable Latches
+            if op == SPIOpcode.WRITE_ENABLE:
                 wel_latched = True
+                volatile_wel_latched = True
+            elif op == SPIOpcode.VOLATILE_SR_WRITE_ENABLE:
+                volatile_wel_latched = True
             elif op == SPIOpcode.WRITE_DISABLE:
                 wel_latched = False
+                volatile_wel_latched = False
 
-            # Check 1: Write / Program / Erase without WREN
-            is_write_or_erase = op in (
+            # 3. Write / Program / Erase without WREN Checks
+            is_array_write_or_erase = op in (
                 SPIOpcode.PAGE_PROGRAM,
                 SPIOpcode.QUAD_PAGE_PROGRAM,
                 SPIOpcode.SECTOR_ERASE_4K,
@@ -36,12 +80,14 @@ class SPIAnomalyDetector:
                 SPIOpcode.BLOCK_ERASE_64K,
                 SPIOpcode.CHIP_ERASE,
                 SPIOpcode.CHIP_ERASE_ALT,
+            )
+            is_sr_write = op in (
                 SPIOpcode.WRITE_STATUS_REG_1,
                 SPIOpcode.WRITE_STATUS_REG_2,
                 SPIOpcode.WRITE_STATUS_REG_3,
             )
 
-            if is_write_or_erase:
+            if is_array_write_or_erase:
                 if not wel_latched:
                     issues.append(
                         SPIDiagnosticIssue(
@@ -52,21 +98,37 @@ class SPIAnomalyDetector:
                             transaction_id=tx.index,
                             description=(
                                 f"Command {tx.opcode_name} was issued to Flash memory without a preceding "
-                                "Write Enable (0x06 WREN / 0x50) command or after WEL was cleared."
+                                "0x06 (WREN) command. Flash hardware ignores this write."
                             ),
                             root_cause_guide=(
                                 "【Root Cause 排查建議】\n"
-                                "1. NOR Flash 硬體保護機制：執行任何 Page Program, Erase 或 Status Register Write 之前，必須先發送單獨的 0x06 (WREN) 或 0x50 封包並拉高 CS#。\n"
-                                "2. 檢查驅動代碼是否遺漏了 spi_flash_write_enable()。\n"
-                                "3. 注意：每次 Program 或 Erase 完成後，Flash 硬體會自動將 WEL 歸零，下一次寫入必須重新發送 0x06！"
+                                "1. 寫入記憶體陣列 (Program/Erase) 前必須發送單獨的 0x06 WREN 封包（0x50 僅能修改狀態暫存器）。\n"
+                                "2. 注意：每次 Program 或 Erase 完成後，WEL 會自動歸零，下一次寫入必須重新發送 0x06！"
                             ),
                             details={"opcode": f"0x{op:02X}", "wel_state": False}
                         )
                     )
-                # Any write/erase clears WEL latch upon completion
                 wel_latched = False
+                volatile_wel_latched = False
 
-            # Check 2: Page Program Wrap-around Hazard
+            elif is_sr_write:
+                if not (wel_latched or volatile_wel_latched):
+                    issues.append(
+                        SPIDiagnosticIssue(
+                            code="SPI_WRITE_NO_WREN",
+                            title=f"Write Status Register without WREN (0x06 / 0x50) @ Tx #{tx.index}",
+                            severity=SPISeverity.CRITICAL,
+                            timestamp=tx.start_time,
+                            transaction_id=tx.index,
+                            description=f"Status Register write {tx.opcode_name} issued without 0x06 (WREN) or 0x50 (Volatile WREN).",
+                            root_cause_guide="【Root Cause 排查建議】寫入狀態暫存器前需發送 0x06 或 0x50 指令。\n",
+                            details={"opcode": f"0x{op:02X}"}
+                        )
+                    )
+                wel_latched = False
+                volatile_wel_latched = False
+
+            # 4. Page Program Wrap-around Hazard
             if op in (SPIOpcode.PAGE_PROGRAM, SPIOpcode.QUAD_PAGE_PROGRAM) and tx.decoded_details.get("page_wrap_hazard"):
                 start_off = tx.decoded_details.get("page_start_offset", 0)
                 p_len = tx.data_payload_len
@@ -83,16 +145,25 @@ class SPIAnomalyDetector:
                         ),
                         root_cause_guide=(
                             "【Root Cause 排查建議】\n"
-                            "1. SPI NOR Flash 內部 Page Buffer 大小固定為 256 bytes。\n"
-                            "2. 當寫入位址跨越 Page 邊界時，位址指標會直接 Wrap-around 回當前 Page 的 0x00 offset，導致該 Page 開頭的資料被非預期覆蓋！\n"
-                            "3. 修正方案：韌體中封裝 Page Write 驅動時，計算 chunk = min(length, 256 - (addr & 0xFF))，跨 Page 時必須拆分為兩次獨立指令。"
+                            "1. SPI NOR Flash 內部 Page Buffer 固定為 256 bytes。\n"
+                            "2. 跨 Page 寫入時位址指標會 Wrap-around 回 0x00 offset，覆蓋同一頁開頭資料！\n"
+                            "3. 修正方案：韌體中封裝 Page Write 驅動時，計算 chunk = min(length, 256 - (addr & 0xFF))。"
                         ),
                         details={"page_offset": start_off, "payload_len": p_len, "page_size": 256}
                     )
                 )
 
-            # Check 3: Truncated Transaction
-            if op in (SPIOpcode.READ_DATA, SPIOpcode.FAST_READ, SPIOpcode.PAGE_PROGRAM, SPIOpcode.SECTOR_ERASE_4K) and len(tx.mosi_bytes) < 4:
+            # 5. Truncated Transaction Checks
+            four_byte_ops = (
+                SPIOpcode.READ_DATA,
+                SPIOpcode.FAST_READ,
+                SPIOpcode.PAGE_PROGRAM,
+                SPIOpcode.QUAD_PAGE_PROGRAM,
+                SPIOpcode.SECTOR_ERASE_4K,
+                SPIOpcode.BLOCK_ERASE_32K,
+                SPIOpcode.BLOCK_ERASE_64K,
+            )
+            if op in four_byte_ops and len(tx.mosi_bytes) < 4:
                 issues.append(
                     SPIDiagnosticIssue(
                         code="SPI_TRUNCATED_TX",
@@ -100,16 +171,8 @@ class SPIAnomalyDetector:
                         severity=SPISeverity.ERROR,
                         timestamp=tx.start_time,
                         transaction_id=tx.index,
-                        description=(
-                            f"Command {tx.opcode_name} requires at least 4 bytes (Opcode + 24-bit Address), "
-                            f"but CS went high after only {len(tx.mosi_bytes)} byte(s)."
-                        ),
-                        root_cause_guide=(
-                            "【Root Cause 排查建議】\n"
-                            "1. 檢查硬體 CS# 線路是否有雜訊 Glitch 提前觸發釋放。\n"
-                            "2. 檢查 SPI Controller DMA 配置長度是否計算錯誤。\n"
-                            "3. Flash 收到不完整位址會直接丟棄此指令。"
-                        ),
+                        description=f"Command {tx.opcode_name} requires at least 4 bytes (Opcode + 24-bit Address), but CS went high after {len(tx.mosi_bytes)} byte(s).",
+                        root_cause_guide="【Root Cause 排查建議】檢查 CS# 線路是否有訊號雜訊或 DMA 長度配置不足。\n",
                         details={"received_bytes": len(tx.mosi_bytes), "expected_min": 4}
                     )
                 )

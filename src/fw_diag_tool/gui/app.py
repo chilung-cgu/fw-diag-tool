@@ -43,7 +43,7 @@ if menu == "📊 I2C / PMBus 波形診斷":
 
     csv_content = None
     if uploaded_file is not None:
-        csv_content = uploaded_file.getvalue().decode("utf-8")
+        csv_content = uploaded_file.getvalue().decode("utf-8", errors="replace")
     elif use_sample:
         sample_path = Path(__file__).parent.parent.parent.parent / "tests" / "data" / "saleae_normal_pmbus_eeprom.csv"
         if sample_path.exists():
@@ -142,7 +142,7 @@ elif menu == "⚡ SPI Flash 協定診斷":
     uploaded_spi = st.file_uploader("選擇 Saleae SPI CSV 檔案", type=["csv", "txt"])
     csv_text = None
     if uploaded_spi is not None:
-        csv_text = uploaded_spi.getvalue().decode("utf-8")
+        csv_text = uploaded_spi.getvalue().decode("utf-8", errors="replace")
     if csv_text:
         engine = SPIDiagnosticEngine()
         rep = engine.analyze_csv_content(csv_text)

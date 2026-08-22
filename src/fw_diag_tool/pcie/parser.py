@@ -418,8 +418,10 @@ class PCIeAnalyzer:
         address = None
         first_dw_be = None
         last_dw_be = None
+        byte_count = None
+        lower_address = None
 
-        if type_ in (0x00, 0x01, 0x02):  # Memory / IO Requests
+        if type_ in (0x00, 0x01, 0x02, 0x0C, 0x0D, 0x0E):  # Memory / IO / AtomicOp Requests
             requester_id = (dw1 >> 16) & 0xFFFF
             tag = (dw1 >> 8) & 0xFF
             last_dw_be = (dw1 >> 4) & 0x0F
@@ -444,6 +446,8 @@ class PCIeAnalyzer:
             completion_status = (dw1 >> 13) & 0x07
             requester_id = (dw2 >> 16) & 0xFFFF
             tag = (dw2 >> 8) & 0xFF
+            byte_count = dw1 & 0x0FFF
+            lower_address = dw2 & 0x7F
 
         return TLPHeaderDecoded(
             fmt=fmt,
@@ -464,6 +468,8 @@ class PCIeAnalyzer:
             address=address,
             first_dw_be=first_dw_be,
             last_dw_be=last_dw_be,
+            byte_count=byte_count,
+            lower_address=lower_address,
             raw_dw=[dw0, dw1, dw2, dw3]
         )
 

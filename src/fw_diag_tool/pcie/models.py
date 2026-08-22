@@ -91,6 +91,8 @@ class TLPHeaderDecoded:
     address: int | None = None
     first_dw_be: int | None = None
     last_dw_be: int | None = None
+    byte_count: int | None = None
+    lower_address: int | None = None
     raw_dw: list[int] = field(default_factory=list)
 
 
