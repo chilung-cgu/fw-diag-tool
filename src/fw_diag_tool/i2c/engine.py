@@ -273,7 +273,7 @@ class I2CDiagnosticEngine:
                     else:
                         tx.semantic_summary = "PMBus Quick Command / Address Probe"
                 else:
-                    cmd_code = ctx.get("last_cmd", 0x88)
+                    cmd_code = ctx.get("last_cmd") if ctx.get("last_cmd") is not None else 0x88
                     tx.command_code = cmd_code
                     if cmd_code == 0x20 and tx.data_bytes:
                         from fw_diag_tool.i2c.pmbus import parse_vout_mode_exponent
@@ -310,7 +310,7 @@ class I2CDiagnosticEngine:
                     else:
                         tx.semantic_summary = "Temperature Sensor Address Probe"
                 else:
-                    ptr = ctx.get("last_cmd", 0x00)
+                    ptr = ctx.get("last_cmd") if ctx.get("last_cmd") is not None else 0x00
                     if ptr == 0x00:
                         decoded = decode_lm75_temperature(tx.data_bytes)
                         tx.semantic_summary = decoded.get("summary")
@@ -331,7 +331,7 @@ class I2CDiagnosticEngine:
                     else:
                         tx.semantic_summary = "INA2xx Address Probe"
                 else:
-                    ptr = ctx.get("last_cmd", 0x02)
+                    ptr = ctx.get("last_cmd") if ctx.get("last_cmd") is not None else 0x02
                     decoded = decode_ina2xx_power(ptr, tx.data_bytes)
                     tx.semantic_summary = decoded.get("summary")
                     tx.decoded_values = decoded
@@ -349,7 +349,7 @@ class I2CDiagnosticEngine:
                     else:
                         tx.semantic_summary = "GPIO Expander Address Probe"
                 else:
-                    ptr = ctx.get("last_cmd", 0x00)
+                    ptr = ctx.get("last_cmd") if ctx.get("last_cmd") is not None else 0x00
                     decoded = decode_pca9555_gpio(ptr, tx.data_bytes)
                     tx.semantic_summary = decoded.get("summary")
                     tx.decoded_values = decoded

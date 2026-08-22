@@ -5,8 +5,11 @@ import streamlit as st
 
 from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
+from fw_diag_tool.codegen.driver_gen import I2CDriverCodeGenerator
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.reporter import I2CReporter
+from fw_diag_tool.i2c.timing_charts import I2CTimingCharts
+from fw_diag_tool.i2c.waveform import I2CWaveformReconstructor
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
@@ -19,7 +22,8 @@ st.caption("Cross-platform Logic Analyzer & System Trace RCA Assistant for Junio
 menu = st.sidebar.radio(
     "功能導覽",
     [
-        "📊 I2C / PMBus 波形診斷",
+        "📊 I2C / PMBus 診斷與波形檢視",
+        "🎨 I2C 封包模擬器與驅動產生",
         "🚀 PCIe Config & AER 診斷",
         "⚡ SPI Flash 協定診斷",
         "🎛 晶片暫存器 Bitfield 解碼器",
@@ -30,10 +34,10 @@ menu = st.sidebar.radio(
 )
 
 # -------------------------------------------------------------
-# 1. I2C / PMBus
+# 1. I2C / PMBus Trace & Waveform Diagnostics
 # -------------------------------------------------------------
-if menu == "📊 I2C / PMBus 波形診斷":
-    st.header("I2C / SMBus / PMBus 波形異常與協定分析")
+if menu == "📊 I2C / PMBus 診斷與波形檢視":
+    st.header("I2C / SMBus / PMBus 協定分析與數位波形檢視")
     col1, col2 = st.columns([2, 1])
     with col1:
         uploaded_file = st.file_uploader("選擇或拖放 Saleae CSV / Trace 檔案", type=["csv", "txt", "log"])
@@ -60,8 +64,30 @@ if menu == "📊 I2C / PMBus 波形診斷":
         kpi4.metric("時鐘抖動 (Jitter)", f"{report.timing_stats.frequency_jitter_pct:.1f} %")
         st.divider()
 
-        tab1, tab2, tab3, tab4 = st.tabs(["🚨 異常診斷", "📈 時序與設備地圖", "📜 交易列表", "📝 Markdown 報告"])
-        with tab1:
+        tab_wave, tab_anom, tab_timing, tab_tx, tab_md = st.tabs([
+            "📈 數位方波與協定軌 (Waveform)",
+            "🚨 異常診斷 (Anomalies)",
+            "📊 匯流排時序與健康圖表",
+            "📜 封包交易列表",
+            "📝 Markdown 診斷報告"
+        ])
+
+        with tab_wave:
+            st.subheader("I2C 互動式數位方波與協定疊加 (SCL / SDA / Protocol Overlay)")
+            if report.transactions:
+                tx_options = [f"Tx #{t.id}: 0x{t.address_7bit:02X} ({t.direction.value}) - {t.semantic_summary or t.hex_dump}" for t in report.transactions]
+                selected_tx_str = st.selectbox("選擇要檢視波形的交易 (Transaction)", tx_options)
+                selected_idx = int(selected_tx_str.split(":")[0].replace("Tx #", "").strip()) - 1
+                selected_tx = report.transactions[selected_idx]
+
+                reconstructor = I2CWaveformReconstructor(default_clock_khz=max(10.0, report.timing_stats.avg_frequency_khz))
+                wave_data = reconstructor.reconstruct_transaction_waveform(selected_tx)
+                fig = reconstructor.create_plotly_figure(wave_data, title=f"Tx #{selected_tx.id} Waveform: 0x{selected_tx.address_7bit:02X} {selected_tx.direction.value}")
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("無交易資料可繪製波形。")
+
+        with tab_anom:
             if not report.issues:
                 st.success("🎉 未偵測到任何 I2C/SMBus 時序與通訊異常！")
             else:
@@ -74,17 +100,17 @@ if menu == "📊 I2C / PMBus 波形診斷":
                         for adv in issue.actionable_advice:
                             st.markdown(f"- ✔ {adv}")
 
-        with tab2:
-            if report.devices_detected:
-                st.subheader("偵測到的週邊設備分佈")
-                dev_df = pd.DataFrame(list(report.devices_detected.values()))
-                st.dataframe(dev_df, use_container_width=True)
-            st.subheader("匯流排時序與健康指標")
-            st.write(f"- 速度模式: `{report.timing_stats.speed_mode.value}`")
-            st.write(f"- Clock Stretching 次數: `{report.timing_stats.clock_stretch_count}` (最大時長: `{report.timing_stats.max_clock_stretch_ms:.3f} ms`)")
-            st.write(f"- 匯流排使用率 (Bus Utilization): `{report.timing_stats.bus_utilization_pct:.2f} %`")
+        with tab_timing:
+            st.subheader("匯流排物理層健康評等")
+            health_df = I2CTimingCharts.get_device_health_summary(report)
+            st.table(health_df)
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                st.plotly_chart(I2CTimingCharts.create_frequency_distribution(report), use_container_width=True)
+            with col_t2:
+                st.plotly_chart(I2CTimingCharts.create_bus_activity_timeline(report), use_container_width=True)
 
-        with tab3:
+        with tab_tx:
             tx_data = []
             for t in report.transactions:
                 tx_data.append({
@@ -100,13 +126,70 @@ if menu == "📊 I2C / PMBus 波形診斷":
                 })
             st.dataframe(pd.DataFrame(tx_data), use_container_width=True)
 
-        with tab4:
+        with tab_md:
             md_out = I2CReporter.generate_markdown(report)
             st.code(md_out, language="markdown")
             st.download_button("下載 Markdown 報告", md_out, file_name="i2c_report.md")
 
 # -------------------------------------------------------------
-# 2. PCIe & AER
+# 2. I2C Packet Builder & Driver Generator
+# -------------------------------------------------------------
+elif menu == "🎨 I2C 封包模擬器與驅動產生":
+    st.header("I2C 封包自訂建構、理想波形生成與多平台 C 驅動產出")
+    st.write("自行指定目標 Slave 位址、暫存器與資料，系統將即時繪製理想波形並生成對應之 C 語言驅動程式碼。")
+
+    b_col1, b_col2, b_col3, b_col4 = st.columns(4)
+    with b_col1:
+        builder_addr_str = st.text_input("Slave 7-bit Address", value="0x50")
+    with b_col2:
+        builder_op = st.selectbox("Operation (R/W)", ["Write", "Read"])
+    with b_col3:
+        builder_reg_str = st.text_input("Register Offset", value="0x00")
+    with b_col4:
+        builder_data_str = st.text_input("Data Bytes (Hex, 空白分隔)", value="0x12 0x34")
+
+    try:
+        b_addr = int(builder_addr_str, 16)
+        b_reg = int(builder_reg_str, 16)
+        b_data = [int(tok, 16) for tok in builder_data_str.split() if tok]
+        is_read_op = (builder_op == "Read")
+
+        # Generate mock transaction and reconstruct waveform
+        from fw_diag_tool.i2c.models import AckType, I2CDirection, I2CTransaction
+        mock_tx = I2CTransaction(
+            id=1,
+            start_time=0.0,
+            end_time=0.0001,
+            address_7bit=b_addr,
+            address_8bit=(b_addr << 1) | (1 if is_read_op else 0),
+            direction=I2CDirection.READ if is_read_op else I2CDirection.WRITE,
+            data_bytes=b_data if not is_read_op else ([b_reg] if b_reg is not None else []),
+            address_ack=AckType.ACK,
+            has_stop=True,
+            command_code=b_reg
+        )
+
+        reconstructor = I2CWaveformReconstructor(default_clock_khz=100.0)
+        wave_data = reconstructor.reconstruct_transaction_waveform(mock_tx)
+        fig_builder = reconstructor.create_plotly_figure(wave_data, title=f"Ideal Waveform: {builder_op} 0x{b_addr:02X} Reg: 0x{b_reg:02X}")
+        st.plotly_chart(fig_builder, use_container_width=True)
+
+        st.subheader("一鍵生成多平台 C 語言驅動代碼")
+        snippets = I2CDriverCodeGenerator.generate_all_snippets(
+            addr_7bit=b_addr,
+            reg_offset=b_reg,
+            data_bytes=b_data,
+            is_read=is_read_op
+        )
+        for plat, code_txt in snippets.items():
+            with st.expander(f"💻 {plat}", expanded=True):
+                st.code(code_txt, language="c" if "CLI" not in plat else "bash")
+
+    except Exception as e:
+        st.error(f"輸入格式錯誤: {e}")
+
+# -------------------------------------------------------------
+# 3. PCIe & AER
 # -------------------------------------------------------------
 elif menu == "🚀 PCIe Config & AER 診斷":
     st.header("PCIe 配置空間、Capability 鏈表與 AER 嚴重錯誤診斷")
@@ -135,7 +218,7 @@ elif menu == "🚀 PCIe Config & AER 診斷":
                 st.markdown(PCIeReporter.to_markdown(cfg))
 
 # -------------------------------------------------------------
-# 3. SPI Flash
+# 4. SPI Flash
 # -------------------------------------------------------------
 elif menu == "⚡ SPI Flash 協定診斷":
     st.header("SPI / QSPI Flash 協定解析與寫入異常診斷")
@@ -146,7 +229,6 @@ elif menu == "⚡ SPI Flash 協定診斷":
     if csv_text:
         engine = SPIDiagnosticEngine()
         rep = engine.analyze_csv_content(csv_text)
-        SPIReporter.render_terminal(rep)
         s1, s2, s3, s4 = st.columns(4)
         s1.metric("總傳輸次數", rep.summary.total_transactions)
         s2.metric("讀取次數", rep.summary.read_count)
@@ -157,7 +239,7 @@ elif menu == "⚡ SPI Flash 協定診斷":
         st.markdown(SPIReporter.to_markdown(rep))
 
 # -------------------------------------------------------------
-# 4. Register Decoder & Bit-Flipper
+# 5. Register Decoder & Bit-Flipper
 # -------------------------------------------------------------
 elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
     st.header("硬體 / 晶片暫存器 Bitfield 視覺化解碼器")
@@ -187,7 +269,7 @@ elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
         st.table(pd.DataFrame([{"Bit Range": f.bit_range, "Field": f.name, "Value": f.hex_val, "Meaning": f"⚠ {f.meaning}" if f.is_warning else f.meaning} for f in res.fields]))
 
 # -------------------------------------------------------------
-# 5. C Code Generator
+# 6. C Code Generator
 # -------------------------------------------------------------
 elif menu == "🛠 C 語言 Register 巨集產生器":
     st.header("YAML 暫存器定義檔 -> C 語言 Header (#define / RMW 巨集) 自動生成")
@@ -201,7 +283,7 @@ elif menu == "🛠 C 語言 Register 巨集產生器":
     st.download_button(f"下載 {mod_name.lower()}.h", c_header, file_name=f"{mod_name.lower()}.h")
 
 # -------------------------------------------------------------
-# 6. Junior FW Fault Lab
+# 7. Junior FW Fault Lab
 # -------------------------------------------------------------
 elif menu == "🧪 Junior FW 故障模擬實驗室 (Fault Lab)":
     st.header("Junior Firmware 工程師硬韌體故障模擬演練場")
@@ -234,7 +316,7 @@ elif menu == "🧪 Junior FW 故障模擬實驗室 (Fault Lab)":
         st.markdown("**【排查 SOP】**\n1. 每次 Page Program 前必須發送單獨的 0x06 WREN 封包。\n2. 檢查 Status Register 中的 WEL 位元是否為 1。")
 
 # -------------------------------------------------------------
-# 7. SOP & Guide
+# 8. SOP & Guide
 # -------------------------------------------------------------
 elif menu == "📚 韌體除錯指南 & SOP":
     st.header("Junior Firmware 工程師硬韌體除錯指南與心智模型")
