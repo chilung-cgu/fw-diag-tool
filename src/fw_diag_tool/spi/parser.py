@@ -8,8 +8,8 @@ import re
 from typing import Any
 
 from .models import (
-    FlashStatusRegister1,
     OPCODE_NAMES,
+    FlashStatusRegister1,
     SPIOpcode,
     SPITransaction,
 )
@@ -207,8 +207,7 @@ class SPIParser:
                     details["erase_address"] = f"0x{address:06X}"
 
             # 5. Read Status Register 1 (0x05)
-            elif opcode == SPIOpcode.READ_STATUS_REG_1:
-                if len(miso) >= 2:
+            elif opcode == SPIOpcode.READ_STATUS_REG_1 and len(miso) >= 2:
                     sr1 = FlashStatusRegister1.decode(miso[1])
                     details["sr1_raw"] = f"0x{sr1.raw_val:02X}"
                     details["busy"] = sr1.busy

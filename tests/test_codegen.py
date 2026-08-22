@@ -1,5 +1,5 @@
-import pytest
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
+
 
 def test_c_header_generation():
     sample_yaml = """

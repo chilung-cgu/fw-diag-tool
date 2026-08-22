@@ -1,6 +1,6 @@
-import pytest
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
+
 
 def test_pcie_link_degradation_detection():
     # Construct a dummy 256-byte config space with PCIe Cap at 0x40

@@ -1,6 +1,5 @@
-import pytest
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
-from fw_diag_tool.i2c.models import Severity
+
 
 def test_i2c_mux_topology_tracking():
     # 1. Write to Mux 0x70 data=0x04 (Enable Channel 2)

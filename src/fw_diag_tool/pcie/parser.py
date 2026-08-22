@@ -35,8 +35,7 @@ class PCIeAnalyzer:
         current_lines = []
         bdf_pattern = re.compile(r"^[0-9a-fA-F]{2,4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]")
         for line in text.splitlines():
-            if bdf_pattern.match(line.strip()):
-                if current_lines:
+            if bdf_pattern.match(line.strip()) and current_lines:
                     chunks.append("\n".join(current_lines))
                     current_lines = []
             current_lines.append(line)
@@ -195,7 +194,7 @@ class PCIeAnalyzer:
 
         elif h_type == HeaderType.TYPE_1_BRIDGE:
             pri_bus, sec_bus, sub_bus, sec_latency = struct.unpack_from("<BBBB", raw_data, 0x18)
-            io_base_low, io_limit_low, sec_status = struct.unpack_from("<BBH", raw_data, 0x1C)
+            io_base_low, io_limit_low, _sec_status = struct.unpack_from("<BBH", raw_data, 0x1C)
             mem_base_raw, mem_limit_raw = struct.unpack_from("<HH", raw_data, 0x20)
             pref_mem_base_raw, pref_mem_limit_raw = struct.unpack_from("<HH", raw_data, 0x24)
 
@@ -276,8 +275,7 @@ class PCIeAnalyzer:
                     is_degraded = False
                     degradation_reason = ""
                     guide = ""
-                    if max_speed_code > 0 and curr_speed_code > 0:
-                        if curr_speed_code < max_speed_code or curr_width < max_width:
+                    if max_speed_code > 0 and curr_speed_code > 0 and (curr_speed_code < max_speed_code or curr_width < max_width):
                             is_degraded = True
                             degradation_reason = (
                                 f"PCIe Link Degraded: Operating at {curr_speed_str} x{curr_width} "
@@ -581,7 +579,7 @@ class PCIeAnalyzer:
 
             m_err = error_name_pattern.search(line)
             if m_err:
-                ts, bdf, sev, err_type, dev_id, err_name = m_err.groups()
+                ts, bdf, sev, _err_type, _dev_id, err_name = m_err.groups()
                 guide = get_root_cause_guide(err_name) or f"Linux Kernel AER error event: {err_name}"
                 events.append(
                     DmesgAEREvent(

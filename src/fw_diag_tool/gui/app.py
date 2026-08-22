@@ -1,16 +1,17 @@
 from pathlib import Path
-import streamlit as st
+
 import pandas as pd
 import plotly.express as px
+import streamlit as st
 
+from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
+from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.reporter import I2CReporter
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.spi.reporter import SPIReporter
-from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
-from fw_diag_tool.codegen.c_header import CHeaderGenerator
 
 st.set_page_config(page_title="FW Diagnostic Toolkit", page_icon="⚡", layout="wide")
 st.title("⚡ Firmware Signal & Protocol Diagnostic Toolkit")

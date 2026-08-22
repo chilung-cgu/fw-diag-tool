@@ -1,6 +1,7 @@
-import pytest
 from pathlib import Path
+
 from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
+
 
 def test_gui_app_syntax():
     app_path = Path("src/fw_diag_tool/gui/app.py")

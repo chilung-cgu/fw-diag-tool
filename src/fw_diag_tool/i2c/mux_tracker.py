@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
-from .models import AckType, I2CDirection, I2CTransaction, I2CDiagnosticIssue, Severity
-
+from .models import AckType, I2CDiagnosticIssue, I2CDirection, I2CTransaction, Severity
 
 MUX_ADDRESSES = {0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77}
 

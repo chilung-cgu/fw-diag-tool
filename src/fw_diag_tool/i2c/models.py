@@ -202,6 +202,10 @@ class I2CAnalysisReport:
     issues: list[I2CDiagnosticIssue]
     summary_text: str = ""
 
+    @property
+    def anomalies(self) -> list[I2CDiagnosticIssue]:
+        return self.issues
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "summary": {

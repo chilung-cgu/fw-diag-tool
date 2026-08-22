@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
-import yaml
 
-from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog, RegisterDef, BitField
+from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
 
 
 class CHeaderGenerator:

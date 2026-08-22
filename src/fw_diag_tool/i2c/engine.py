@@ -6,7 +6,6 @@ and actionable diagnostic advice generation.
 """
 
 from __future__ import annotations
-from .mux_tracker import I2CMuxTracker
 
 from typing import Any
 
@@ -30,6 +29,8 @@ from fw_diag_tool.i2c.sensor_decoders import (
     decode_pca9555_gpio,
 )
 from fw_diag_tool.i2c.timing import analyze_timing_statistics
+
+from .mux_tracker import I2CMuxTracker
 
 
 class I2CDiagnosticEngine:

@@ -64,8 +64,7 @@ class SPIAnomalyDetector:
                 wel_latched = False
 
             # Check 2: Page Program Wrap-around Hazard
-            if op in (SPIOpcode.PAGE_PROGRAM, SPIOpcode.QUAD_PAGE_PROGRAM):
-                if tx.decoded_details.get("page_wrap_hazard"):
+            if op in (SPIOpcode.PAGE_PROGRAM, SPIOpcode.QUAD_PAGE_PROGRAM) and tx.decoded_details.get("page_wrap_hazard"):
                     start_off = tx.decoded_details.get("page_start_offset", 0)
                     p_len = tx.data_payload_len
                     issues.append(
@@ -88,8 +87,7 @@ class SPIAnomalyDetector:
                     )
 
             # Check 3: Truncated Transaction
-            if op in (SPIOpcode.READ_DATA, SPIOpcode.FAST_READ, SPIOpcode.PAGE_PROGRAM, SPIOpcode.SECTOR_ERASE_4K):
-                if len(tx.mosi_bytes) < 4:
+            if op in (SPIOpcode.READ_DATA, SPIOpcode.FAST_READ, SPIOpcode.PAGE_PROGRAM, SPIOpcode.SECTOR_ERASE_4K) and len(tx.mosi_bytes) < 4:
                     issues.append(
                         SPIDiagnosticIssue(
                             code="SPI_TRUNCATED_TX",

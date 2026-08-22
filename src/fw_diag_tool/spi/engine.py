@@ -7,9 +7,8 @@ from .models import (
     SPIOpcode,
     SPIReport,
     SPIReportSummary,
-    SPITransaction,
 )
-from .parser import JEDEC_DATABASE, SPIParser
+from .parser import SPIParser
 
 
 class SPIDiagnosticEngine:

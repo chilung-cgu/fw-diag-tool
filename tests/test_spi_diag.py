@@ -1,8 +1,7 @@
-import pytest
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
-from fw_diag_tool.spi.models import SPIOpcode, SPISeverity
-from fw_diag_tool.spi.parser import SPIParser
+from fw_diag_tool.spi.models import SPISeverity
 from fw_diag_tool.spi.reporter import SPIReporter
+
 
 def test_spi_jedec_id_and_wren_program():
     # Simulated SPI trace:
@@ -54,7 +53,6 @@ def test_spi_write_without_wren_anomaly():
 
 def test_spi_page_program_wrap_around_hazard():
     # Program starting at offset 0xF0 with 30 bytes (> 256 page wrap)
-    mosi_bytes = [0x06]
     tx1_csv = "0.001,0x06,0x00,0\n0.002,0x00,0x00,1\n"
     tx2_rows = ["0.010,0x02,0x00,0", "0.011,0x00,0x00,0", "0.012,0x00,0x00,0", "0.013,0xF0,0x00,0"]
     for i in range(30):

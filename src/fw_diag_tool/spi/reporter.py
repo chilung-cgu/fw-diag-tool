@@ -44,7 +44,7 @@ class SPIReporter:
     def to_markdown(report: SPIReport) -> str:
         lines: list[str] = []
         chip_str = report.summary.detected_flash_chip or "Unknown / Generic SPI Flash"
-        lines.append(f"# SPI / QSPI Flash Diagnostic Report\n")
+        lines.append("# SPI / QSPI Flash Diagnostic Report\n")
         lines.append(f"- **Identified Flash Chip**: `{chip_str}`")
         lines.append(f"- **Total Transactions**: `{report.summary.total_transactions}`")
         lines.append(f"- **Read / Program / Erase**: `{report.summary.read_count}` / `{report.summary.write_count}` / `{report.summary.erase_count}`")

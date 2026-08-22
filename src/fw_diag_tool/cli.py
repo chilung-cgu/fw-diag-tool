@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -40,8 +39,8 @@ console = Console()
 @i2c_app.command("analyze")
 def analyze_i2c_trace(
     file_path: Path = typer.Argument(..., help="Path to Saleae Logic 2 CSV, generic CSV, or text trace log"),
-    markdown_out: Optional[Path] = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
-    json_out: Optional[Path] = typer.Option(None, "--json", "-j", help="Export JSON structured report to file"),
+    markdown_out: Path | None = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
+    json_out: Path | None = typer.Option(None, "--json", "-j", help="Export JSON structured report to file"),
     smbus_timeout: float = typer.Option(25.0, "--smbus-timeout", help="SMBus clock stretching timeout in ms (default: 25.0)"),
 ):
     """Analyze an I2C / SMBus / PMBus trace, decode transactions, check timing, and diagnose faults."""
@@ -67,7 +66,7 @@ def analyze_i2c_trace(
 @pcie_app.command("analyze")
 def analyze_pcie(
     file_or_dump: str = typer.Argument(..., help="Path to lspci text / hex dump file, dmesg log file, or raw hex string"),
-    markdown_out: Optional[Path] = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
+    markdown_out: Path | None = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
 ):
     """Analyze PCIe Config Space, Capability list, AER errors, and decode faulting TLP Headers."""
     content = file_or_dump
@@ -134,7 +133,7 @@ def analyze_pcie(
 @spi_app.command("analyze")
 def analyze_spi_trace(
     file_path: Path = typer.Argument(..., help="Path to Saleae Logic 2 SPI CSV export"),
-    markdown_out: Optional[Path] = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
+    markdown_out: Path | None = typer.Option(None, "--md", "-m", help="Export markdown diagnostic report to file"),
 ):
     """Analyze SPI / QSPI NOR Flash trace, decode JEDEC opcodes, and detect write/erase hazards."""
     if not file_path.exists():
@@ -189,7 +188,7 @@ def decode_register(
 @gen_app.command("c-header")
 def generate_c_header(
     yaml_file: Path = typer.Argument(..., help="Path to register definition YAML file"),
-    output_header: Optional[Path] = typer.Option(None, "--out", "-o", help="Output C header file path"),
+    output_header: Path | None = typer.Option(None, "--out", "-o", help="Output C header file path"),
     module_name: str = typer.Option("CHIP_REGS", "--name", "-n", help="C header module name / guard prefix"),
 ):
     """Generate MISRA-compliant C header definitions and RMW bitfield macros from YAML."""
@@ -210,7 +209,8 @@ def generate_c_header(
 @app.command("gui")
 def launch_gui(port: int = typer.Option(8501, "--port", "-p"), host: str = typer.Option("127.0.0.1", "--host", "-h")):
     """Launch the interactive Web GUI dashboard."""
-    import subprocess, sys
+    import subprocess
+    import sys
     from pathlib import Path
     app_path = Path(__file__).parent / "gui" / "app.py"
     console.print(f"[bold green]🚀 Launching Web GUI on http://{host}:{port}...[/]")
