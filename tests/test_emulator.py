@@ -7,7 +7,7 @@ from fw_diag_tool.emulator.spi_flash import VirtualSPIFlashW25Q128
 
 def test_eeprom_basic_write_and_read():
     eeprom = VirtualEEPROM24C64(addr_7bit=0x50, page_size=32)
-    result = eeprom.write([0x00, 0xAB, 0xCD])
+    result = eeprom.write([0x00, 0x00, 0xAB, 0xCD])
     assert result["offset"] == 0x00
     data = eeprom.read(offset=0x00, length=2)
     assert data == bytes([0xAB, 0xCD])
@@ -15,12 +15,19 @@ def test_eeprom_basic_write_and_read():
 
 def test_eeprom_page_boundary_rollover():
     eeprom = VirtualEEPROM24C64(page_size=8)
-    result = eeprom.write([0x06, 0xAA, 0xBB, 0xCC, 0xDD])
+    result = eeprom.write([0x06, 0xAA, 0xBB, 0xCC, 0xDD], preferred_address_bytes=1)
     assert result["rollover_hazard"] is True
     assert eeprom.memory[6] == 0xAA
     assert eeprom.memory[7] == 0xBB
     assert eeprom.memory[0] == 0xCC
     assert eeprom.memory[1] == 0xDD
+
+
+def test_24c64_emulator_defaults_to_two_byte_word_address():
+    eeprom = VirtualEEPROM24C64()
+    result = eeprom.write([0x01, 0x00, 0xAA])
+    assert result["offset"] == 0x0100
+    assert eeprom.read(0x0100, 1) == b"\xaa"
 
 
 def test_lm75_temperature_encoding():

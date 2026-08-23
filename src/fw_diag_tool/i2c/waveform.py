@@ -61,7 +61,11 @@ class I2CWaveformReconstructor:
     ) -> I2CWaveformData:
         if not isinstance(tx, I2CTransaction):
             raise TypeError("tx must be an I2CTransaction")
-        if not tx.address_available or not tx.direction_available:
+        if (
+            not tx.address_available
+            or not tx.direction_available
+            or not isinstance(tx.direction, I2CDirection)
+        ):
             raise ValueError(
                 "cannot reconstruct a protocol waveform without trustworthy address and direction evidence"
             )

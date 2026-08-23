@@ -36,7 +36,7 @@ class VirtualEEPROM24C64:
             raise ValueError(f"Read out of range: offset=0x{offset:04X} len={length}")
         return bytes(self.memory[offset : offset + length])
 
-    def write(self, data_bytes: list[int], preferred_address_bytes: int = 1) -> dict[str, Any]:
+    def write(self, data_bytes: list[int], preferred_address_bytes: int = 2) -> dict[str, Any]:
         if not isinstance(data_bytes, list):
             raise TypeError("data_bytes must be a list of integers")
         for index, value in enumerate(data_bytes):

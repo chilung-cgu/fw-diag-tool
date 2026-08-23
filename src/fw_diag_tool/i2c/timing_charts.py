@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-from .models import AckType, I2CAnalysisReport
+from .models import AckType, I2CAnalysisReport, I2CDirection
 
 
 class I2CTimingCharts:
@@ -91,7 +91,11 @@ class I2CTimingCharts:
                     ),
                     "Start Time (s)": tx.start_time if tx.timestamp_available else None,
                     "Duration (ms)": tx.duration_us / 1000.0 if tx.timestamp_available else None,
-                    "Direction": tx.direction.value if tx.direction_available else "UNKNOWN",
+                    "Direction": (
+                        tx.direction.value
+                        if tx.direction_available and isinstance(tx.direction, I2CDirection)
+                        else "UNKNOWN"
+                    ),
                     "Status": status,
                     "Bytes": len(tx.data_bytes),
                 }

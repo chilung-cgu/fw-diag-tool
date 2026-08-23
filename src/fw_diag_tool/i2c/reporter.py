@@ -154,7 +154,7 @@ class I2CReporter:
         tx_tbl.add_column("Status", justify="center")
 
         for tx in report.transactions:
-            if tx.direction_available:
+            if tx.direction_available and isinstance(tx.direction, I2CDirection):
                 rw_color = "cyan" if tx.direction == I2CDirection.READ else "magenta"
                 rw_text = f"[{rw_color}]{tx.direction.value}[/]"
             else:
@@ -334,7 +334,11 @@ class I2CReporter:
                 summary = f"⚠️ **{summary}**"
 
             addr_text = f"0x{tx.address_7bit:02X}" if tx.address_available else "n/a"
-            direction_text = tx.direction.value if tx.direction_available else "UNKNOWN"
+            direction_text = (
+                tx.direction.value
+                if tx.direction_available and isinstance(tx.direction, I2CDirection)
+                else "UNKNOWN"
+            )
 
             lines.append(
                 f"| {tx.id} | {tx.start_time:.6f} | `{addr_text}` | `{direction_text}` | `{tx.hex_dump}` | {summary} | {status} |"

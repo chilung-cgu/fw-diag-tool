@@ -301,7 +301,11 @@ class I2CAnalysisReport:
                     "duration_us": round(tx.duration_us, 2),
                     "address_7bit": (f"0x{tx.address_7bit:02X}" if tx.address_available else None),
                     "address_8bit": (f"0x{tx.address_8bit:02X}" if tx.address_available else None),
-                    "direction": tx.direction.value if tx.direction_available else None,
+                    "direction": (
+                        tx.direction.value
+                        if tx.direction_available and isinstance(tx.direction, I2CDirection)
+                        else None
+                    ),
                     "address_ack": tx.address_ack.value,
                     "data_hex": tx.hex_dump,
                     "byte_count": len(tx.data_bytes),

@@ -45,6 +45,8 @@ def analyze_timing_statistics(
         raise ValueError("total_trace_duration_s must be finite and non-negative")
     if not isinstance(transactions, list):
         raise TypeError("transactions must be a list")
+    if any(not isinstance(tx, I2CTransaction) for tx in transactions):
+        raise TypeError("transactions must contain I2CTransaction objects")
 
     stats = TimingStatistics()
     if not transactions:

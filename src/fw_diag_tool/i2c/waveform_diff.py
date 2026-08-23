@@ -51,6 +51,8 @@ class WaveformDiffEngine:
         golden: I2CAnalysisReport,
         failing: I2CAnalysisReport,
     ) -> WaveformDiffReport:
+        if not isinstance(golden, I2CAnalysisReport) or not isinstance(failing, I2CAnalysisReport):
+            raise TypeError("golden and failing must be I2CAnalysisReport objects")
         divergences: list[DivergencePoint] = []
         g_txs = golden.transactions
         f_txs = failing.transactions

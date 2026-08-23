@@ -14,6 +14,7 @@ from fw_diag_tool.i2c.pmbus import (
     encode_linear11,
     parse_vout_mode_exponent,
 )
+from fw_diag_tool.i2c.reporter import I2CReporter
 from fw_diag_tool.i2c.sensor_decoders import (
     decode_ina2xx_power,
     decode_lm75_temperature,
@@ -488,6 +489,26 @@ def test_i2c_direct_timing_and_waveform_inputs_reject_nonfinite_values():
         analyze_timing_statistics([], float("nan"))
     with pytest.raises(ValueError, match="default_clock_khz"):
         I2CWaveformReconstructor(default_clock_khz=float("nan"))
+
+
+def test_i2c_reporters_and_helpers_handle_hostile_model_boundaries():
+    tx = I2CTransaction(
+        id=1,
+        start_time=0.0,
+        end_time=0.0,
+        address_7bit=0x50,
+        address_8bit=0xA0,
+        direction=None,  # type: ignore[arg-type]
+    )
+    report = I2CDiagnosticEngine().analyze([])
+    report.transactions = [tx]
+    report.total_transactions = 1
+    assert "UNKNOWN" in I2CReporter.generate_markdown(report)
+    report.to_json()
+    with pytest.raises(TypeError, match="I2CTransaction"):
+        analyze_timing_statistics([None], 0.0)  # type: ignore[list-item]
+    with pytest.raises(TypeError, match="I2CAnalysisReport"):
+        WaveformDiffEngine.compare_reports(None, None)  # type: ignore[arg-type]
 
 
 def test_i2c_missing_direction_and_data_are_not_guessed():
