@@ -36,6 +36,21 @@ EEPROM_MODELS: dict[str, EEPROMProfile] = {
 }
 
 
+def _validate_bytes(data_bytes: list[int], *, name: str = "data_bytes") -> None:
+    """Validate a byte sequence before formatting or arithmetic on its values."""
+    if not isinstance(data_bytes, list):
+        raise TypeError(f"{name} must be a list of integers")
+    for index, value in enumerate(data_bytes):
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFF:
+            raise ValueError(f"{name}[{index}] must be an integer in range 0..0xFF")
+
+
+def _validate_positive_int(name: str, value: int, *, maximum: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
+        raise ValueError(f"{name} must be an integer in range 1..{maximum}")
+    return value
+
+
 def decode_eeprom_write(
     data_bytes: list[int], preferred_address_bytes: int = 1, page_size: int = 16
 ) -> dict[str, Any]:
@@ -45,7 +60,15 @@ def decode_eeprom_write(
         data_bytes: Payload bytes transmitted following slave address byte.
         preferred_address_bytes: 1 for 24C01-24C16, 2 for 24C32-24C512.
         page_size: Page size in bytes for boundary check.
+
+    Raises:
+        TypeError/ValueError: If the input sequence or EEPROM geometry is invalid.
     """
+    _validate_bytes(data_bytes)
+    _validate_positive_int("preferred_address_bytes", preferred_address_bytes, maximum=2)
+    if preferred_address_bytes not in (1, 2):
+        raise ValueError("preferred_address_bytes must be 1 or 2")
+    _validate_positive_int("page_size", page_size, maximum=4096)
     if not data_bytes:
         return {
             "type": "Write Polling / Address Probe",
@@ -69,7 +92,7 @@ def decode_eeprom_write(
 
     # Check Page Boundary Rollover
     # If start offset + payload length crosses the page boundary, the EEPROM hardware counter wraps!
-    safe_page_size = max(1, page_size)
+    safe_page_size = page_size
     offset_in_page = offset % safe_page_size
     page_start = (offset // safe_page_size) * safe_page_size
     rollover_hazard = False
@@ -115,6 +138,13 @@ def decode_eeprom_read(
     data_bytes: list[int], last_known_offset: int | None = None
 ) -> dict[str, Any]:
     """Decode an EEPROM read transaction."""
+    _validate_bytes(data_bytes)
+    if last_known_offset is not None and (
+        isinstance(last_known_offset, bool)
+        or not isinstance(last_known_offset, int)
+        or not 0 <= last_known_offset <= 0xFFFF
+    ):
+        raise ValueError("last_known_offset must be an integer in range 0..0xFFFF or None")
     payload_len = len(data_bytes)
     if payload_len == 0:
         return {"type": "Read Probe", "summary": "Empty Read"}

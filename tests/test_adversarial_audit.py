@@ -1,7 +1,7 @@
 import pytest
 
 from fw_diag_tool.analyzers.register_mapper import BitField
-from fw_diag_tool.i2c.eeprom import decode_eeprom_write
+from fw_diag_tool.i2c.eeprom import decode_eeprom_read, decode_eeprom_write
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.models import RawEventType, RawI2CEvent
 from fw_diag_tool.i2c.parser import I2CParser, parse_hex_or_int
@@ -92,11 +92,17 @@ def test_spi_jedec_line_fault():
     assert any(a.code == "SPI_JEDEC_LINE_FAULT" for a in report.anomalies)
 
 
-def test_eeprom_zero_page_size_guard():
-    res = decode_eeprom_write([0x00, 0x12, 0x34], page_size=0)
-    assert res["page_size"] == 1
-    assert res["rollover_hazard"] is True
-    assert "1 byte(s) will WRAP AROUND" in res["rollover_details"]
+def test_eeprom_decoder_rejects_invalid_geometry_and_bytes():
+    with pytest.raises(ValueError, match="page_size"):
+        decode_eeprom_write([0x00, 0x12, 0x34], page_size=0)
+    with pytest.raises(ValueError, match="data_bytes"):
+        decode_eeprom_write([-1, 0x12])
+    with pytest.raises(ValueError, match="data_bytes"):
+        decode_eeprom_write([0x100])
+    with pytest.raises(ValueError, match="preferred_address_bytes"):
+        decode_eeprom_write([0x00], preferred_address_bytes=3)
+    with pytest.raises(ValueError, match="data_bytes"):
+        decode_eeprom_read([0x100])
 
 
 def test_linear11_nan_inf_guard():
