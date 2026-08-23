@@ -333,6 +333,21 @@ def test_raw_adapter_rejects_malformed_transaction_metadata() -> None:
             raw_decode_to_events(malformed)
 
 
+def test_raw_adapter_rejects_malformed_condition_metadata() -> None:
+    builder = _CaptureBuilder()
+    builder.start()
+    builder.byte(0xA0, 0)
+    builder.stop()
+    decoded = analyze_raw_i2c_csv(builder.csv())
+    malformed = replace(
+        decoded,
+        conditions=(replace(decoded.conditions[0], kind=None),),  # type: ignore[arg-type]
+    )
+
+    with pytest.raises(RawCaptureValidationError):
+        raw_decode_to_waveform(malformed)
+
+
 def test_level_sampled_unchanged_rows_do_not_break_stop_detection() -> None:
     builder = _CaptureBuilder()
     builder.start()

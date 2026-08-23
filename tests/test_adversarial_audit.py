@@ -4,7 +4,7 @@ from fw_diag_tool.analyzers.register_mapper import BitField, RegisterMapCatalog
 from fw_diag_tool.i2c.anomaly import I2CAnomalyDetector
 from fw_diag_tool.i2c.eeprom import decode_eeprom_read, decode_eeprom_write
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
-from fw_diag_tool.i2c.models import RawEventType, RawI2CEvent
+from fw_diag_tool.i2c.models import RawEventType, RawI2CEvent, TimingStatistics
 from fw_diag_tool.i2c.parser import I2CParser, parse_hex_or_int
 from fw_diag_tool.i2c.pmbus import (
     decode_linear11,
@@ -20,7 +20,7 @@ from fw_diag_tool.i2c.sensor_decoders import (
     decode_lm75_temperature,
     decode_pca9555_gpio,
 )
-from fw_diag_tool.i2c.timing import analyze_timing_statistics
+from fw_diag_tool.i2c.timing import analyze_timing_statistics, classify_speed_mode
 from fw_diag_tool.pcie.diagnostics import diagnose_pcie_device
 from fw_diag_tool.pcie.models import AERAnalysisResult, PCIeConfigSpace, TLPHeaderDecoded
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
@@ -111,10 +111,15 @@ def test_pmbus_linear16_signed_trim():
 
 def test_pmbus_vout_mode_read_dynamic_update():
     csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
-0.001,0,0x58,Write,0x20,ACK
-0.002,1,0x58,Read,0x14,ACK
-0.003,2,0x58,Write,0x8B,ACK
-0.004,3,0x58,Read,0x00 0x10,ACK
+0.001,0,0x58,Write,,ACK
+0.0011,0,,Write,0x20,ACK
+0.002,1,0x58,Read,,ACK
+0.0021,1,,Read,0x14,ACK
+0.003,2,0x58,Write,,ACK
+0.0031,2,,Write,0x8B,ACK
+0.004,3,0x58,Read,,ACK
+0.0041,3,,Read,0x00,ACK
+0.0042,3,,Read,0x10,NAK
 """
     engine = I2CDiagnosticEngine()
     report = engine.analyze_csv_content(csv_data)
@@ -191,7 +196,10 @@ def test_eeprom_profile_capacity_rejects_out_of_range_offset():
 def test_engine_surfaces_eeprom_profile_capacity_limit():
     report = I2CDiagnosticEngine(eeprom_profile="24C64").analyze_csv_content(
         "Time,Packet ID,Address,Read/Write,Data,ACK/NACK\n"
-        "0.001,0,0x50,Write,0xFF 0xFF 0xAA,ACK\n"
+        "0.001,0,0x50,Write,,ACK\n"
+        "0.0011,0,,Write,0xFF,ACK\n"
+        "0.0012,0,,Write,0xFF,ACK\n"
+        "0.0013,0,,Write,0xAA,ACK\n"
         "0.002,1,0x50,Read,0x12,ACK\n"
     )
     tx = report.transactions[0]
@@ -278,7 +286,10 @@ def test_i2c_anomaly_detector_rejects_invalid_configuration():
 
 def test_ambiguous_eeprom_requires_explicit_profile_before_offset_decode():
     csv_data = """Time,Address,Read/Write,Data,ACK/NACK
-0.001,0x50,Write,0x01 0x23 0xAA,ACK
+0.001,0x50,Write,,ACK
+0.0011,,Write,0x01,ACK
+0.0012,,Write,0x23,ACK
+0.0013,,Write,0xAA,ACK
 """
     ambiguous = I2CDiagnosticEngine().analyze_csv_content(csv_data)
     tx = ambiguous.transactions[0]
@@ -541,6 +552,17 @@ def test_i2c_reporters_and_helpers_handle_hostile_model_boundaries():
         analyze_timing_statistics([None], 0.0)  # type: ignore[list-item]
     with pytest.raises(TypeError, match="I2CAnalysisReport"):
         WaveformDiffEngine.compare_reports(None, None)  # type: ignore[arg-type]
+
+
+def test_i2c_public_group_and_anomaly_helpers_reject_malformed_boundaries():
+    with pytest.raises(TypeError, match="RawI2CEvent"):
+        I2CDiagnosticEngine().group_events_into_transactions([None])  # type: ignore[list-item]
+    with pytest.raises(TypeError, match="I2CTransaction"):
+        I2CAnomalyDetector().analyze_transactions([None], TimingStatistics())  # type: ignore[list-item]
+    with pytest.raises(TypeError, match="finite"):
+        classify_speed_mode(True)
+    with pytest.raises(ValueError, match="finite"):
+        classify_speed_mode(float("nan"))
 
 
 def test_i2c_missing_direction_and_data_are_not_guessed():

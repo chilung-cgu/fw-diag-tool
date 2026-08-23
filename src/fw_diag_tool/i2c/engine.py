@@ -101,6 +101,7 @@ class I2CDiagnosticEngine:
 
     def group_events_into_transactions(self, events: list[RawI2CEvent]) -> list[I2CTransaction]:
         """Group raw stream of physical I2C events into logical I2C Transactions."""
+        self._validate_events(events)
         transactions: list[I2CTransaction] = []
         if not events:
             return transactions
@@ -119,7 +120,16 @@ class I2CDiagnosticEngine:
 
         for ev in events:
             event_source_error = bool(ev.extra and ev.extra.get("source_error"))
-            if current_tx is not None and event_source_error:
+            # Non-aggregate parser errors belong to the transaction currently
+            # being assembled.  Aggregate rows are applied after their
+            # address/data event has selected the correct transaction below;
+            # applying them here would contaminate the previous packet at a
+            # packet-id boundary.
+            if (
+                current_tx is not None
+                and event_source_error
+                and not (ev.extra and ev.extra.get("aggregate_ack"))
+            ):
                 current_tx.source_error = True
             # Explicit START or REPEATED_START
             if ev.event_type in (RawEventType.START, RawEventType.REPEATED_START):
@@ -293,6 +303,12 @@ class I2CDiagnosticEngine:
                     byte_available=(ev.address_7bit is not None and ev.direction is not None),
                 )
                 current_tx.byte_packets.append(pkt)
+                if event_source_error:
+                    current_tx.source_error = True
+                if ev.extra and ev.extra.get("aggregate_ack"):
+                    aggregate_value = ev.extra.get("aggregate_ack_value")
+                    if aggregate_value in {ack.value for ack in AckType}:
+                        current_tx.aggregate_ack = AckType(aggregate_value)
                 if ev.timestamp_available:
                     current_tx.end_time = ev.timestamp + (dur_s or 0.0)
                     last_byte_end_time = current_tx.end_time
@@ -423,6 +439,12 @@ class I2CDiagnosticEngine:
                     byte_available=data_available,
                 )
                 current_tx.byte_packets.append(pkt)
+                if event_source_error:
+                    current_tx.source_error = True
+                if ev.extra and ev.extra.get("aggregate_ack"):
+                    aggregate_value = ev.extra.get("aggregate_ack_value")
+                    if aggregate_value in {ack.value for ack in AckType}:
+                        current_tx.aggregate_ack = AckType(aggregate_value)
                 if data_available:
                     current_tx.data_bytes.append(data_val)
                 if ev.timestamp_available:
@@ -478,10 +500,19 @@ class I2CDiagnosticEngine:
                 tx.identity_confidence = "address-only"
                 tx.semantic_summary = "Read/write direction unavailable; semantic decoding withheld"
                 continue
-            if tx.source_error:
+            if tx.source_error and tx.aggregate_ack == AckType.NONE:
                 tx.semantic_summary = "Source field invalid; semantic decoding withheld"
                 tx.decoded_values = {"evidence": "source-error"}
                 semantic_source_error += 1
+                continue
+            if tx.aggregate_ack != AckType.NONE:
+                tx.semantic_summary = (
+                    "ACK attribution unavailable; semantic decoding withheld"
+                )
+                tx.decoded_values = {
+                    "evidence": "aggregate-ack",
+                    "aggregate_ack": tx.aggregate_ack.value,
+                }
                 continue
             if any(
                 not packet.byte_available for packet in tx.byte_packets if not packet.is_address
@@ -937,7 +968,6 @@ class I2CDiagnosticEngine:
 
     def analyze(self, events: list[RawI2CEvent]) -> I2CAnalysisReport:
         """Execute full end-to-end diagnostic pipeline on parsed events."""
-        self._validate_events(events)
         # A diagnostic engine may be reused for multiple independent captures.  MUX
         # state belongs to one capture and must never leak into the next report.
         self.mux_tracker = I2CMuxTracker()

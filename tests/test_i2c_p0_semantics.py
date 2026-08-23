@@ -144,7 +144,7 @@ def test_multibyte_aggregate_ack_withholds_eeprom_semantics():
         '0.001,0x50,Write,"0x00 0x01",ACK\n'
     )
     tx = report.transactions[0]
-    assert tx.decoded_values["evidence"] == "source-error"
+    assert tx.decoded_values["evidence"] == "aggregate-ack"
     assert "withheld" in (tx.semantic_summary or "")
     assert any(
         issue.code == "I2C_ACK_AGGREGATE_UNATTRIBUTABLE"

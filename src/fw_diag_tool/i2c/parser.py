@@ -365,12 +365,23 @@ class I2CParser:
 
             if raw_data_tokens and addr_7bit is not None:
                 # Analyzer summary rows can combine address and one or more data bytes.
-                aggregate_ack = len(raw_data_tokens) > 1 and ack_val != AckType.NONE
+                # A row that carries both an address and data does not identify
+                # which byte owns its single ACK/NACK, even when there is only
+                # one data token.  Preserve the bytes, but keep ACK attribution
+                # unknown and let the engine withhold accepted-payload semantics.
+                aggregate_ack = ack_val != AckType.NONE
                 if aggregate_ack:
                     source_error = source_error or (
                         "aggregate ACK/NACK cannot be attributed to individual data bytes"
                     )
-                aggregate_extra = {"aggregate_ack": True} if aggregate_ack else {}
+                aggregate_extra = (
+                    {
+                        "aggregate_ack": True,
+                        "aggregate_ack_value": ack_val.value,
+                    }
+                    if aggregate_ack
+                    else {}
+                )
                 if source_error:
                     aggregate_extra["source_error"] = source_error
                 events.append(

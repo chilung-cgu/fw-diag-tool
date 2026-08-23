@@ -49,6 +49,12 @@ class I2CAnomalyDetector:
         self, transactions: list[I2CTransaction], timing_stats: TimingStatistics
     ) -> list[I2CDiagnosticIssue]:
         """Run full battery of diagnostic checks across all transactions."""
+        if not isinstance(transactions, list):
+            raise TypeError("transactions must be a list")
+        if any(not isinstance(tx, I2CTransaction) for tx in transactions):
+            raise TypeError("transactions must contain I2CTransaction objects")
+        if not isinstance(timing_stats, TimingStatistics):
+            raise TypeError("timing_stats must be a TimingStatistics object")
         issues: list[I2CDiagnosticIssue] = []
 
         if not transactions:

@@ -14,6 +14,10 @@ from fw_diag_tool.i2c.models import I2CSpeedMode, I2CTransaction, TimingStatisti
 
 def classify_speed_mode(avg_freq_khz: float) -> I2CSpeedMode:
     """Classify nominal I2C speed mode based on observed average frequency."""
+    if isinstance(avg_freq_khz, bool) or not isinstance(avg_freq_khz, (int, float)):
+        raise TypeError("avg_freq_khz must be a finite numeric value")
+    if not math.isfinite(float(avg_freq_khz)):
+        raise ValueError("avg_freq_khz must be a finite numeric value")
     if avg_freq_khz <= 0:
         return I2CSpeedMode.UNKNOWN
     elif avg_freq_khz <= 125.0:

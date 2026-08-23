@@ -252,6 +252,8 @@ def _validate_decode_result(result: RawI2CDecodeResult) -> None:
     for index, condition in enumerate(result.conditions):
         if not isinstance(condition, RawI2CCondition):
             raise RawCaptureValidationError(f"raw condition {index} is malformed")
+        if not isinstance(condition.kind, RawConditionKind):
+            raise RawCaptureValidationError(f"raw condition {index} kind is malformed")
         _validate_timestamp(condition.timestamp_s, f"raw condition {index}")
 
     if not isinstance(result.transactions, (tuple, list)) or not result.transactions:

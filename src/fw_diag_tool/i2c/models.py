@@ -135,6 +135,10 @@ class I2CTransaction:
     address_available: bool = True
     direction_available: bool = True
     source_error: bool = False
+    # A combined analyzer row supplied one ACK/NACK for address + data.  Keep
+    # the aggregate status separately from per-byte ACKs, whose attribution is
+    # intentionally unknown.
+    aggregate_ack: AckType = AckType.NONE
 
     @property
     def hex_dump(self) -> str:
@@ -308,6 +312,7 @@ class I2CAnalysisReport:
                         else None
                     ),
                     "address_ack": tx.address_ack.value,
+                    "aggregate_ack": tx.aggregate_ack.value,
                     "data_hex": tx.hex_dump,
                     "byte_count": len(tx.data_bytes),
                     "source_byte_count": sum(

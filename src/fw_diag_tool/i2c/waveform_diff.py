@@ -37,6 +37,10 @@ class WaveformDiffEngine:
         """Return a comparison-safe ACK outcome, excluding normal read termination NACK."""
         if tx.address_ack == AckType.NACK:
             return "address_nack"
+        if tx.aggregate_ack == AckType.NACK:
+            return "aggregate_nack"
+        if tx.aggregate_ack == AckType.ACK:
+            return "aggregate_ack"
         if tx.has_unexpected_data_nack:
             return "data_nack"
         if tx.address_ack == AckType.NONE or any(

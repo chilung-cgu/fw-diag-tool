@@ -4,12 +4,18 @@ from fw_diag_tool.i2c.waveform_diff import WaveformDiffEngine
 
 def test_waveform_diff_divergence_detection():
     golden_csv = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
-0.001,0,0x50,Write,0x00,ACK
-0.002,1,0x50,Write,0x12 0x34,ACK
+0.001,0,0x50,Write,,ACK
+0.0011,0,,Write,0x00,ACK
+0.002,1,0x50,Write,,ACK
+0.0021,1,,Write,0x12,ACK
+0.0022,1,,Write,0x34,ACK
 """
     failing_csv = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
-0.001,0,0x50,Write,0x00,ACK
-0.002,1,0x50,Write,0x12 0x34,NACK
+0.001,0,0x50,Write,,ACK
+0.0011,0,,Write,0x00,ACK
+0.002,1,0x50,Write,,ACK
+0.0021,1,,Write,0x12,ACK
+0.0022,1,,Write,0x34,NACK
 """
     eng = I2CDiagnosticEngine()
     g_rep = eng.analyze_csv_content(golden_csv)

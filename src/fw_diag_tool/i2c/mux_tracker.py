@@ -22,6 +22,9 @@ class I2CMuxTracker:
                     if tx.byte_packets
                     else True
                 )
+                aggregate_ack_evidence = tx.aggregate_ack == AckType.ACK and bool(tx.data_bytes)
+                if aggregate_ack_evidence:
+                    data_acked = True
                 if (
                     tx.direction == I2CDirection.WRITE
                     and tx.data_bytes
@@ -42,6 +45,8 @@ class I2CMuxTracker:
                         if tx.address_ack == AckType.NONE
                         else ""
                     )
+                    if aggregate_ack_evidence:
+                        evidence_note = " (aggregate ACK; per-byte attribution unavailable)"
                     tx.semantic_summary = (
                         f"I2C MUX 0x{addr:02X} Channel Switch -> "
                         f"{active_channels if active_channels else ['All Disabled']}"
