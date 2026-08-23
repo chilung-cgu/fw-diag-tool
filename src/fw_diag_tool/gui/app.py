@@ -7,7 +7,10 @@ from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.codegen.driver_gen import I2CDriverCodeGenerator
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
+from fw_diag_tool.gui.uploads import MAX_UPLOAD_BYTES, decode_uploaded_text
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
+from fw_diag_tool.i2c.raw_adapter import raw_decode_to_events, raw_decode_to_waveform
+from fw_diag_tool.i2c.raw_capture import analyze_raw_i2c_csv
 from fw_diag_tool.i2c.reporter import I2CReporter
 from fw_diag_tool.i2c.timing_charts import I2CTimingCharts
 from fw_diag_tool.i2c.waveform import I2CWaveformReconstructor
@@ -16,16 +19,17 @@ from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
+from fw_diag_tool.resources import load_i2c_sample
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.spi.reporter import SPIReporter
 from fw_diag_tool.uart.parser import UARTCrashParser
 from fw_diag_tool.uart.reporter import UARTReporter
 
+MAX_UPLOAD_MIB = MAX_UPLOAD_BYTES // (1024 * 1024)
+
 st.set_page_config(page_title="FW Diagnostic Toolkit", page_icon="⚡", layout="wide")
 st.title("⚡ Firmware Signal & Protocol Diagnostic Suite")
-st.caption(
-    "Flagship Cross-Platform Logic Analyzer & Firmware Engineering Workstation for Junior Engineers"
-)
+st.caption("Local I2C/PMBus protocol diagnostics and firmware learning workstation")
 
 menu = st.sidebar.radio(
     "功能導覽",
@@ -48,10 +52,18 @@ menu = st.sidebar.radio(
 # 1. I2C / PMBus
 if menu == "📊 I2C / PMBus 診斷與波形檢視":
     st.header("I2C / SMBus / PMBus 協定分析與數位波形檢視")
+    input_mode = st.radio(
+        "輸入資料型態",
+        ["Saleae Analyzer table / text trace", "Raw digital transition (Time, SCL, SDA)"],
+        horizontal=True,
+        help="Analyzer table 可做協定/語意診斷；raw digital transition 才能保留實際 SCL/SDA 0/1 邊緣與量測頻率。",
+    )
     col1, col2 = st.columns([2, 1])
     with col1:
         uploaded_file = st.file_uploader(
-            "選擇或拖放 Saleae CSV / Trace 檔案", type=["csv", "txt", "log"]
+            "選擇或拖放 Saleae CSV / Trace 檔案",
+            type=["csv", "txt", "log"],
+            max_upload_size=MAX_UPLOAD_MIB,
         )
     with col2:
         smbus_timeout = st.number_input(
@@ -64,22 +76,34 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
         use_sample = st.button("載入內建測試波形")
 
     csv_content = None
+    raw_capture_result = None
     if uploaded_file is not None:
-        csv_content = uploaded_file.getvalue().decode("utf-8", errors="replace")
+        try:
+            csv_content = decode_uploaded_text(
+                uploaded_file, allowed_extensions={".csv", ".txt", ".log"}
+            )
+        except ValueError as exc:
+            st.error(f"無法讀取 trace：{exc}")
     elif use_sample:
-        sample_path = (
-            Path(__file__).parent.parent.parent.parent
-            / "tests"
-            / "data"
-            / "saleae_normal_pmbus_eeprom.csv"
-        )
-        if sample_path.exists():
-            csv_content = sample_path.read_text(encoding="utf-8")
+        if input_mode == "Raw digital transition (Time, SCL, SDA)":
+            st.warning(
+                "內建範例是 decoded analyzer CSV；請上傳含 Time/SCL/SDA 的 raw digital CSV。"
+            )
+        else:
+            csv_content = load_i2c_sample()
             st.info("已載入內建範例 CSV！")
 
     if csv_content:
         engine = I2CDiagnosticEngine(smbus_timeout_ms=smbus_timeout)
-        report = engine.analyze_csv_content(csv_content)
+        try:
+            if input_mode == "Raw digital transition (Time, SCL, SDA)":
+                raw_capture_result = analyze_raw_i2c_csv(csv_content)
+                report = engine.analyze(raw_decode_to_events(raw_capture_result))
+            else:
+                report = engine.analyze_csv_content(csv_content)
+        except ValueError as exc:
+            st.error(f"無法解析 I2C 輸入：{exc}")
+            st.stop()
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
         kpi1.metric("總傳輸次數", report.total_transactions)
         kpi2.metric(
@@ -88,8 +112,36 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             delta=f"-{len(report.issues)}" if report.issues else "0",
             delta_color="inverse",
         )
-        kpi3.metric("平均時鐘頻率", f"{report.timing_stats.avg_frequency_khz:.1f} kHz")
-        kpi4.metric("時鐘抖動 (Jitter)", f"{report.timing_stats.frequency_jitter_pct:.1f} %")
+        timing = report.timing_stats
+        if timing.frequency_sample_count:
+            kpi3.metric(
+                "平均時鐘頻率",
+                f"{timing.avg_frequency_khz:.1f} kHz",
+                help="由來源提供的 bitrate 或 byte duration 推算；不是從 analyzer table 的交易時間臆測。",
+            )
+            kpi4.metric(
+                "時鐘抖動 (Jitter)",
+                f"{timing.frequency_jitter_pct:.1f} %",
+                help="僅對有來源 timing evidence 的頻率樣本計算。",
+            )
+        else:
+            kpi3.metric(
+                "平均時鐘頻率",
+                "不可用",
+                help="目前檔案沒有 per-byte bitrate/duration；請匯出 raw digital SCL/SDA transition 才能量測。",
+            )
+            kpi4.metric(
+                "時鐘抖動 (Jitter)",
+                "不可用",
+                help="沒有頻率樣本，因此不顯示 0% 這種容易誤解的數字。",
+            )
+        if report.data_quality_issues:
+            with st.expander("⚠ 資料證據與限制（先看這裡）", expanded=True):
+                st.caption(
+                    "診斷結果只代表檔案中實際提供的欄位；缺少 timestamp、ACK 或 SCL/SDA edge 時，工具不會把未知值當成正常。"
+                )
+                for quality in report.data_quality_issues:
+                    st.markdown(f"- **{quality.code}**（{quality.count} 筆）：{quality.message}")
         st.divider()
 
         tab_wave, tab_anom, tab_timing, tab_tx, tab_md = st.tabs(
@@ -114,21 +166,53 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                     tx_options.index(selected_tx_str) if selected_tx_str in tx_options else 0
                 )
                 selected_tx = report.transactions[selected_idx]
-                reconstructor = I2CWaveformReconstructor(
-                    default_clock_khz=max(10.0, report.timing_stats.avg_frequency_khz)
-                )
-                wave_data = reconstructor.reconstruct_transaction_waveform(selected_tx)
-                fig = reconstructor.create_plotly_figure(
-                    wave_data,
-                    title=f"Tx #{selected_tx.id} Waveform: 0x{selected_tx.address_7bit:02X} {selected_tx.direction.value}",
-                )
-                st.plotly_chart(fig, use_container_width=True)
+                if raw_capture_result is not None:
+                    st.success(
+                        "這是 Logic Analyzer raw digital transition 的實測 0/1 波形；"
+                        "它不是類比電壓/上升時間量測。"
+                    )
+                    st.plotly_chart(
+                        I2CWaveformReconstructor.create_plotly_figure(
+                            raw_decode_to_waveform(raw_capture_result),
+                            title="Measured Raw Digital I2C Waveform & Protocol Overlay",
+                        ),
+                        width="stretch",
+                    )
+                    st.caption(
+                        f"目前選取 Tx #{selected_tx.id}；raw view 顯示整段 capture，"
+                        "可用 hover 對照 START/byte/ACK/STOP。"
+                    )
+                else:
+                    measured_clock_khz = (
+                        timing.avg_frequency_khz if timing.frequency_sample_count else None
+                    )
+                    if measured_clock_khz is None:
+                        st.info(
+                            "目前顯示的是重建波形（Reconstructed），不是邏輯分析儀實測電壓波形。"
+                            "此 CSV 沒有 SCL/SDA edge；若要看真實時序，請使用 raw digital transition 匯出。"
+                        )
+                    else:
+                        st.caption(
+                            "波形時鐘使用來源 timing evidence；仍屬協定層重建，非類比電壓量測。"
+                        )
+                    reconstructor = I2CWaveformReconstructor(
+                        default_clock_khz=measured_clock_khz or 100.0
+                    )
+                    wave_data = reconstructor.reconstruct_transaction_waveform(selected_tx)
+                    fig = reconstructor.create_plotly_figure(
+                        wave_data,
+                        title=f"Reconstructed Tx #{selected_tx.id} Waveform: 0x{selected_tx.address_7bit:02X} {selected_tx.direction.value}",
+                    )
+                    st.plotly_chart(fig, width="stretch")
             else:
                 st.info("無交易資料可繪製波形。")
 
         with tab_anom:
             if not report.issues:
-                st.success("🎉 未偵測到任何 I2C/SMBus 時序與通訊異常！")
+                if report.data_quality_issues:
+                    st.warning("沒有被證明的協定異常；但資料證據不完整，不能直接視為完全正常。")
+                else:
+                    st.success("🎉 未偵測到任何 I2C/SMBus 時序與通訊異常！")
             else:
                 for idx, issue in enumerate(report.issues, 1):
                     addr_str = (
@@ -139,22 +223,28 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                         expanded=True,
                     ):
                         st.markdown(f"**現象描述**: {issue.description}")
-                        st.markdown(f"**根本原因 (Root Cause)**:\n{issue.root_cause_analysis}")
+                        st.markdown(
+                            f"**可能原因（Hypotheses；不是已證明的根因）**:\n{issue.root_cause_analysis}"
+                        )
                         st.markdown("**排查行動清單**:")
                         for adv in issue.actionable_advice:
                             st.markdown(f"- ✔ {adv}")
 
         with tab_timing:
             st.subheader("匯流排物理層健康評等")
+            st.caption(
+                "健康評等只使用已知 ACK/NACK；READ 最後一個 controller NACK 是正常結束。"
+                "缺少 ACK 時顯示 N/A，不把未知當成功。"
+            )
             st.table(I2CTimingCharts.get_device_health_summary(report))
             c_t1, c_t2 = st.columns(2)
             with c_t1:
                 st.plotly_chart(
-                    I2CTimingCharts.create_frequency_distribution(report), use_container_width=True
+                    I2CTimingCharts.create_frequency_distribution(report), width="stretch"
                 )
             with c_t2:
                 st.plotly_chart(
-                    I2CTimingCharts.create_bus_activity_timeline(report), use_container_width=True
+                    I2CTimingCharts.create_bus_activity_timeline(report), width="stretch"
                 )
 
         with tab_tx:
@@ -172,7 +262,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                 }
                 for t in report.transactions
             ]
-            st.dataframe(pd.DataFrame(tx_data), use_container_width=True)
+            st.dataframe(pd.DataFrame(tx_data), width="stretch")
 
         with tab_md:
             md_out = I2CReporter.generate_markdown(report)
@@ -216,7 +306,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
             reconstructor.create_plotly_figure(
                 wave_data, title=f"Ideal Waveform: {builder_op} 0x{b_addr:02X} Reg: 0x{b_reg:02X}"
             ),
-            use_container_width=True,
+            width="stretch",
         )
         st.subheader("一鍵生成多平台 C 語言驅動代碼")
         snippets = I2CDriverCodeGenerator.generate_all_snippets(
@@ -233,12 +323,24 @@ elif menu == "⚖️ 雙波形對比檢視 (Waveform Diff)":
     st.header("Golden (正常板卡) vs Failing (故障板卡) 雙波形差分對比")
     d_col1, d_col2 = st.columns(2)
     with d_col1:
-        golden_file = st.file_uploader("上傳 Golden (正常) Trace CSV", type=["csv", "txt"])
+        golden_file = st.file_uploader(
+            "上傳 Golden (正常) Trace CSV",
+            type=["csv", "txt"],
+            max_upload_size=MAX_UPLOAD_MIB,
+        )
     with d_col2:
-        failing_file = st.file_uploader("上傳 Failing (故障) Trace CSV", type=["csv", "txt"])
+        failing_file = st.file_uploader(
+            "上傳 Failing (故障) Trace CSV",
+            type=["csv", "txt"],
+            max_upload_size=MAX_UPLOAD_MIB,
+        )
     if golden_file and failing_file:
-        g_text = golden_file.getvalue().decode("utf-8", errors="replace")
-        f_text = failing_file.getvalue().decode("utf-8", errors="replace")
+        try:
+            g_text = decode_uploaded_text(golden_file, allowed_extensions={".csv", ".txt"})
+            f_text = decode_uploaded_text(failing_file, allowed_extensions={".csv", ".txt"})
+        except ValueError as exc:
+            st.error(f"無法讀取比較 trace：{exc}")
+            st.stop()
         eng = I2CDiagnosticEngine()
         g_rep = eng.analyze_csv_content(g_text)
         f_rep = eng.analyze_csv_content(f_text)
@@ -253,9 +355,7 @@ elif menu == "⚖️ 雙波形對比檢視 (Waveform Diff)":
                 ):
                     st.markdown(f"**現象描述**: {dp.description}")
                     st.markdown(f"**排查建議**: {dp.root_cause_hint}")
-            st.plotly_chart(
-                WaveformDiffEngine.create_comparison_figure(diff_res), use_container_width=True
-            )
+            st.plotly_chart(WaveformDiffEngine.create_comparison_figure(diff_res), width="stretch")
 
 # 4. UART Crash Dump
 elif menu == "📟 UART Crash & HardFault 分析":
@@ -313,7 +413,7 @@ elif menu == "🚀 PCIe Config & AER 診斷":
     )
     raw_input = st.text_area("輸入 Log 或 Dump 內容：", height=200)
     if st.button("執行 PCIe 分析") and raw_input.strip():
-        if "PCIe Bus Error:" in raw_input or ("AER:" in raw_input and "00:" not in raw_input):
+        if input_mode == "貼上 Linux dmesg AER Error Log":
             events = PCIeAnalyzer.parse_dmesg_aer(raw_input)
             st.subheader(f"Kernel dmesg AER 診斷結果 (共 {len(events)} 個事件)")
             for idx, ev in enumerate(events, 1):
@@ -341,10 +441,17 @@ elif menu == "🚀 PCIe Config & AER 診斷":
 # 8. SPI Flash
 elif menu == "⚡ SPI Flash 協定診斷":
     st.header("SPI / QSPI Flash 協定解析與寫入異常診斷")
-    uploaded_spi = st.file_uploader("選擇 Saleae SPI CSV 檔案", type=["csv", "txt"])
+    uploaded_spi = st.file_uploader(
+        "選擇 Saleae SPI CSV 檔案",
+        type=["csv", "txt"],
+        max_upload_size=MAX_UPLOAD_MIB,
+    )
     csv_text = None
     if uploaded_spi is not None:
-        csv_text = uploaded_spi.getvalue().decode("utf-8", errors="replace")
+        try:
+            csv_text = decode_uploaded_text(uploaded_spi, allowed_extensions={".csv", ".txt"})
+        except ValueError as exc:
+            st.error(f"無法讀取 SPI trace：{exc}")
     if csv_text:
         engine = SPIDiagnosticEngine()
         rep = engine.analyze_csv_content(csv_text)
@@ -383,22 +490,23 @@ elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
         try:
             cur_val = int(raw_val_str, 0)
         except ValueError:
-            cur_val = 0
-        res = catalog.decode_register(sel_reg, cur_val)
-        st.subheader(f"{res.reg_name} (0x{cur_val:08X})")
-        st.table(
-            pd.DataFrame(
-                [
-                    {
-                        "Bit Range": f.bit_range,
-                        "Field": f.name,
-                        "Value": f.hex_val,
-                        "Meaning": f"⚠ {f.meaning}" if f.is_warning else f.meaning,
-                    }
-                    for f in res.fields
-                ]
+            st.error("暫存器值格式錯誤；請輸入整數或 0x 開頭的十六進位值。")
+        else:
+            res = catalog.decode_register(sel_reg, cur_val)
+            st.subheader(f"{res.reg_name} (0x{cur_val:08X})")
+            st.table(
+                pd.DataFrame(
+                    [
+                        {
+                            "Bit Range": f.bit_range,
+                            "Field": f.name,
+                            "Value": f.hex_val,
+                            "Meaning": f"⚠ {f.meaning}" if f.is_warning else f.meaning,
+                        }
+                        for f in res.fields
+                    ]
+                )
             )
-        )
 
 # 10. C Codegen
 elif menu == "🛠 C 語言 Register 巨集產生器":

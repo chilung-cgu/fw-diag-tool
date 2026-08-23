@@ -420,7 +420,7 @@ wheels = [
 
 [[package]]
 name = "fw-diag-tool"
-version = "0.1.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -450,7 +450,7 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0.1" },
     { name = "rich", specifier = ">=13.7.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.3.0" },
-    { name = "streamlit", specifier = ">=1.32.0" },
+    { name = "streamlit", specifier = ">=1.62.0" },
     { name = "typer", specifier = ">=0.9.0" },
 ]
 provides-extras = ["dev"]

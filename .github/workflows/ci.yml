@@ -8,10 +8,18 @@ on:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        include:
+          - os: ubuntu-latest
+            python-version: "3.10"
+          - os: ubuntu-latest
+            python-version: "3.11"
+          - os: ubuntu-latest
+            python-version: "3.12"
+          - os: macos-latest
+            python-version: "3.12"
 
     steps:
       - name: Checkout repository
@@ -22,27 +30,35 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install uv (fast package manager)
-        run: pip install uv
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          uv venv .venv
-          source .venv/bin/activate
-          uv pip install -e ".[dev]"
+        run: uv sync --locked --extra dev
 
       - name: Lint with ruff
-        run: |
-          source .venv/bin/activate
-          ruff check src/ tests/
+        run: uv run --locked --extra dev ruff check src/ tests/
 
       - name: Run tests with pytest and coverage
         run: |
-          source .venv/bin/activate
-          pytest --cov=src/fw_diag_tool --cov-report=xml --junitxml=junit.xml -v
+          uv run --locked --extra dev pytest --cov=src/fw_diag_tool --cov-report=xml --junitxml=junit.xml -v
+
+      - name: Build and smoke-test isolated wheel
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
+        run: |
+          uv build
+          uv venv --python "${{ matrix.python-version }}" .wheel-smoke
+          uv pip install --python .wheel-smoke/bin/python dist/*.whl
+          wheel_python="$GITHUB_WORKSPACE/.wheel-smoke/bin/python"
+          wheel_cli="$GITHUB_WORKSPACE/.wheel-smoke/bin/fw-diag"
+          cd "$RUNNER_TEMP"
+          test "$("$wheel_cli" --version)" = "1.0.0"
+          "$wheel_python" -c 'from fw_diag_tool.i2c.engine import I2CDiagnosticEngine; from fw_diag_tool.resources import load_i2c_sample; assert I2CDiagnosticEngine().analyze_csv_content(load_i2c_sample()).total_transactions > 0'
 
       - name: Upload coverage reports to Codecov
-        if: matrix.python-version == '3.12'
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage.xml
@@ -51,10 +67,10 @@ jobs:
           fail_ci_if_error: false
 
       - name: Upload test results
-        if: always() && matrix.python-version == '3.12'
+        if: always() && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-${{ matrix.python-version }}
+          name: test-results-${{ matrix.os }}-${{ matrix.python-version }}
           path: |
             junit.xml
             coverage.xml

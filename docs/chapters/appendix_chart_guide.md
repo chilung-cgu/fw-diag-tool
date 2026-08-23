@@ -48,6 +48,8 @@
 - 綠色 **ACK**：交易成功完成，Slave 正常回應。
 - 橘色 **DATA NAK**：Address 有 ACK，但後續出現非預期 data NACK。Controller 在 read 最後一個 byte 用 NACK 結束讀取屬於正常流程，應另行分類。
 - 紅色 **ADDR NAK**：Slave 沒有回應 Address（完全沒有 ACK）。
+- 藍色 **READ END NAK**：Read 的最後一個 data byte 由 controller 發出 NACK，通常是正常的讀取終止。
+- 灰色 **ACK UNKNOWN**：來源沒有 ACK/NACK 欄位；這不是成功，也不應列入失敗率分母。
 
 **怎麼判讀？**
 

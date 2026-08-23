@@ -26,7 +26,7 @@ uv run fw-diag gui
 
 | 功能模組 | 協定 / 功能 | 核心特色與排查重點 |
 |---|---|---|
-| **1. I2C / PMBus 診斷與波形檢視** | I2C, SMBus, PMBus | 解析 decoded trace、呈現 START/Address/ACK/Data/STOP 協定軌；只有輸入含可用 timing 時才顯示量測統計。 |
+| **1. I2C / PMBus 診斷與波形檢視** | I2C, SMBus, PMBus | Analyzer table 做協定診斷；Raw digital `Time/SCL/SDA` CSV 可量測 digital edge、tHIGH/tLOW 與頻率；兩者都明確標示證據限制。 |
 | **2. I2C 封包模擬與驅動產生** | C Driver CodeGen | 輸入 Slave Addr 與暫存器即時「造波形」，並產出 Linux `i2c-dev`、OpenBMC、STM32 HAL 與 Arduino C 代碼。 |
 | **3. 雙波形差分對比 (Waveform Diff)** | A/B 測試比對 | 逐筆比較 Golden 與 Failing 的已解碼交易，找出第一筆協定差異並繪製重建示意圖。 |
 | **4. UART Crash & HardFault 分析** | Linux Panic, ARM Cortex-M | 自動拆解 Kernel Panic (RIP/CR2/Call Trace) 與 ARM HardFault (HFSR/CFSR/DIVBYZERO/UNALIGNED)。 |
@@ -46,6 +46,9 @@ uv run fw-diag gui
 ```bash
 # 1. 診斷邏輯分析儀 I2C 波形 (支援 Saleae CSV)
 fw-diag i2c analyze examples/data/i2c_golden.csv --md i2c_report.md
+
+# 1b. 診斷 raw digital transition（Time/SCL/SDA；顯示實測 digital 0/1 波形）
+fw-diag i2c analyze capture_raw.csv --raw-digital --md raw_i2c_report.md
 
 # 2. 診斷邏輯分析儀 SPI Flash 波形
 fw-diag spi analyze examples/data/spi_w25q128_sample.csv --md spi_report.md

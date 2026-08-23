@@ -4,7 +4,6 @@ import re
 from pathlib import Path
 from urllib.parse import unquote
 
-
 ROOT = Path(__file__).parents[1]
 MARKDOWN_LINK = re.compile(r"!?\[[^]]*]\(([^)]+)\)")
 

@@ -1,0 +1,108 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from importlib.metadata import version
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from streamlit.testing.v1 import AppTest
+from typer.testing import CliRunner
+
+from fw_diag_tool import __version__
+from fw_diag_tool.cli import app
+from fw_diag_tool.gui.uploads import MAX_UPLOAD_BYTES, decode_uploaded_text
+from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
+from fw_diag_tool.resources import load_i2c_sample
+
+APP_PATH = Path(__file__).resolve().parents[1] / "src" / "fw_diag_tool" / "gui" / "app.py"
+
+
+@dataclass
+class FakeUpload:
+    name: str
+    content: bytes
+    reported_size: int | None = None
+
+    @property
+    def size(self) -> int:
+        return self.reported_size if self.reported_size is not None else len(self.content)
+
+    def getvalue(self) -> bytes:
+        return self.content
+
+
+def test_version_is_exposed_by_package_and_cli():
+    result = CliRunner().invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.output.strip() == __version__ == version("fw-diag-tool") == "1.0.0"
+
+
+def test_launch_gui_propagates_streamlit_exit_code(monkeypatch):
+    monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: SimpleNamespace(returncode=7))
+
+    result = CliRunner().invoke(app, ["gui"])
+
+    assert result.exit_code == 7
+
+
+def test_packaged_i2c_sample_is_analyzable():
+    sample = load_i2c_sample()
+    report = I2CDiagnosticEngine().analyze_csv_content(sample)
+
+    assert sample.startswith("Time [s],Packet ID,Address")
+    assert report.total_transactions == 18
+
+
+@pytest.mark.parametrize(
+    ("upload", "allowed_extensions", "message"),
+    [
+        (FakeUpload("trace.bin", b"data"), {".csv"}, "不支援的檔案格式"),
+        (FakeUpload("trace.csv", b""), {".csv"}, "檔案是空的"),
+        (FakeUpload("trace.csv", b"a\x00b"), {".csv"}, "二進位資料"),
+        (FakeUpload("trace.csv", b"\xff"), {".csv"}, "UTF-8"),
+        (
+            FakeUpload("trace.csv", b"x", reported_size=MAX_UPLOAD_BYTES + 1),
+            {".csv"},
+            "20 MiB",
+        ),
+    ],
+)
+def test_upload_preflight_rejects_invalid_input(upload, allowed_extensions, message):
+    with pytest.raises(ValueError, match=message):
+        decode_uploaded_text(upload, allowed_extensions=allowed_extensions)
+
+
+def test_upload_preflight_accepts_utf8_bom():
+    upload = FakeUpload("trace.csv", b"\xef\xbb\xbfTime,Data\n0,0x12\n")
+
+    assert decode_uploaded_text(upload, allowed_extensions={".csv"}).startswith("Time,Data")
+
+
+def test_gui_builtin_sample_runs_from_package_resource():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert any(info.value == "已載入內建範例 CSV！" for info in at.info)
+    assert any(metric.label == "總傳輸次數" and metric.value == "18" for metric in at.metric)
+
+
+def test_gui_respects_pcie_mode_and_rejects_invalid_register_value():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🚀 PCIe Config & AER 診斷").run()
+    at.radio[0].set_value("貼上 Linux dmesg AER Error Log")
+    at.text_area[0].input("AER: Corrected error received: 0000:00:1c.0")
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert any("Kernel dmesg AER 診斷結果" in item.value for item in at.subheader)
+
+    at.sidebar.radio[0].set_value("🎛 晶片暫存器 Bitfield 解碼器").run()
+    at.text_input[0].input("not-hex").run()
+
+    assert not at.exception
+    assert any("暫存器值格式錯誤" in error.value for error in at.error)
+    assert not at.table

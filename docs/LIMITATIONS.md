@@ -23,6 +23,8 @@
 - I2C address 不是唯一的晶片識別碼；相同 address 可能對應多種 EEPROM、sensor、GPIO expander 或 PMBus device。
 - Read transaction 最後一個 byte 的 NACK 可能是 controller 正常終止讀取，不應單獨視為故障。
 - Decoded CSV 沒有 SCL edge 或可靠 duration 時，不能計算真實 clock frequency、jitter、tHIGH 或 tLOW。
+- GUI/CLI 的 Raw digital 模式要求可辨識的 timestamp、SCL、SDA 欄位，且每列時間嚴格遞增、邏輯值只能是 0/1；欄位不明或 sampling edge 同時變化時會拒絕猜測。
+- Raw digital 模式量到的是 logic-level transition，不是類比電壓；rise/fall time、pull-up 強度與 ringing 仍需示波器或類比資料。
 - Digital capture 無法證明 pull-up 電阻、bus capacitance、overshoot 或 ringing；這些需要 schematic、datasheet 與 analog measurement。
 - PMBus 單位、format、PAGE/PHASE 與 command 意義可能依 device 而異；沒有明確 device profile 時只顯示原始值與候選解釋。
 

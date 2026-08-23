@@ -7,11 +7,14 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from fw_diag_tool import __version__
 from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
 from fw_diag_tool.cli_extra import register_extra_commands
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
+from fw_diag_tool.i2c.raw_adapter import raw_decode_to_events
+from fw_diag_tool.i2c.raw_capture import analyze_raw_i2c_csv
 from fw_diag_tool.i2c.reporter import I2CReporter
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
@@ -49,6 +52,25 @@ console = Console()
 register_extra_commands(app, i2c_app, console)
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        console.print(__version__)
+        raise typer.Exit()
+
+
+@app.callback()
+def root_options(
+    version: bool = typer.Option(
+        False,
+        "--version",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the fw-diag version and exit.",
+    ),
+) -> None:
+    """Firmware diagnostic suite."""
+
+
 @i2c_app.command("analyze")
 def analyze_i2c_trace(
     file_path: Path = typer.Argument(
@@ -63,13 +85,42 @@ def analyze_i2c_trace(
     smbus_timeout: float = typer.Option(
         25.0, "--smbus-timeout", help="SMBus clock stretching timeout in ms (default: 25.0)"
     ),
+    raw_digital: bool = typer.Option(
+        False,
+        "--raw-digital",
+        help="Parse a raw digital transition CSV with Time/SCL/SDA columns instead of an analyzer table.",
+    ),
+    time_column: str | None = typer.Option(
+        None,
+        "--time-column",
+        help="Explicit raw-capture timestamp column (use with --raw-digital).",
+    ),
+    scl_column: str | None = typer.Option(
+        None, "--scl-column", help="Explicit raw-capture SCL column (use with --raw-digital)."
+    ),
+    sda_column: str | None = typer.Option(
+        None, "--sda-column", help="Explicit raw-capture SDA column (use with --raw-digital)."
+    ),
 ):
     """Analyze an I2C / SMBus / PMBus trace, decode transactions, check timing, and diagnose faults."""
     if not file_path.exists():
         console.print(f"[bold red]Error: File {file_path} not found![/]")
         raise typer.Exit(code=1)
     engine = I2CDiagnosticEngine(smbus_timeout_ms=smbus_timeout)
-    report = engine.analyze_csv_file(str(file_path))
+    if raw_digital:
+        try:
+            result = analyze_raw_i2c_csv(
+                file_path.read_bytes(),
+                time_column=time_column,
+                scl_column=scl_column,
+                sda_column=sda_column,
+            )
+            report = engine.analyze(raw_decode_to_events(result))
+        except ValueError as exc:
+            console.print(f"[bold red]Error: raw digital capture is invalid: {exc}[/]")
+            raise typer.Exit(code=2) from exc
+    else:
+        report = engine.analyze_csv_file(str(file_path))
     I2CReporter.render_terminal(report, console=console)
     if markdown_out:
         md_text = I2CReporter.generate_markdown(report)
@@ -305,7 +356,7 @@ def launch_gui(
 
     app_path = Path(__file__).parent / "gui" / "app.py"
     console.print(f"[bold green]🚀 Launching Web GUI on http://{host}:{port}...[/]")
-    subprocess.run(
+    result = subprocess.run(
         [
             sys.executable,
             "-m",
@@ -317,6 +368,8 @@ def launch_gui(
         ],
         check=False,
     )
+    if result.returncode:
+        raise typer.Exit(code=result.returncode)
 
 
 def main():
