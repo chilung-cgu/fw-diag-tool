@@ -412,3 +412,24 @@ registers:
         catalog.decode_register("STATUS", 0x100)
     with pytest.raises(ValueError, match="between 0 and 0xFFFFFFFF"):
         catalog.decode_register("STATUS", -1)
+
+
+def test_c_header_escapes_untrusted_comments_and_file_name() -> None:
+    generator = CHeaderGenerator.from_yaml_str(
+        """
+registers:
+  - name: STATUS
+    description: |
+      close */
+      #define EVIL 1
+      /* reopen
+    offset: 0x00
+    size: 8
+    fields: []
+"""
+    )
+    header = generator.generate_header("MOD*/\n#define EVIL 2\n/*")
+
+    assert "@file mod____define_evil_2___.h" in header
+    assert "\n#define EVIL" not in header
+    assert "* /" in header
