@@ -248,6 +248,24 @@ def test_pmbus_block_read_count_mismatch_is_explicit():
     assert result["received_count"] == 2
 
 
+def test_engine_surfaces_pmbus_incomplete_response_as_data_quality():
+    report = I2CDiagnosticEngine().analyze_records(
+        [
+            {"timestamp": 0.0, "event_type": "START"},
+            {
+                "timestamp": 0.00001,
+                "event_type": "ADDRESS",
+                "address": 0x58,
+                "direction": "READ",
+                "ack": "ACK",
+            },
+            {"timestamp": 0.00002, "event_type": "DATA", "data": 0x01, "ack": "NACK"},
+            {"timestamp": 0.00003, "event_type": "STOP"},
+        ]
+    )
+    assert any(issue.code == "I2C_PMBUS_PAYLOAD_TRUNCATED" for issue in report.data_quality_issues)
+
+
 def test_engine_rejects_malformed_direct_event_and_reports_unknown_csv_rows():
     with pytest.raises(ValueError, match="timestamp"):
         I2CDiagnosticEngine().analyze(

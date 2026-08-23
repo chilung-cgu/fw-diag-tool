@@ -355,6 +355,8 @@ class I2CDiagnosticEngine:
         """Perform chip identification and protocol semantic decoding across transactions."""
         device_context: dict[int, dict[str, Any]] = {}
         ambiguous_eeprom_writes = 0
+        pmbus_truncated = 0
+        pmbus_block_mismatch = 0
 
         for tx in transactions:
             addr = tx.address_7bit
@@ -405,6 +407,10 @@ class I2CDiagnosticEngine:
                         tx.command_name = decoded.get("command_name")
                         tx.semantic_summary = decoded.get("summary")
                         tx.decoded_values = decoded
+                        if decoded.get("evidence") == "truncated":
+                            pmbus_truncated += 1
+                        elif decoded.get("evidence") == "block-count-mismatch":
+                            pmbus_block_mismatch += 1
 
                         # If VOUT_MODE was written, update exponent in context
                         if cmd_code == 0x20 and payload:
@@ -427,6 +433,10 @@ class I2CDiagnosticEngine:
                     tx.command_name = decoded.get("command_name")
                     tx.semantic_summary = decoded.get("summary")
                     tx.decoded_values = decoded
+                    if decoded.get("evidence") == "truncated":
+                        pmbus_truncated += 1
+                    elif decoded.get("evidence") == "block-count-mismatch":
+                        pmbus_block_mismatch += 1
 
             # 2. EEPROM Protocol Semantic Decoding
             elif tx.protocol == "EEPROM" or (chip and "EEPROM" in chip.category):
@@ -560,8 +570,9 @@ class I2CDiagnosticEngine:
                 rw_str = "Write" if tx.direction == I2CDirection.WRITE else "Read"
                 tx.semantic_summary = f"{rw_str} {len(tx.data_bytes)} byte(s): {tx.hex_dump}"
 
+        quality_issues: list[DataQualityIssue] = []
         if ambiguous_eeprom_writes:
-            return [
+            quality_issues.append(
                 DataQualityIssue(
                     code="I2C_EEPROM_PROFILE_UNAVAILABLE",
                     message=(
@@ -570,8 +581,30 @@ class I2CDiagnosticEngine:
                     ),
                     count=ambiguous_eeprom_writes,
                 )
-            ]
-        return []
+            )
+        if pmbus_truncated:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_PMBUS_PAYLOAD_TRUNCATED",
+                    message=(
+                        "A PMBus command response did not contain the number of bytes declared by "
+                        "the command definition; telemetry/status interpretation was withheld."
+                    ),
+                    count=pmbus_truncated,
+                )
+            )
+        if pmbus_block_mismatch:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_PMBUS_BLOCK_COUNT_MISMATCH",
+                    message=(
+                        "A PMBus block-read byte count disagreed with the captured payload; the "
+                        "string/telemetry result is incomplete."
+                    ),
+                    count=pmbus_block_mismatch,
+                )
+            )
+        return quality_issues
 
     def analyze(self, events: list[RawI2CEvent]) -> I2CAnalysisReport:
         """Execute full end-to-end diagnostic pipeline on parsed events."""
