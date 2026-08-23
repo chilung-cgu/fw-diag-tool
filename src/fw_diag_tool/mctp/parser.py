@@ -54,8 +54,27 @@ class ServerMgmtParser:
 
     @classmethod
     def parse_hex_tokens(cls, text: str) -> list[int]:
-        tokens = re.findall(r"(?:0x)?([0-9a-fA-F]{2})", text)
-        return [int(t, 16) for t in tokens]
+        """Extract complete byte tokens without harvesting hex-looking text.
+
+        Inputs may contain whitespace/comma/semicolon-separated bytes, optional
+        ``0x`` prefixes, or an even-length contiguous byte string.  Labels and
+        odd-length/invalid tokens are ignored instead of being silently split
+        into plausible bytes (for example, ``packet`` must not contribute
+        ``0xAC``).
+        """
+        values: list[int] = []
+        for raw_token in re.split(r"[\s,;]+", text):
+            token = raw_token.strip("[](){}")
+            if not token or (raw_token.endswith(":") and not token.lower().startswith("0x")):
+                continue
+            if token.lower().startswith("0x"):
+                digits = token[2:]
+            else:
+                digits = token
+            if not digits or len(digits) % 2 or not re.fullmatch(r"[0-9a-fA-F]+", digits):
+                continue
+            values.extend(int(digits[idx : idx + 2], 16) for idx in range(0, len(digits), 2))
+        return values
 
     @classmethod
     def decode_mctp_packet(cls, raw_bytes: list[int]) -> MCTPPacket | None:

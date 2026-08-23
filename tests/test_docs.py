@@ -41,6 +41,12 @@ def test_sop_teaches_evidence_boundaries() -> None:
     assert "不能量類比電壓" in sop
 
 
+def test_mctp_tutorial_uses_valid_ipmb_checksum_example() -> None:
+    chapter = (ROOT / "docs" / "chapters" / "ch05_mctp_ipmb.md").read_text(encoding="utf-8")
+    assert "20 18 C8 81 00 01 7E" in chapter
+    assert "20 18 67 20 00 01 5F" not in chapter
+
+
 def test_readme_does_not_overstate_unverified_capabilities() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "真實故障波形" not in readme

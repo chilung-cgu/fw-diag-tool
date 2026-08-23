@@ -397,11 +397,17 @@ elif menu == "🌐 MCTP / IPMB 伺服器協定解析":
     m_raw = st.text_area(
         "請輸入 MCTP 或 IPMB 封包 Hex Dump (每行一封包)：",
         height=150,
-        value="08 00 80 01 00 02 01 00\n20 18 C8 81 20 01 56",
+        value="01 08 00 C0 01 00 02 01 00\n20 18 C8 81 00 01 7E",
     )
     if st.button("執行伺服器協定解碼") and m_raw.strip():
         m_report = ServerMgmtParser.parse_text_dump(m_raw)
-        st.markdown(ServerMgmtReporter.to_markdown(m_report))
+        if not m_report.total_frames:
+            st.warning(
+                "沒有解出可辨識的 MCTP/IPMB frame；請確認每行是完整 hex bytes，"
+                "並保留原始 capture/協定標頭以便人工核對。"
+            )
+        else:
+            st.markdown(ServerMgmtReporter.to_markdown(m_report))
 
 # 6. Device Tree Generator
 elif menu == "🌲 Device Tree (.dts) 產生器":
@@ -456,6 +462,8 @@ elif menu == "🚀 PCIe Config & AER 診斷":
         if input_mode == "貼上 Linux dmesg AER Error Log":
             events = PCIeAnalyzer.parse_dmesg_aer(raw_input)
             st.subheader(f"Kernel dmesg AER 診斷結果 (共 {len(events)} 個事件)")
+            if not events:
+                st.warning("沒有找到可解析的 AER 事件；請確認貼上的內容包含完整 kernel dmesg。")
             for idx, ev in enumerate(events, 1):
                 with st.expander(
                     f"事件 #{idx}: {ev.bdf} - {ev.error_name} ({ev.severity})", expanded=True
@@ -463,10 +471,14 @@ elif menu == "🚀 PCIe Config & AER 診斷":
                     st.markdown(f"**原始日誌**: `{ev.raw_line}`")
                     st.markdown("**Root Cause 排查 SOP**:\n" + ev.root_cause_guide)
         else:
-            devices = PCIeAnalyzer.parse_multi_lspci_text(raw_input)
-            if not devices:
-                bdf, raw_bytes = PCIeAnalyzer.parse_lspci_text(raw_input)
-                devices = [PCIeAnalyzer.decode_config_space(raw_bytes, bdf=bdf)]
+            try:
+                devices = PCIeAnalyzer.parse_multi_lspci_text(raw_input)
+                if not devices:
+                    bdf, raw_bytes = PCIeAnalyzer.parse_lspci_text(raw_input)
+                    devices = [PCIeAnalyzer.decode_config_space(raw_bytes, bdf=bdf)]
+            except (TypeError, ValueError) as exc:
+                st.error(f"PCIe 輸入錯誤：{exc}")
+                devices = []
             for cfg in devices:
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Vendor / Device ID", f"0x{cfg.vendor_id:04X} / 0x{cfg.device_id:04X}")
@@ -565,13 +577,19 @@ elif menu == "🛠 C 語言 Register 巨集產生器":
     data_dir = Path(__file__).parent.parent / "data"
     builtin_yamls = list(data_dir.glob("*.yaml"))
     choice_yaml = st.selectbox("選擇 YAML 範本", [y.name for y in builtin_yamls])
-    gen = CHeaderGenerator.from_yaml_file(data_dir / choice_yaml)
     mod_name = st.text_input(
         "模組名稱 (Module Name)", value=choice_yaml.replace(".yaml", "").upper()
     )
-    c_header = gen.generate_header(module_name=mod_name)
-    st.code(c_header, language="c")
-    st.download_button(f"下載 {mod_name.lower()}.h", c_header, file_name=f"{mod_name.lower()}.h")
+    try:
+        gen = CHeaderGenerator.from_yaml_file(data_dir / choice_yaml)
+        c_header = gen.generate_header(module_name=mod_name)
+    except (OSError, TypeError, ValueError) as exc:
+        st.error(f"C header 輸入錯誤：{exc}")
+    else:
+        st.code(c_header, language="c")
+        st.download_button(
+            f"下載 {mod_name.lower()}.h", c_header, file_name=f"{mod_name.lower()}.h"
+        )
 
 # 11. Fault Arena
 elif menu == "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)":

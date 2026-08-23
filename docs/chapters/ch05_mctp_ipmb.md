@@ -30,12 +30,12 @@
 
 ### IPMB 訊框解碼範例
 
-輸入 `20 18 67 20 00 01 5F`，輸出會顯示：
+輸入 `20 18 C8 81 00 01 7E`，輸出會顯示：
 
 | 欄位 | 值 | 白話解釋 |
 |---|---|---|
-| Rq Addr | 0x20 | 發送方 (通常是 BMC) 的 I2C 位址 |
-| Rs Addr | 0x81 | 接收方 (Satellite Controller) 的位址 |
+| Rq Addr | 0x81 | 發送方 (通常是 BMC) 的 I2C 位址 |
+| Rs Addr | 0x20 | 接收方 (Satellite Controller) 的位址 |
 | NetFn | App (Request) | 功能類別為 Application，這是一筆請求 |
 | Command | Get Device ID (0x01) | 查詢設備型號與版本 |
 | Checksum 1 | OK | 標頭校驗碼正確 |

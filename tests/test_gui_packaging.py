@@ -108,6 +108,25 @@ def test_gui_respects_pcie_mode_and_rejects_invalid_register_value():
     assert not at.table
 
 
+def test_gui_pcie_invalid_dump_is_reported_without_streamlit_exception():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🚀 PCIe Config & AER 診斷").run()
+    at.text_area[0].input("not a config dump").run()
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert any("PCIe 輸入錯誤" in error.value for error in at.error)
+
+
+def test_gui_c_header_invalid_module_name_is_reported():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🛠 C 語言 Register 巨集產生器").run()
+    at.text_input[0].input("9-not-a-c-identifier").run()
+
+    assert not at.exception
+    assert any("C header 輸入錯誤" in error.value for error in at.error)
+
+
 def test_gui_packet_builder_read_template_is_explicit_about_length():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
     at.sidebar.radio[0].set_value("🎨 I2C 封包模擬器與驅動產生").run()

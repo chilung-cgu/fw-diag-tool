@@ -28,9 +28,10 @@ def test_mctp_som_zero_continuation_packet():
 
 
 def test_ipmb_response_frame_decoding():
-    # IPMB Response: rsSA=0x81, NetFn=0x07 (App Response = 0x06 + 1), Chk1, rqSA=0x20, rqSeq=0x20, Cmd=0x01, CC=0x00 (Success)
-    # Checksum 1: (0x81 + 0x1C + 0x63) % 256 == 0
-    hex_dump = "81 1C 63 20 20 01 00 3F"
+    # IPMB Response: rsSA=0x81, NetFn=0x07 (App Response = 0x06 + 1), Chk1,
+    # rqSA=0x20, rqSeq=0x20, Cmd=0x01, CC=0x00 (Success), valid Chk2=0xBF.
+    # Checksum 1: (0x81 + 0x1C + 0x63) % 256 == 0.
+    hex_dump = "81 1C 63 20 20 01 00 BF"
     report = ServerMgmtParser.parse_text_dump(hex_dump)
     assert len(report.ipmb_frames) == 1
     frame = report.ipmb_frames[0]
@@ -38,4 +39,16 @@ def test_ipmb_response_frame_decoding():
     assert "Response" in frame.netfn_name
     assert frame.cmd_name == "Get Device ID"
     assert frame.checksum1_valid is True
+    assert frame.checksum2_valid is True
     assert frame.data == [0x00]  # Completion Code 0x00
+
+
+def test_hex_token_parser_ignores_labels_and_partial_words():
+    assert ServerMgmtParser.parse_hex_tokens("MCTP packet: 01 08 00 C0 01") == [
+        0x01,
+        0x08,
+        0x00,
+        0xC0,
+        0x01,
+    ]
+    assert ServerMgmtParser.parse_hex_tokens("garbage") == []
