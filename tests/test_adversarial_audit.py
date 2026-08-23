@@ -227,6 +227,21 @@ def test_pmbus_empty_known_status_is_not_reported_as_clean_or_quick_command():
     assert result["received_bytes"] == 0
 
 
+def test_pmbus_write_command_selection_is_not_called_a_truncated_response():
+    result = decode_pmbus_payload(0x8D, [], phase="write")
+    assert result["evidence"] == "command-select"
+    assert result["is_complete"] is True
+    assert "response bytes are not present" in result["summary"]
+
+
+def test_pmbus_block_read_count_mismatch_is_explicit():
+    result = decode_pmbus_payload(0x99, [3, 0x41, 0x42])
+    assert result["evidence"] == "block-count-mismatch"
+    assert result["is_complete"] is False
+    assert result["declared_count"] == 3
+    assert result["received_count"] == 2
+
+
 def test_engine_rejects_malformed_direct_event_and_reports_unknown_csv_rows():
     with pytest.raises(ValueError, match="timestamp"):
         I2CDiagnosticEngine().analyze(

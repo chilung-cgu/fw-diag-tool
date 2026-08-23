@@ -396,7 +396,7 @@ class I2CDiagnosticEngine:
                         payload = tx.data_bytes[1:]
                         tx.command_code = cmd_code
                         decoded = decode_pmbus_payload(
-                            cmd_code, payload, vout_exponent=ctx["vout_exp"]
+                            cmd_code, payload, vout_exponent=ctx["vout_exp"], phase="write"
                         )
                         tx.command_name = decoded.get("command_name")
                         tx.semantic_summary = decoded.get("summary")
@@ -418,7 +418,7 @@ class I2CDiagnosticEngine:
 
                         ctx["vout_exp"] = parse_vout_mode_exponent(tx.data_bytes[0])
                     decoded = decode_pmbus_payload(
-                        cmd_code, tx.data_bytes, vout_exponent=ctx["vout_exp"]
+                        cmd_code, tx.data_bytes, vout_exponent=ctx["vout_exp"], phase="read"
                     )
                     tx.command_name = decoded.get("command_name")
                     tx.semantic_summary = decoded.get("summary")

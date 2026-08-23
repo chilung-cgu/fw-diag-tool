@@ -468,12 +468,23 @@ def decode_status_cml(cml_byte: int) -> list[str]:
 
 
 def decode_pmbus_payload(
-    cmd_code: int, data_bytes: list[int], vout_exponent: int = -9
+    cmd_code: int,
+    data_bytes: list[int],
+    vout_exponent: int = -9,
+    *,
+    phase: str | None = None,
 ) -> dict[str, Any]:
-    """Decode PMBus data bytes into structured telemetry and diagnostics."""
+    """Decode PMBus data bytes into structured telemetry and diagnostics.
+
+    ``phase`` distinguishes a command-selection write from a device response
+    read.  Without it, the conservative default requires the longest payload
+    declared by the command definition.
+    """
     _validate_byte(cmd_code, "cmd_code")
     _validate_bytes(data_bytes)
     _validate_exponent(vout_exponent)
+    if phase not in (None, "write", "read"):
+        raise ValueError("phase must be None, 'write', or 'read'")
     cmd_def = PMBUS_COMMANDS.get(cmd_code)
     result: dict[str, Any] = {
         "command_code": f"0x{cmd_code:02X}",
@@ -491,7 +502,11 @@ def decode_pmbus_payload(
         return result
 
     dtype = cmd_def.data_type
-    required_len = max(cmd_def.write_len, cmd_def.read_len)
+    required_len = (
+        max(cmd_def.write_len, cmd_def.read_len)
+        if phase is None
+        else (cmd_def.write_len if phase == "write" else cmd_def.read_len)
+    )
     if required_len and len(data_bytes) < required_len:
         result.update(
             {
@@ -509,6 +524,28 @@ def decode_pmbus_payload(
     result["is_complete"] = True
 
     if not data_bytes:
+        if phase == "write" and cmd_def.write_len == 0:
+            result.update(
+                {
+                    "evidence": "command-select",
+                    "summary": (
+                        f"{cmd_def.name} command selected; response bytes are not present "
+                        "in this write phase"
+                    ),
+                }
+            )
+            return result
+        if dtype == PMBusDataType.BLOCK_READ:
+            result.update(
+                {
+                    "evidence": "truncated",
+                    "is_complete": False,
+                    "required_bytes": 1,
+                    "received_bytes": 0,
+                    "summary": f"{cmd_def.name}: missing PMBus block count byte",
+                }
+            )
+            return result
         result["summary"] = f"{result['command_name']} (No Data / Quick Cmd)"
         return result
 
@@ -588,11 +625,23 @@ def decode_pmbus_payload(
     # 5. Block Read Strings
     elif dtype == PMBusDataType.BLOCK_READ:
         # PMBus Block read has byte count as first byte
-        text_bytes = (
-            data_bytes[1:]
-            if len(data_bytes) > 0 and data_bytes[0] == len(data_bytes) - 1
-            else data_bytes
-        )
+        declared_count = data_bytes[0]
+        actual_count = len(data_bytes) - 1
+        if declared_count != actual_count:
+            result.update(
+                {
+                    "evidence": "block-count-mismatch",
+                    "is_complete": False,
+                    "declared_count": declared_count,
+                    "received_count": actual_count,
+                    "summary": (
+                        f"{cmd_def.name}: block count mismatch (declared {declared_count}, "
+                        f"received {actual_count})"
+                    ),
+                }
+            )
+            return result
+        text_bytes = data_bytes[1:] if declared_count == actual_count else data_bytes
         ascii_str = "".join(chr(c) if 32 <= c <= 126 else "." for c in text_bytes)
         result["string"] = ascii_str
         result["summary"] = f"{cmd_def.name} = '{ascii_str}'"
