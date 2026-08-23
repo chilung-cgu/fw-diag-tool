@@ -1,6 +1,8 @@
 import pytest
+from typer.testing import CliRunner
 
 from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
+from fw_diag_tool.cli import app
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.codegen.driver_gen import I2CDriverCodeGenerator
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
@@ -396,6 +398,35 @@ registers:
         )
 
 
+def test_register_catalog_load_is_atomic_and_offset_parsing_is_explicit():
+    catalog = RegisterMapCatalog()
+    catalog.load_from_yaml(
+        """
+registers:
+  - name: FIRST
+    offset: 0x10
+    fields: []
+"""
+    )
+    with pytest.raises(TypeError, match="name"):
+        catalog.load_from_yaml(
+            """
+registers:
+  - name: SECOND
+    offset: 0x20
+    fields: []
+  - offset: 0x24
+    fields: []
+"""
+        )
+    assert set(catalog.registers) == {0x10}
+
+    assert catalog.decode_register("0X10", 0).offset == 0x10
+    assert catalog.decode_register("010", 0).offset == 0x0A
+    with pytest.raises(ValueError, match="valid integer"):
+        catalog.decode_register("0xZZ", 0)
+
+
 def test_register_decoder_rejects_values_outside_declared_width():
     catalog = RegisterMapCatalog()
     catalog.load_from_yaml(
@@ -433,3 +464,18 @@ registers:
     assert "@file mod____define_evil_2___.h" in header
     assert "\n#define EVIL" not in header
     assert "* /" in header
+
+
+@pytest.mark.parametrize(
+    "yaml_text",
+    ["registers: [", "registers:\n  - offset: 0\n    fields: []\n"],
+)
+def test_codegen_cli_reports_malformed_yaml_without_traceback(tmp_path, yaml_text):
+    yaml_path = tmp_path / "bad.yaml"
+    yaml_path.write_text(yaml_text, encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["gen", "c-header", str(yaml_path)])
+
+    assert result.exit_code == 2
+    assert "C header input is invalid" in result.output
+    assert "Traceback" not in result.output

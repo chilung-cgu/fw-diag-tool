@@ -1,6 +1,7 @@
 import pytest
 
 from fw_diag_tool.analyzers.register_mapper import BitField
+from fw_diag_tool.i2c.anomaly import I2CAnomalyDetector
 from fw_diag_tool.i2c.eeprom import decode_eeprom_read, decode_eeprom_write
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.models import RawEventType, RawI2CEvent
@@ -148,6 +149,13 @@ def test_i2c_raw_record_boundaries_are_rejected_not_reinterpreted():
 def test_i2c_engine_rejects_invalid_configuration(kwargs):
     with pytest.raises((TypeError, ValueError)):
         I2CDiagnosticEngine(**kwargs)
+
+
+def test_i2c_anomaly_detector_rejects_invalid_configuration():
+    with pytest.raises((TypeError, ValueError)):
+        I2CAnomalyDetector(smbus_timeout_ms="25")
+    with pytest.raises((TypeError, ValueError)):
+        I2CAnomalyDetector(high_jitter_threshold_pct=float("nan"))
 
 
 def test_ambiguous_eeprom_requires_explicit_profile_before_offset_decode():

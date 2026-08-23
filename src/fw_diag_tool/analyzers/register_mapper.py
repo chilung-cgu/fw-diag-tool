@@ -80,6 +80,22 @@ class RegisterMapCatalog:
         self.registers: dict[int, RegisterDef] = {}
         self.name_map: dict[str, RegisterDef] = {}
 
+    @staticmethod
+    def _parse_int(value: Any, label: str) -> int:
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            raise TypeError(f"{label} must be an integer")
+        if isinstance(value, int):
+            return value
+        token = value.strip()
+        try:
+            return int(token, 0)
+        except ValueError:
+            # YAML/CLI users often write zero-padded decimal offsets such as
+            # "010"; base-10 is unambiguous after the base-0 attempt fails.
+            if token.isdigit():
+                return int(token, 10)
+            raise ValueError(f"{label} is not a valid integer") from None
+
     def load_from_yaml(self, yaml_content: str) -> None:
         data = yaml.safe_load(yaml_content)
         if not data:
@@ -89,68 +105,87 @@ class RegisterMapCatalog:
         regs = data.get("registers", [])
         if not isinstance(regs, list):
             raise TypeError("registers must be a list")
-        for r in regs:
+
+        # Stage all changes so a malformed later register cannot leave a
+        # partially loaded catalog behind.
+        staged_registers = dict(self.registers)
+        staged_name_map = dict(self.name_map)
+        for register_index, r in enumerate(regs):
             if not isinstance(r, dict):
                 raise TypeError("each register must be a mapping")
-            raw_offset = r.get("offset")
-            if isinstance(raw_offset, bool) or not isinstance(raw_offset, (int, str)):
-                raise TypeError(f"register {r.get('name', '<unnamed>')} offset must be an integer")
-            try:
-                offset = int(raw_offset, 0) if isinstance(raw_offset, str) else raw_offset
-            except ValueError as exc:
-                raise ValueError(
-                    f"register {r.get('name', '<unnamed>')} offset is not a valid integer"
-                ) from exc
+            register_name = r.get("name")
+            if not isinstance(register_name, str) or not register_name.strip():
+                raise TypeError(f"register {register_index} name must be a non-empty string")
+            offset = self._parse_int(r.get("offset"), f"register {register_name!r} offset")
             if offset < 0 or offset > 0xFFFFFFFF:
                 raise ValueError(
-                    f"register {r.get('name', '<unnamed>')} offset must be between 0 and 0xFFFFFFFF"
+                    f"register {register_name!r} offset must be between 0 and 0xFFFFFFFF"
                 )
-            fields = []
+            fields: list[BitField] = []
             raw_fields = r.get("fields", [])
             if not isinstance(raw_fields, list):
-                raise TypeError(f"register {r.get('name', '<unnamed>')} fields must be a list")
-            for f in raw_fields:
+                raise TypeError(f"register {register_name!r} fields must be a list")
+            for field_index, f in enumerate(raw_fields):
                 if not isinstance(f, dict):
                     raise TypeError("each register field must be a mapping")
-                val_map = {}
+                field_name = f.get("name")
+                if not isinstance(field_name, str) or not field_name.strip():
+                    raise TypeError(
+                        f"register {register_name!r} field {field_index} name must be a non-empty string"
+                    )
+                if "bits" not in f:
+                    raise ValueError(f"field {field_name!r} bits must be provided")
+                access = f.get("access", "RW")
+                if not isinstance(access, str):
+                    raise TypeError(f"field {field_name!r} access must be a string")
+                val_map: dict[int, str] = {}
                 raw_values = f.get("values", {})
                 if not isinstance(raw_values, dict):
-                    raise TypeError(f"field {f.get('name', '<unnamed>')} values must be a mapping")
+                    raise TypeError(f"field {field_name!r} values must be a mapping")
                 for k, v in raw_values.items():
-                    val_map[int(str(k), 0)] = str(v)
+                    val_map[self._parse_int(k, f"field {field_name!r} enum value")] = str(v)
                 raw_warnings = f.get("warning_values", [])
                 if not isinstance(raw_warnings, list):
-                    raise TypeError(
-                        f"field {f.get('name', '<unnamed>')} warning_values must be a list"
-                    )
-                warns = [int(str(w), 0) for w in raw_warnings]
+                    raise TypeError(f"field {field_name!r} warning_values must be a list")
+                warns = [
+                    self._parse_int(w, f"field {field_name!r} warning value") for w in raw_warnings
+                ]
                 fields.append(
                     BitField(
-                        name=f["name"],
+                        name=field_name,
                         bit_range=str(f["bits"]),
-                        description=f.get("description", ""),
-                        access=f.get("access", "RW"),
+                        description=str(f.get("description", "")),
+                        access=access,
                         values=val_map,
                         warning_values=warns,
                     )
                 )
             raw_size = r.get("size", 32)
             raw_reset = r.get("reset")
+            size = self._parse_int(raw_size, f"register {register_name!r} size")
+            reset_val = (
+                self._parse_int(raw_reset, f"register {register_name!r} reset")
+                if raw_reset is not None
+                else None
+            )
             reg_def = RegisterDef(
-                name=r["name"],
+                name=register_name,
                 offset=offset,
-                size=int(str(raw_size), 0),
-                reset_val=int(str(raw_reset), 0) if raw_reset is not None else None,
-                description=r.get("description", ""),
+                size=size,
+                reset_val=reset_val,
+                description=str(r.get("description", "")),
                 fields=fields,
             )
-            if offset in self.registers:
+            if offset in staged_registers:
                 raise ValueError(f"duplicate register offset: 0x{offset:X}")
-            name_key = reg_def.name.lower()
-            if name_key in self.name_map:
+            name_key = register_name.lower()
+            if name_key in staged_name_map:
                 raise ValueError(f"duplicate register name: {reg_def.name}")
-            self.registers[offset] = reg_def
-            self.name_map[name_key] = reg_def
+            staged_registers[offset] = reg_def
+            staged_name_map[name_key] = reg_def
+
+        self.registers = staged_registers
+        self.name_map = staged_name_map
 
     def decode_register(self, offset_or_name: Any, value: int) -> DecodedRegisterResult:
         if isinstance(value, bool) or not isinstance(value, int):
@@ -158,19 +193,30 @@ class RegisterMapCatalog:
         if value < 0 or value > 0xFFFFFFFF:
             raise ValueError("register value must be between 0 and 0xFFFFFFFF")
         reg_def = None
+        if isinstance(offset_or_name, bool):
+            raise TypeError("register offset/name must not be boolean")
         if isinstance(offset_or_name, int):
             reg_def = self.registers.get(offset_or_name)
         elif isinstance(offset_or_name, str):
-            if offset_or_name.startswith("0x") or offset_or_name.isdigit():
-                offset = int(offset_or_name, 0)
+            token = offset_or_name.strip()
+            is_numeric = token.lower().startswith("0x") or token.lstrip("+-").isdigit()
+            if is_numeric:
+                offset = self._parse_int(token, "register offset")
+                if offset < 0 or offset > 0xFFFFFFFF:
+                    raise ValueError("register offset must be between 0 and 0xFFFFFFFF")
                 reg_def = self.registers.get(offset)
             else:
-                reg_def = self.name_map.get(offset_or_name.lower())
+                reg_def = self.name_map.get(token.lower())
         if not reg_def:
             offset = (
                 offset_or_name
                 if isinstance(offset_or_name, int)
-                else (int(offset_or_name, 0) if str(offset_or_name).startswith("0x") else 0)
+                else (
+                    self._parse_int(offset_or_name, "register offset")
+                    if str(offset_or_name).strip().lower().startswith("0x")
+                    or str(offset_or_name).strip().lstrip("+-").isdigit()
+                    else 0
+                )
             )
             return DecodedRegisterResult(
                 reg_name=str(offset_or_name),

@@ -11,6 +11,8 @@ Provides actionable root-cause analysis and step-by-step debug checklists.
 
 from __future__ import annotations
 
+import math
+
 from fw_diag_tool.i2c.models import (
     AckType,
     I2CDiagnosticIssue,
@@ -25,8 +27,21 @@ class I2CAnomalyDetector:
     """Detects bus anomalies and generates step-by-step junior engineer advice."""
 
     def __init__(self, smbus_timeout_ms: float = 25.0, high_jitter_threshold_pct: float = 35.0):
-        self.smbus_timeout_ms = smbus_timeout_ms
-        self.high_jitter_threshold_pct = high_jitter_threshold_pct
+        self.smbus_timeout_ms = self._positive_finite_config(
+            "smbus_timeout_ms", smbus_timeout_ms, maximum=60_000.0
+        )
+        self.high_jitter_threshold_pct = self._positive_finite_config(
+            "high_jitter_threshold_pct", high_jitter_threshold_pct, maximum=10_000.0
+        )
+
+    @staticmethod
+    def _positive_finite_config(name: str, value: object, *, maximum: float) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError(f"{name} must be a finite numeric value")
+        parsed = float(value)
+        if not math.isfinite(parsed) or parsed <= 0 or parsed > maximum:
+            raise ValueError(f"{name} must be > 0 and <= {maximum:g}")
+        return parsed
 
     def analyze_transactions(
         self, transactions: list[I2CTransaction], timing_stats: TimingStatistics

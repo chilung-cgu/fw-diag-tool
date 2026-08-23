@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
+import yaml
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -300,7 +301,15 @@ def decode_register(
     catalog = RegisterMapCatalog()
     try:
         catalog.load_from_yaml(yaml_file.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+    except (
+        OSError,
+        UnicodeError,
+        TypeError,
+        ValueError,
+        KeyError,
+        AttributeError,
+        yaml.YAMLError,
+    ) as exc:
         console.print(f"[bold red]Error: Register YAML is invalid: {exc}[/]")
         raise typer.Exit(code=2) from exc
     try:
@@ -345,7 +354,15 @@ def generate_c_header(
     try:
         gen = CHeaderGenerator.from_yaml_file(yaml_file)
         header_text = gen.generate_header(module_name=module_name)
-    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+    except (
+        OSError,
+        UnicodeError,
+        TypeError,
+        ValueError,
+        KeyError,
+        AttributeError,
+        yaml.YAMLError,
+    ) as exc:
         console.print(f"[bold red]Error: C header input is invalid: {exc}[/]")
         raise typer.Exit(code=2) from exc
     if output_header:

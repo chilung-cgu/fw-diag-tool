@@ -622,7 +622,9 @@ class I2CDiagnosticEngine:
                     count=unknown_event_count,
                 )
             )
-        source_error_count = sum(bool(event.extra.get("source_error")) for event in events)
+        source_error_count = sum(
+            bool(event.extra and event.extra.get("source_error")) for event in events
+        )
         if source_error_count:
             data_quality_issues.append(
                 DataQualityIssue(
@@ -734,9 +736,25 @@ class I2CDiagnosticEngine:
                 raise ValueError(f"I2C event {index} timestamp must be finite and non-negative")
             if not isinstance(event.event_type, RawEventType):
                 raise TypeError(f"I2C event {index} event_type must be a RawEventType")
-            if event.address_7bit is not None and not 0 <= event.address_7bit <= 0x7F:
+            if not isinstance(event.timestamp_available, bool):
+                raise TypeError(f"I2C event {index} timestamp_available must be boolean")
+            if event.extra is not None and not isinstance(event.extra, dict):
+                raise TypeError(f"I2C event {index} extra must be a mapping or None")
+            if event.direction is not None and not isinstance(event.direction, I2CDirection):
+                raise TypeError(f"I2C event {index} direction must be an I2CDirection")
+            if event.ack is not None and not isinstance(event.ack, AckType):
+                raise TypeError(f"I2C event {index} ack must be an AckType")
+            if event.address_7bit is not None and (
+                isinstance(event.address_7bit, bool)
+                or not isinstance(event.address_7bit, int)
+                or not 0 <= event.address_7bit <= 0x7F
+            ):
                 raise ValueError(f"I2C event {index} address_7bit must be in range 0..0x7F")
-            if event.data_byte is not None and not 0 <= event.data_byte <= 0xFF:
+            if event.data_byte is not None and (
+                isinstance(event.data_byte, bool)
+                or not isinstance(event.data_byte, int)
+                or not 0 <= event.data_byte <= 0xFF
+            ):
                 raise ValueError(f"I2C event {index} data_byte must be in range 0..0xFF")
 
     def analyze_csv_string(self, csv_text: str) -> I2CAnalysisReport:
