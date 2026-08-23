@@ -89,3 +89,19 @@ def test_emulators_reject_invalid_boundaries_instead_of_silent_wrap_or_truncatio
         sensor.write([0x01, 0x100])
     with pytest.raises(ValueError, match="finite"):
         sensor.set_temperature(float("nan"))
+
+
+def test_spi_page_program_is_atomic_on_capacity_failure():
+    flash = VirtualSPIFlashW25Q128(total_size=257)
+    flash.write_enable()
+    with pytest.raises(ValueError, match="capacity"):
+        flash.page_program(0x100, [0xAA, 0xBB])
+    assert flash.memory[0x100] == 0x00
+    assert flash.wel_latched is True
+
+
+def test_eeprom_rejects_boolean_or_float_address_width():
+    eeprom = VirtualEEPROM24C64()
+    for address_width in (True, 1.0, 2.0):
+        with pytest.raises(ValueError, match="preferred_address_bytes"):
+            eeprom.write([0x00, 0x01], preferred_address_bytes=address_width)

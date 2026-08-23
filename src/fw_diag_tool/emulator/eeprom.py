@@ -42,7 +42,11 @@ class VirtualEEPROM24C64:
         for index, value in enumerate(data_bytes):
             if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFF:
                 raise ValueError(f"data_bytes[{index}] must be an integer in range 0..0xFF")
-        if preferred_address_bytes not in (1, 2):
+        if (
+            isinstance(preferred_address_bytes, bool)
+            or not isinstance(preferred_address_bytes, int)
+            or preferred_address_bytes not in (1, 2)
+        ):
             raise ValueError("preferred_address_bytes must be 1 or 2")
         if not data_bytes:
             return {"type": "Address Probe", "summary": "Empty write probe"}

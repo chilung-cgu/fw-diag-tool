@@ -31,10 +31,12 @@ class VirtualSPIFlashW25Q128:
         if not self.wel_latched:
             return False
         start_offset = address & 0xFF
-        for i, val in enumerate(data):
-            addr = (address & ~0xFF) + ((start_offset + i) % 256)
-            if addr >= self.total_size:
-                raise ValueError("page program address exceeds flash capacity")
+        addresses = [
+            (address & ~0xFF) + ((start_offset + index) % 256) for index in range(len(data))
+        ]
+        if any(addr >= self.total_size for addr in addresses):
+            raise ValueError("page program address exceeds flash capacity")
+        for addr, val in zip(addresses, data):
             self.memory[addr] = val
         self.wel_latched = False
         self.busy = True

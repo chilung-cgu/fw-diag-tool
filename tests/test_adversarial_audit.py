@@ -351,6 +351,40 @@ def test_pmbus_block_read_count_mismatch_is_explicit():
     assert result["received_count"] == 2
 
 
+@pytest.mark.parametrize(
+    ("cmd_code", "payload", "phase", "evidence"),
+    [
+        (0x88, [0x01, 0x02, 0x03], "read", "overlong"),
+        (0x88, [0x01], "write", "phase-mismatch"),
+        (0x03, [0x01], "write", "phase-mismatch"),
+    ],
+)
+def test_pmbus_rejects_overlong_or_phase_invalid_payloads(cmd_code, payload, phase, evidence):
+    result = decode_pmbus_payload(cmd_code, payload, phase=phase)
+    assert result["evidence"] == evidence
+    assert result["is_complete"] is False
+
+
+def test_engine_surfaces_pmbus_overlong_payload_as_data_quality():
+    report = I2CDiagnosticEngine().analyze_records(
+        [
+            {"timestamp": 0.0, "event_type": "START"},
+            {
+                "timestamp": 0.00001,
+                "event_type": "ADDRESS",
+                "address": 0x58,
+                "direction": "READ",
+                "ack": "ACK",
+            },
+            {"timestamp": 0.00002, "event_type": "DATA", "data": 0x01, "ack": "ACK"},
+            {"timestamp": 0.00003, "event_type": "DATA", "data": 0x02, "ack": "ACK"},
+            {"timestamp": 0.00004, "event_type": "DATA", "data": 0x03, "ack": "NACK"},
+            {"timestamp": 0.00005, "event_type": "STOP"},
+        ]
+    )
+    assert any(issue.code == "I2C_PMBUS_PAYLOAD_OVERLONG" for issue in report.data_quality_issues)
+
+
 def test_engine_surfaces_pmbus_incomplete_response_as_data_quality():
     report = I2CDiagnosticEngine().analyze_records(
         [
@@ -435,6 +469,13 @@ def test_sensor_decoders_reject_invalid_direct_byte_inputs():
         decode_pca9555_gpio(0x00, [0x100])
     with pytest.raises(ValueError, match="reg_pointer"):
         decode_ina2xx_power(0x100, [0, 0])
+
+
+def test_sensor_short_register_response_is_explicitly_incomplete():
+    result = decode_ina2xx_power(0x02, [0x12])
+    assert result["evidence"] == "truncated"
+    assert result["is_complete"] is False
+    assert result["required_bytes"] == 2
 
 
 def test_i2c_direct_timing_and_waveform_inputs_reject_nonfinite_values():

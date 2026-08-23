@@ -420,6 +420,9 @@ class I2CDiagnosticEngine:
         eeprom_out_of_range = 0
         pmbus_truncated = 0
         pmbus_block_mismatch = 0
+        pmbus_overlong = 0
+        pmbus_phase_mismatch = 0
+        sensor_truncated = 0
 
         for tx in transactions:
             if not tx.address_available:
@@ -494,6 +497,10 @@ class I2CDiagnosticEngine:
                             pmbus_truncated += 1
                         elif decoded.get("evidence") == "block-count-mismatch":
                             pmbus_block_mismatch += 1
+                        elif decoded.get("evidence") == "overlong":
+                            pmbus_overlong += 1
+                        elif decoded.get("evidence") == "phase-mismatch":
+                            pmbus_phase_mismatch += 1
 
                         # If VOUT_MODE was written, update exponent in context
                         if cmd_code == 0x20 and payload:
@@ -520,6 +527,10 @@ class I2CDiagnosticEngine:
                         pmbus_truncated += 1
                     elif decoded.get("evidence") == "block-count-mismatch":
                         pmbus_block_mismatch += 1
+                    elif decoded.get("evidence") == "overlong":
+                        pmbus_overlong += 1
+                    elif decoded.get("evidence") == "phase-mismatch":
+                        pmbus_phase_mismatch += 1
 
             # 2. EEPROM Protocol Semantic Decoding
             elif tx.protocol == "EEPROM" or (chip and "EEPROM" in chip.category):
@@ -619,6 +630,8 @@ class I2CDiagnosticEngine:
                         decoded = decode_lm75_temperature(tx.data_bytes)
                         tx.semantic_summary = decoded.get("summary")
                         tx.decoded_values = decoded
+                        if decoded.get("evidence") == "truncated":
+                            sensor_truncated += 1
                     else:
                         tx.semantic_summary = f"Read Register 0x{ptr:02X}: " + " ".join(
                             f"0x{b:02X}" for b in tx.data_bytes
@@ -634,6 +647,8 @@ class I2CDiagnosticEngine:
                         decoded = decode_ina2xx_power(ptr, payload)
                         tx.semantic_summary = decoded.get("summary")
                         tx.decoded_values = decoded
+                        if decoded.get("evidence") == "truncated":
+                            sensor_truncated += 1
                     else:
                         tx.semantic_summary = "INA2xx Address Probe"
                 else:
@@ -641,6 +656,8 @@ class I2CDiagnosticEngine:
                     decoded = decode_ina2xx_power(ptr, tx.data_bytes)
                     tx.semantic_summary = decoded.get("summary")
                     tx.decoded_values = decoded
+                    if decoded.get("evidence") == "truncated":
+                        sensor_truncated += 1
 
             # 5. PCA9555 GPIO Expanders
             elif tx.device_category and "GPIO Expander" in tx.device_category:
@@ -719,6 +736,39 @@ class I2CDiagnosticEngine:
                         "string/telemetry result is incomplete."
                     ),
                     count=pmbus_block_mismatch,
+                )
+            )
+        if pmbus_overlong:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_PMBUS_PAYLOAD_OVERLONG",
+                    message=(
+                        "A PMBus fixed-length command contained extra payload bytes; "
+                        "telemetry/status interpretation was withheld."
+                    ),
+                    count=pmbus_overlong,
+                )
+            )
+        if pmbus_phase_mismatch:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_PMBUS_PHASE_MISMATCH",
+                    message=(
+                        "A PMBus payload was observed in a direction where the command definition "
+                        "does not permit it; semantic decoding was withheld."
+                    ),
+                    count=pmbus_phase_mismatch,
+                )
+            )
+        if sensor_truncated:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_SENSOR_PAYLOAD_TRUNCATED",
+                    message=(
+                        "A sensor register response contained fewer bytes than its decoder requires; "
+                        "the partial value is retained but not treated as a complete reading."
+                    ),
+                    count=sensor_truncated,
                 )
             )
         return quality_issues

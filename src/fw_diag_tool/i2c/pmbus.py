@@ -502,11 +502,56 @@ def decode_pmbus_payload(
         return result
 
     dtype = cmd_def.data_type
+    if (
+        phase == "write"
+        and cmd_def.write_len == 0
+        and dtype != PMBusDataType.BLOCK_READ
+        and data_bytes
+    ):
+        result.update(
+            {
+                "evidence": "phase-mismatch",
+                "is_complete": False,
+                "expected_bytes": 0,
+                "received_bytes": len(data_bytes),
+                "summary": (
+                    f"{cmd_def.name} is read-only; {len(data_bytes)} write payload byte(s) "
+                    "are not valid command-selection evidence"
+                ),
+            }
+        )
+        return result
+    if phase == "read" and cmd_def.read_len == 0 and dtype != PMBusDataType.BLOCK_READ:
+        result.update(
+            {
+                "evidence": "phase-mismatch",
+                "is_complete": False,
+                "expected_bytes": 0,
+                "received_bytes": len(data_bytes),
+                "summary": f"{cmd_def.name} does not define a read response",
+            }
+        )
+        return result
     required_len = (
         max(cmd_def.write_len, cmd_def.read_len)
         if phase is None
         else (cmd_def.write_len if phase == "write" else cmd_def.read_len)
     )
+    if dtype != PMBusDataType.BLOCK_READ and len(data_bytes) > required_len:
+        result.update(
+            {
+                "evidence": "overlong",
+                "is_complete": False,
+                "expected_bytes": required_len,
+                "received_bytes": len(data_bytes),
+                "extra_bytes": len(data_bytes) - required_len,
+                "summary": (
+                    f"{cmd_def.name}: received {len(data_bytes)} byte(s), "
+                    f"expected {required_len}; extra payload bytes were not decoded"
+                ),
+            }
+        )
+        return result
     if required_len and len(data_bytes) < required_len:
         result.update(
             {

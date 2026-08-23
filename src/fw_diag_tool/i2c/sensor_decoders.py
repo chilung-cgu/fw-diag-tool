@@ -38,9 +38,19 @@ def decode_lm75_temperature(data_bytes: list[int]) -> dict[str, Any]:
             temp_c = raw_8bit if raw_8bit < 128 else raw_8bit - 256
             return {
                 "temp_c": float(temp_c),
+                "evidence": "truncated",
+                "is_complete": False,
+                "required_bytes": 2,
+                "received_bytes": 1,
                 "summary": f"Temperature = {temp_c:.1f} °C (8-bit MSB)",
             }
-        return {"summary": "Empty data"}
+        return {
+            "evidence": "truncated",
+            "is_complete": False,
+            "required_bytes": 2,
+            "received_bytes": 0,
+            "summary": "Temperature data unavailable",
+        }
 
     raw_16 = (data_bytes[0] << 8) | data_bytes[1]
 
@@ -88,6 +98,10 @@ def decode_ina2xx_power(reg_pointer: int | None, data_bytes: list[int]) -> dict[
     if len(data_bytes) < 2:
         return {
             "register": reg_name,
+            "evidence": "truncated",
+            "is_complete": False,
+            "required_bytes": 2,
+            "received_bytes": len(data_bytes),
             "summary": f"{reg_name}: " + " ".join(f"0x{b:02X}" for b in data_bytes),
         }
 
