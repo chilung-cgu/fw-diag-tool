@@ -196,7 +196,8 @@ class UARTCrashParser:
 
         if addr_num is not None and addr_num < 0x1000:
             rc_lines.append(
-                f"💥 【NULL Pointer Dereference】存取位址 {faulting_addr} 落在 Page 0 (0x00~0x1000) 範圍，表示程式碼解引用了 NULL 指標。"
+                f"💥 【NULL Pointer Dereference 候選】存取位址 {faulting_addr} 落在 Page 0 (0x00~0x1000) 範圍，"
+                "這與 NULL 指標解引用一致；仍需依 CPU 架構、頁表/MPU 與 fault context 驗證，不能只靠低位址證明根因。"
             )
             checklist.append(
                 "檢查驅動 probe/open 流程中是否對 kzalloc/kmalloc/devm_* 回傳值進行了 NULL 檢查。"

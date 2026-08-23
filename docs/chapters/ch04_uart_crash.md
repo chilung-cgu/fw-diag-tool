@@ -24,7 +24,7 @@
 | Panic Reason | 崩潰原因描述 | 判斷是 Page Fault、Oops 还是 Fatal Exception |
 | Faulting IP / RIP | CPU 當機時正在執行的指令位址 | 用 addr2line 定位源碼行號 |
 | Faulting Function | 出錯的函式名稱 | 直接知道哪個函式出了問題 |
-| Faulting Memory Address | 存取了非法記憶體位址 | < 0x1000 表示 NULL Pointer Dereference |
+| Faulting Memory Address | 存取了 fault log 中提供的記憶體位址 | < 0x1000 是 NULL pointer 的候選訊號；仍須依架構、頁表/MPU 與 fault context 驗證 |
 | Call Trace | 函式呼叫堆疊鏈 | 往回追蹤是誰呼叫了出錯的函式 |
 
 ### ARM Cortex-M HardFault 解讀
@@ -66,5 +66,7 @@ ARM MCU 的 Crash 分析需要理解 SCB (System Control Block) 暫存器：
 | 1 | DACCVIOL | 資料存取違反 MPU Region 設定 |
 | 0 | IACCVIOL | 指令存取違反 MPU Region 設定 |
 
-**新手提示**：如果 HFSR.FORCED = 1 且 CFSR.DIVBYZERO = 1，表示你的程式碼中有除以零。
-修復方式是在除法前加入 `if (denom == 0) return ERROR;` 防護。
+**新手提示**：如果 HFSR.FORCED = 1 且 CFSR.DIVBYZERO = 1，這表示 fault status register
+記錄了除以零 trap；它指出「CPU 觀察到這個 fault」，但不等於已經找到造成錯誤的唯一程式碼路徑。
+接著用 stacked PC、map file/`addr2line` 與原始碼確認。修復時可在除法前加入
+`if (denom == 0) return ERROR;`，但要依專案的錯誤處理契約決定回傳方式。
