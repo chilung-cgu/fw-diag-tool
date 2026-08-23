@@ -80,7 +80,7 @@ class RegisterMapCatalog:
         self.registers: dict[int, RegisterDef] = {}
         self.name_map: dict[str, RegisterDef] = {}
 
-    def load_from_yaml(self, yaml_content: str):
+    def load_from_yaml(self, yaml_content: str) -> None:
         data = yaml.safe_load(yaml_content)
         if not data:
             return
@@ -92,9 +92,19 @@ class RegisterMapCatalog:
         for r in regs:
             if not isinstance(r, dict):
                 raise TypeError("each register must be a mapping")
-            offset = r.get("offset")
-            if isinstance(offset, str):
-                offset = int(offset, 0)
+            raw_offset = r.get("offset")
+            if isinstance(raw_offset, bool) or not isinstance(raw_offset, (int, str)):
+                raise TypeError(f"register {r.get('name', '<unnamed>')} offset must be an integer")
+            try:
+                offset = int(raw_offset, 0) if isinstance(raw_offset, str) else raw_offset
+            except ValueError as exc:
+                raise ValueError(
+                    f"register {r.get('name', '<unnamed>')} offset is not a valid integer"
+                ) from exc
+            if offset < 0 or offset > 0xFFFFFFFF:
+                raise ValueError(
+                    f"register {r.get('name', '<unnamed>')} offset must be between 0 and 0xFFFFFFFF"
+                )
             fields = []
             raw_fields = r.get("fields", [])
             if not isinstance(raw_fields, list):

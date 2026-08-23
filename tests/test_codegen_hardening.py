@@ -377,6 +377,24 @@ registers:
     with pytest.raises(TypeError, match="registers must be a list"):
         CHeaderGenerator.from_yaml_str("registers: STATUS\n")
 
+    with pytest.raises(TypeError, match="offset must be an integer"):
+        CHeaderGenerator.from_yaml_str(
+            """
+registers:
+  - name: STATUS
+    offset: null
+"""
+        )
+
+    with pytest.raises(ValueError, match="offset must be between"):
+        CHeaderGenerator.from_yaml_str(
+            """
+registers:
+  - name: STATUS
+    offset: -1
+"""
+        )
+
 
 def test_register_decoder_rejects_values_outside_declared_width():
     catalog = RegisterMapCatalog()
