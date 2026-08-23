@@ -195,6 +195,13 @@ def test_spi_hex_byte_helper_rejects_boolean_values():
     assert SPIParser.parse_hex_byte(False) is None
 
 
+def test_spi_hex_byte_helper_does_not_guess_bare_decimal_as_hex():
+    assert SPIParser.parse_hex_byte("10") == 10
+    assert SPIParser.parse_hex_byte("20") == 20
+    assert SPIParser.parse_hex_byte("0x20") == 0x20
+    assert SPIParser.parse_hex_byte("AA") == 0xAA
+
+
 def test_spi_direct_decoder_rejects_malformed_time_and_bytes():
     with pytest.raises(ValueError, match="finite"):
         SPIParser.decode_single_transaction(1, float("nan"), 1.0, [0x06], [0x00])

@@ -38,6 +38,14 @@ JEDEC_DATABASE: dict[tuple[int, int, int], str] = {
 class SPIParser:
     @staticmethod
     def parse_hex_byte(val: Any) -> int | None:
+        """Parse a byte using explicit ``0x`` hex or unprefixed decimal digits.
+
+        Bare tokens containing hexadecimal letters (for example ``AA``) remain
+        accepted as hexadecimal for common analyzer exports.  Treating an
+        all-digit token as decimal avoids silently turning ``10`` into 0x10;
+        callers that need hexadecimal digits must use the unambiguous ``0x``
+        prefix.
+        """
         if val is None:
             return None
         if isinstance(val, bool):
@@ -54,7 +62,12 @@ class SPIParser:
                 return None
             return parsed if 0 <= parsed <= 0xFF else None
         try:
-            parsed = int(s, 16) if len(s) == 2 and re.match(r"^[0-9a-fA-F]{2}$", s) else int(s, 10)
+            if re.fullmatch(r"[0-9]+", s):
+                parsed = int(s, 10)
+            elif re.fullmatch(r"[0-9a-fA-F]+", s):
+                parsed = int(s, 16)
+            else:
+                parsed = int(s, 10)
         except ValueError:
             return None
         return parsed if 0 <= parsed <= 0xFF else None
