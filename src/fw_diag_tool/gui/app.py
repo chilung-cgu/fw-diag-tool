@@ -33,6 +33,16 @@ from fw_diag_tool.uart.reporter import UARTReporter
 
 MAX_UPLOAD_MIB = MAX_UPLOAD_BYTES // (1024 * 1024)
 
+
+def render_guide_expander(chapter_rel_path: str, label: str = "📖 點擊展開本功能詳細實戰教學手冊") -> None:
+    doc_path = Path(__file__).resolve().parents[3] / "docs" / chapter_rel_path
+    if not doc_path.exists():
+        doc_path = Path(__file__).resolve().parent.parent / "docs" / chapter_rel_path
+    if doc_path.exists():
+        with st.expander(label, expanded=False):
+            st.markdown(doc_path.read_text(encoding="utf-8"))
+
+
 st.set_page_config(page_title="FW Diagnostic Toolkit", page_icon="⚡", layout="wide")
 st.title("⚡ Firmware Signal & Protocol Diagnostic Suite")
 st.caption("Local I2C/PMBus protocol diagnostics and firmware learning workstation")
@@ -58,7 +68,8 @@ menu = st.sidebar.radio(
 # 1. I2C / PMBus
 if menu == "📊 I2C / PMBus 診斷與波形檢視":
     st.header("I2C / SMBus / PMBus 協定分析與數位波形檢視")
-    st.caption("📖 詳細教學請參閱 [第 1 章：I2C/PMBus 波形診斷手冊](docs/chapters/ch01_i2c_pmbus.md) 與 [附錄 A 圖表判讀指南](docs/chapters/appendix_chart_guide.md)")
+    render_guide_expander("chapters/ch01_i2c_pmbus.md", "📖 點擊展開：第 1 章 I2C/PMBus 波形診斷手冊")
+    render_guide_expander("chapters/appendix_chart_guide.md", "📊 點擊展開：附錄 A 圖表與數據判讀指南")
     input_mode = st.radio(
         "輸入資料型態",
         ["Saleae Analyzer table / text trace", "Raw digital transition (Time, SCL, SDA)"],
@@ -300,7 +311,9 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
 
         with tab_md:
             md_out = I2CReporter.generate_markdown(report)
-            st.code(md_out, language="markdown")
+            st.markdown(md_out)
+            with st.expander("📄 檢視原始 Markdown 原始碼", expanded=False):
+                st.code(md_out, language="markdown")
             st.download_button("下載 Markdown 報告", md_out, file_name="i2c_report.md")
             if input_name is not None and input_bytes is not None:
                 session_json = SessionManager.serialize_session(
@@ -325,7 +338,10 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
 # 2. Packet Builder & Driver CodeGen
 elif menu == "🎨 I2C 封包模擬器與驅動產生":
     st.header("I2C 封包自訂建構、理想波形生成與多平台 C 驅動產出")
-    st.caption("📖 詳細教學請參閱 [第 2 章：I2C 封包模擬器與 C 驅動產出](docs/chapters/ch02_packet_builder.md)（本頁為協定示意與模板產出，不是硬體量測）")
+    st.caption(
+        "這一頁產生的是協定示意與程式碼模板，不是硬體量測；Read 的回傳 bytes 必須由實際裝置或 raw capture 提供。"
+    )
+    render_guide_expander("chapters/ch02_packet_builder.md", "📖 點擊展開：第 2 章 I2C 封包模擬器與 C 驅動產出教學")
     b_col1, b_col2, b_col3, b_col4, b_col5 = st.columns(5)
     with b_col1:
         builder_addr_str = st.text_input("Slave 7-bit Address", value="0x50")
@@ -383,7 +399,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
 # 3. Waveform Diff
 elif menu == "⚖️ 雙波形對比檢視 (Waveform Diff)":
     st.header("Golden (正常板卡) vs Failing (故障板卡) 雙波形差分對比")
-    st.caption("📖 詳細教學請參閱 [第 3 章：Golden vs Failing 雙波形差分比對](docs/chapters/ch03_waveform_diff.md)")
+    render_guide_expander("chapters/ch03_waveform_diff.md", "📖 點擊展開：第 3 章 Golden vs Failing 雙波形差分比對教學")
     d_col1, d_col2 = st.columns(2)
     with d_col1:
         golden_file = st.file_uploader(
@@ -427,7 +443,7 @@ elif menu == "⚖️ 雙波形對比檢視 (Waveform Diff)":
 # 4. UART Crash Dump
 elif menu == "📟 UART Crash & HardFault 分析":
     st.header("UART Serial Crash Dump & ARM Cortex-M HardFault 智慧診斷")
-    st.caption("📖 詳細教學請參閱 [第 4 章：UART 崩潰與 ARM HardFault 診斷](docs/chapters/ch04_uart_crash.md)")
+    render_guide_expander("chapters/ch04_uart_crash.md", "📖 點擊展開：第 4 章 UART 崩潰與 ARM HardFault 診斷教學")
     u_mode = st.radio(
         "選擇輸入方式",
         [
@@ -450,7 +466,7 @@ elif menu == "📟 UART Crash & HardFault 分析":
 # 5. MCTP / IPMB
 elif menu == "🌐 MCTP / IPMB 伺服器協定解析":
     st.header("MCTP (DSP0236/PLDM/SPDM) 與 IPMB 伺服器管理協定解碼")
-    st.caption("📖 詳細教學請參閱 [第 5 章：MCTP 與 IPMB 伺服器協定解析](docs/chapters/ch05_mctp_ipmb.md)")
+    render_guide_expander("chapters/ch05_mctp_ipmb.md", "📖 點擊展開：第 5 章 MCTP 與 IPMB 伺服器協定解析教學")
     m_raw = st.text_area(
         "請輸入 MCTP 或 IPMB 封包 Hex Dump (每行一封包)：",
         height=150,
@@ -469,7 +485,7 @@ elif menu == "🌐 MCTP / IPMB 伺服器協定解析":
 # 6. Device Tree Generator
 elif menu == "🌲 Device Tree (.dts) 產生器":
     st.header("Linux Kernel & OpenBMC Device Tree Source (.dts) 自動生成")
-    st.caption("📖 詳細教學請參閱 [第 6 章：Device Tree 產生器教學](docs/chapters/ch06_dts_generator.md)（DTS 需經硬體原理圖與 kernel binding 確認）")
+    render_guide_expander("chapters/ch06_dts_generator.md", "📖 點擊展開：第 6 章 Device Tree 產生器教學")
     dt_b1, dt_b2, dt_b3 = st.columns(3)
     with dt_b1:
         dts_bus = st.number_input("I2C Bus Number (&i2c...)", min_value=0, max_value=32, value=1)
@@ -509,7 +525,7 @@ elif menu == "🌲 Device Tree (.dts) 產生器":
 # 7. PCIe
 elif menu == "🚀 PCIe Config & AER 診斷":
     st.header("PCIe 配置空間、Capability 鏈表與 AER 嚴重錯誤診斷")
-    st.caption("📖 詳細教學請參閱 [第 7 章：PCIe Config Space 與 AER 診斷](docs/chapters/ch07_pcie_aer.md)")
+    render_guide_expander("chapters/ch07_pcie_aer.md", "📖 點擊展開：第 7 章 PCIe Config Space 與 AER 診斷教學")
     input_mode = st.radio(
         "輸入方式", ["貼上 lspci -xxxx / Hex Dump", "貼上 Linux dmesg AER Error Log"]
     )
@@ -549,7 +565,7 @@ elif menu == "🚀 PCIe Config & AER 診斷":
 # 8. SPI Flash
 elif menu == "⚡ SPI Flash 協定診斷":
     st.header("SPI / QSPI Flash 協定解析與寫入異常診斷")
-    st.caption("📖 詳細教學請參閱 [第 8 章：SPI Flash 協定與狀態機診斷](docs/chapters/ch08_spi_flash.md)")
+    render_guide_expander("chapters/ch08_spi_flash.md", "📖 點擊展開：第 8 章 SPI Flash 協定與狀態機診斷教學")
     spi_col1, spi_col2 = st.columns([3, 1])
     with spi_col1:
         uploaded_spi = st.file_uploader(
@@ -591,7 +607,7 @@ elif menu == "⚡ SPI Flash 協定診斷":
 # 9. Register Decoder
 elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
     st.header("硬體 / 晶片暫存器 Bitfield 視覺化解碼器")
-    st.caption("📖 詳細教學請參閱 [第 9 章：暫存器 Bitfield 解碼與 C 巨集產生](docs/chapters/ch09_register_codegen.md)")
+    render_guide_expander("chapters/ch09_register_codegen.md", "📖 點擊展開：第 9 章 暫存器 Bitfield 解碼教學")
     builtin_map = {
         "PMBus 標準狀態暫存器 (PMBus STATUS_WORD)": "pmbus_standard.yaml",
         "PCIe AER Uncorrectable Error 暫存器": "pcie_aer_registers.yaml",
@@ -639,7 +655,7 @@ elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
 # 10. C Codegen
 elif menu == "🛠 C 語言 Register 巨集產生器":
     st.header("YAML 暫存器定義檔 -> C 語言 Header (#define / RMW 巨集) 自動生成")
-    st.caption("📖 詳細教學請參閱 [第 9 章：C 語言 Register 巨集產生器](docs/chapters/ch09_register_codegen.md)")
+    render_guide_expander("chapters/ch09_register_codegen.md", "📖 點擊展開：第 9 章 C 語言 Register 巨集產生器教學")
     data_dir = Path(__file__).parent.parent / "data"
     builtin_yamls = list(data_dir.glob("*.yaml"))
     choice_yaml = st.selectbox("選擇 YAML 範本", [y.name for y in builtin_yamls])
@@ -660,7 +676,7 @@ elif menu == "🛠 C 語言 Register 巨集產生器":
 # 11. Fault Arena
 elif menu == "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)":
     st.header("Junior Firmware 工程師 20 大經典硬韌體故障演練場")
-    st.caption("📖 詳細教學請參閱 [第 10 章：20 大實戰除錯實驗室](docs/chapters/ch10_fault_arena.md)")
+    render_guide_expander("chapters/ch10_fault_arena.md", "📖 點擊展開：第 10 章 20 大實戰除錯實驗室手冊")
     arena_cases = [
         "Case 01: I2C Address NACK (Slave 未上電 / Address Pin 浮接)",
         "Case 02: I2C Data NACK (EEPROM 內部寫入週期 tWR 忙碌中)",
@@ -733,7 +749,8 @@ elif menu == "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)":
 # 12. SOP
 elif menu == "📚 韌體除錯指南 & SOP":
     st.header("Junior Firmware 工程師韌體除錯指南與心智模型")
-    st.caption("📖 詳細教學請參閱 [第 12 章：分層除錯 SOP 與心智模型](docs/chapters/ch12_sop.md)")
+    render_guide_expander("chapters/appendix_gui_reading_guide.md", "🧭 點擊展開：附錄 B 12 個 GUI 頁面第一輪閱讀地圖")
+    render_guide_expander("chapters/ch12_sop.md", "📖 點擊展開：第 12 章 L1~L7 系統化除錯 SOP 手冊")
     st.info(
         "先確認證據，再提出假設：工具的圖表與報告能縮小範圍，不能取代示波器、datasheet、"
         "kernel source、matching ELF 或目標板上的重現。"
