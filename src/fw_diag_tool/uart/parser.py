@@ -102,7 +102,7 @@ class UARTCrashParser:
                     raw_fa = m_addr.group(1)
                     faulting_addr = raw_fa if raw_fa.startswith("0x") else f"0x{raw_fa}"
 
-            if line_s.startswith("CR2:") or line_s.startswith("FAR_EL1:"):
+            if line_s.startswith(("CR2:", "FAR_EL1:")):
                 m_cr = re.search(r"(?:CR2|FAR_EL1):\s*(?:0x)?([0-9a-fA-F]+)", line_s, re.IGNORECASE)
                 if m_cr:
                     faulting_addr = f"0x{m_cr.group(1)}"

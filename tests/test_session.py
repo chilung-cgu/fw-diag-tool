@@ -1,6 +1,5 @@
 import pytest
-import json
-from pathlib import Path
+
 from fw_diag_tool.session.session_manager import SessionManager
 
 
@@ -21,7 +20,7 @@ def test_list_sessions(tmp_path):
     assert len(sessions) == 2
 
 
-def test_load_nonexistent_raises():
-    mgr = SessionManager(session_dir=tmp_path if "tmp_path" in dir() else Path("/tmp"))
+def test_load_nonexistent_raises(tmp_path):
+    mgr = SessionManager(session_dir=tmp_path)
     with pytest.raises(FileNotFoundError):
-        mgr.load_session("/nonexistent/path.fwsession.json")
+        mgr.load_session(tmp_path / "nonexistent.fwsession.json")

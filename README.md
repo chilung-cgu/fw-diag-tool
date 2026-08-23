@@ -4,6 +4,7 @@
 結合 **邏輯分析儀波形還原**、**5 大伺服器與嵌入式協定解析**（I2C/PMBus, PCIe AER, SPI Flash, UART Crash Dump, MCTP/IPMB）、**雙波形差分對比 (Waveform Diff)**、**Linux & OpenBMC Device Tree 自動生成** 以及 **20 大實戰除錯演練場**。
 
 👉 **完整新人圖文教學指南**：請參閱 [docs/JUNIOR_FW_GUIDE.md](docs/JUNIOR_FW_GUIDE.md)。
+> 📂 **各章節詳細文件**：[ch01 I2C波形](docs/chapters/ch01_i2c_pmbus.md) | [ch03 Waveform Diff](docs/chapters/ch03_waveform_diff.md) | [ch04 UART Crash](docs/chapters/ch04_uart_crash.md) | [ch05 MCTP/IPMB](docs/chapters/ch05_mctp_ipmb.md) | [ch07 PCIe AER](docs/chapters/ch07_pcie_aer.md) | [ch08 SPI Flash](docs/chapters/ch08_spi_flash.md) | [附錄A 圖表判讀](docs/chapters/appendix_chart_guide.md)
 
 ---
 

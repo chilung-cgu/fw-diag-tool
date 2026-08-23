@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
+from fw_diag_tool.cli_extra import register_extra_commands
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
@@ -45,6 +46,7 @@ app.add_typer(reg_app)
 app.add_typer(gen_app)
 
 console = Console()
+register_extra_commands(app, i2c_app, console)
 
 
 @i2c_app.command("analyze")

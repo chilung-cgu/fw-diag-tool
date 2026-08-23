@@ -588,15 +588,15 @@ class PCIeAnalyzer:
             r"(?:\[\s*([0-9\.]+)\]\s*)?(?:pcieport\s+)?([0-9a-fA-F:\.]+):\s+TLP\s+Header:\s+([0-9a-fA-F\s]+)"
         )
 
-        current_bdf = "Unknown"
+        _current_bdf = "Unknown"
         current_sev = "Uncorrected"
-        current_timestamp = None
+        _current_timestamp = None
 
         for line in lines:
             m_hdr = aer_header_pattern.search(line)
             if m_hdr:
-                current_timestamp = m_hdr.group(1)
-                current_bdf = m_hdr.group(2)
+                _timestamp = m_hdr.group(1)
+                _bdf = m_hdr.group(2)
                 current_sev = m_hdr.group(3)
                 continue
 
