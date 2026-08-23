@@ -1,0 +1,196 @@
+from fw_diag_tool.i2c.chip_db import get_all_matching_devices, lookup_device
+from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
+from fw_diag_tool.i2c.models import (
+    AckType,
+    I2CBytePacket,
+    I2CDirection,
+    I2CSpeedMode,
+    RawEventType,
+    RawI2CEvent,
+)
+from fw_diag_tool.i2c.parser import I2CParser, parse_ack
+from fw_diag_tool.i2c.reporter import I2CReporter
+from fw_diag_tool.i2c.timing_charts import I2CTimingCharts
+
+
+def test_missing_csv_evidence_remains_unknown_and_timing_unavailable():
+    csv_data = """Packet ID,Address,Read/Write,Data
+0,0x50,Write,
+0,,Write,0x10
+"""
+
+    events = I2CParser.parse_csv_string(csv_data)
+    report = I2CDiagnosticEngine().analyze(events)
+
+    assert parse_ack(None) == AckType.NONE
+    assert all(not event.timestamp_available for event in events)
+    assert all(event.ack == AckType.NONE for event in events)
+    assert report.total_duration_s == 0.0
+    assert report.timing_stats.avg_frequency_khz == 0.0
+    assert report.timing_stats.frequency_sample_count == 0
+    assert report.timing_stats.frequency_evidence == "unavailable"
+    assert report.timing_stats.speed_mode == I2CSpeedMode.UNKNOWN
+    assert {issue.code for issue in report.data_quality_issues} >= {
+        "I2C_TIMESTAMP_UNAVAILABLE",
+        "I2C_ACK_UNAVAILABLE",
+        "I2C_TIMING_UNAVAILABLE",
+    }
+
+    tx = report.transactions[0]
+    assert tx.address_ack == AckType.NONE
+    assert all(packet.duration_s is None for packet in tx.byte_packets)
+    assert report.to_dict()["transactions"][0]["start_time"] is None
+
+    health = I2CTimingCharts.get_device_health_summary(report)
+    assert health.iloc[0]["Unknown ACK Count"] == 1
+    assert health.iloc[0]["Success Rate"] == "N/A"
+    assert health.iloc[0]["Health Grade"] == "N/A (ACK unavailable)"
+
+    figure = I2CTimingCharts.create_frequency_distribution(report)
+    assert len(figure.data) == 0
+    assert "unavailable" in figure.layout.title.text.lower()
+
+    timeline = I2CTimingCharts.create_bus_activity_timeline(report)
+    assert all(value is None for trace in timeline.data for value in trace.x)
+    assert "| 1 | n/a |" in I2CReporter.generate_markdown(report)
+
+
+def test_missing_timestamp_is_not_attached_to_diagnostic_issue():
+    csv_data = """Packet ID,Address,Read/Write,Data,ACK/NACK
+0,0x3A,Write,,NACK
+"""
+
+    report = I2CDiagnosticEngine().analyze_csv_string(csv_data)
+    issue = next(issue for issue in report.issues if issue.code == "I2C_ADDR_NACK")
+
+    assert issue.timestamp is None
+
+
+def test_multibyte_summary_row_does_not_invent_per_byte_timestamps():
+    csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
+0.001,7,0x48,Read,0x19 0x20,NACK
+"""
+
+    events = I2CParser.parse_csv_string(csv_data)
+
+    assert [event.timestamp for event in events] == [0.001, 0.001, 0.001]
+    assert [event.ack for event in events] == [AckType.ACK, AckType.ACK, AckType.NACK]
+    assert all(event.duration_s is None for event in events)
+
+
+def test_source_provided_byte_duration_produces_frequency_measurement():
+    csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK,Duration
+0.001000,0,0x50,Write,,ACK,0.0000225
+0.001025,0,,Write,0x10,ACK,0.0000225
+"""
+
+    report = I2CDiagnosticEngine().analyze_csv_string(csv_data)
+
+    assert report.timing_stats.avg_frequency_khz == 400.0
+    assert report.timing_stats.frequency_sample_count == 2
+    assert report.timing_stats.frequency_evidence == "source-provided"
+    assert not any(issue.code == "I2C_TIMING_UNAVAILABLE" for issue in report.data_quality_issues)
+    assert len(I2CTimingCharts.create_frequency_distribution(report).data) == 1
+
+
+def test_final_controller_read_nack_is_neutral_in_timeline_and_health():
+    csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
+0.001000,0,0x48,Read,,ACK
+0.001025,0,,Read,0x19,ACK
+0.001050,0,,Read,0x20,NACK
+"""
+
+    report = I2CDiagnosticEngine().analyze_csv_string(csv_data)
+    tx = report.transactions[0]
+
+    assert tx.direction == I2CDirection.READ
+    assert not tx.has_unexpected_data_nack
+    assert not any(issue.code == "I2C_DATA_NACK" for issue in report.issues)
+
+    timeline = I2CTimingCharts.create_bus_activity_timeline(report)
+    trace_names = {trace.name for trace in timeline.data}
+    assert "DATA NAK" not in trace_names
+    assert "READ END NAK" in trace_names
+
+    health = I2CTimingCharts.get_device_health_summary(report)
+    row = health.iloc[0]
+    assert row["NACK Count"] == 0
+    assert row["Success Rate"] == "100.0 %"
+    assert row["Health Grade"] == "A (Excellent)"
+
+
+def test_address_and_write_data_nacks_remain_failures():
+    csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
+0.001000,0,0x3A,Write,,NACK
+0.002000,1,0x58,Write,,ACK
+0.002025,1,,Write,0x10,ACK
+0.002050,1,,Write,0xFF,NACK
+"""
+
+    report = I2CDiagnosticEngine().analyze_csv_string(csv_data)
+    issue_codes = {issue.code for issue in report.issues}
+
+    assert "I2C_ADDR_NACK" in issue_codes
+    assert "I2C_DATA_NACK" in issue_codes
+
+
+def test_ambiguous_address_is_presented_as_candidates_not_exact_identity():
+    candidates = get_all_matching_devices(0x50)
+    assert len(candidates) > 1
+    assert lookup_device(0x50) is candidates[0]
+
+    csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
+0.001,0,0x50,Write,,ACK
+0.002,0,,Write,0x00,ACK
+"""
+    report = I2CDiagnosticEngine().analyze_csv_string(csv_data)
+    device = report.devices_detected["0x50"]
+
+    assert device["identity_confidence"] == "ambiguous"
+    assert len(device["candidates"]) == len(candidates)
+    assert report.transactions[0].device_name.startswith("Possible devices (")
+
+
+def test_single_database_match_is_still_only_an_address_candidate():
+    csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
+0.001,0,0x70,Write,,ACK
+"""
+
+    report = I2CDiagnosticEngine().analyze_csv_string(csv_data)
+    device = report.devices_detected["0x70"]
+
+    assert device["identity_confidence"] == "single-address-candidate"
+    assert len(device["candidates"]) == 1
+    assert device["name"].startswith("Possible:")
+
+
+def test_additive_evidence_fields_preserve_legacy_positional_model_arguments():
+    event = RawI2CEvent(1.0, RawEventType.DATA, 7)
+    packet = I2CBytePacket(
+        1.0,
+        0x12,
+        False,
+        I2CDirection.WRITE,
+        AckType.ACK,
+        0.000025,
+    )
+
+    assert event.packet_id == 7
+    assert event.timestamp_available
+    assert packet.duration_s == 0.000025
+    assert packet.timestamp_available
+
+
+def test_nonfinite_source_measurements_are_unavailable_and_timestamp_regression_is_reported():
+    csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK,Duration,Bit Rate
+0.002,0,0x50,Write,,ACK,nan,inf
+0.001,0,,Write,0x10,ACK,0.0000225,400
+"""
+
+    report = I2CDiagnosticEngine().analyze_csv_string(csv_data)
+
+    assert report.timing_stats.frequency_sample_count == 1
+    assert {issue.code for issue in report.data_quality_issues} >= {
+        "I2C_TIMESTAMP_OUT_OF_ORDER",
+        "I2C_TIMING_PARTIAL",
+    }
