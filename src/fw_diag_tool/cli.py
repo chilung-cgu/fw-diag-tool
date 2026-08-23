@@ -107,8 +107,8 @@ def analyze_i2c_trace(
         console.print(f"[bold red]Error: File {file_path} not found![/]")
         raise typer.Exit(code=1)
     engine = I2CDiagnosticEngine(smbus_timeout_ms=smbus_timeout)
-    if raw_digital:
-        try:
+    try:
+        if raw_digital:
             result = analyze_raw_i2c_csv(
                 file_path.read_bytes(),
                 time_column=time_column,
@@ -116,11 +116,12 @@ def analyze_i2c_trace(
                 sda_column=sda_column,
             )
             report = engine.analyze(raw_decode_to_events(result))
-        except ValueError as exc:
-            console.print(f"[bold red]Error: raw digital capture is invalid: {exc}[/]")
-            raise typer.Exit(code=2) from exc
-    else:
-        report = engine.analyze_csv_file(str(file_path))
+        else:
+            report = engine.analyze_csv_file(str(file_path))
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        label = "raw digital capture" if raw_digital else "I2C trace"
+        console.print(f"[bold red]Error: {label} is invalid: {exc}[/]")
+        raise typer.Exit(code=2) from exc
     I2CReporter.render_terminal(report, console=console)
     if markdown_out:
         md_text = I2CReporter.generate_markdown(report)
@@ -141,69 +142,77 @@ def analyze_pcie(
     ),
 ):
     """Analyze PCIe Config Space, Capability list, AER errors, and decode faulting TLP Headers."""
-    content = file_or_dump
-    if "\n" not in file_or_dump and len(file_or_dump) < 256:
-        p = Path(file_or_dump)
-        if p.exists():
-            content = p.read_text(encoding="utf-8")
-    if "PCIe Bus Error:" in content or (
-        "AER:" in content
-        and "lspci" not in content.lower()
-        and not any(line.strip().startswith("00:") for line in content.splitlines())
-    ):
-        events = PCIeAnalyzer.parse_dmesg_aer(content)
-        report_md = PCIeReporter.format_dmesg_events(events)
-        console.print(
-            Panel(
-                f"[bold cyan]Kernel dmesg AER Diagnostic Report[/]\nFound {len(events)} AER event(s)"
-            )
-        )
-        console.print(report_md)
-    else:
-        devices = PCIeAnalyzer.parse_multi_lspci_text(content)
-        if not devices:
-            bdf, raw_bytes = PCIeAnalyzer.parse_lspci_text(content)
-            devices = [PCIeAnalyzer.decode_config_space(raw_bytes, bdf=bdf)]
-        all_mds = []
-        for cfg in devices:
-            report_md = PCIeReporter.to_markdown(cfg)
-            all_mds.append(report_md)
+    try:
+        content = file_or_dump
+        if "\n" not in file_or_dump and len(file_or_dump) < 256:
+            p = Path(file_or_dump)
+            if p.exists():
+                content = p.read_text(encoding="utf-8")
+        if "PCIe Bus Error:" in content or (
+            "AER:" in content
+            and "lspci" not in content.lower()
+            and not any(line.strip().startswith("00:") for line in content.splitlines())
+        ):
+            events = PCIeAnalyzer.parse_dmesg_aer(content)
+            report_md = PCIeReporter.format_dmesg_events(events)
             console.print(
-                Panel(f"[bold green]PCIe Device Config Space Decoded (BDF: {cfg.bdf or 'N/A'})[/]")
-            )
-            table = Table(title="Device Overview", show_header=True)
-            table.add_column("Property", style="cyan")
-            table.add_column("Value", style="yellow")
-            table.add_row("Vendor / Device ID", f"0x{cfg.vendor_id:04X} / 0x{cfg.device_id:04X}")
-            table.add_row(
-                "Class",
-                f"{cfg.class_name} (0x{cfg.base_class:02X}{cfg.sub_class:02X}{cfg.prog_if:02X})",
-            )
-            table.add_row("Header Type", f"{cfg.header_type.name}")
-            table.add_row("Standard Capabilities", str(len(cfg.standard_capabilities)))
-            table.add_row("Extended Capabilities", str(len(cfg.extended_capabilities)))
-            if cfg.link_info:
-                status_color = "red" if cfg.link_info.is_degraded else "green"
-                table.add_row(
-                    "Link Negotiation",
-                    f"[{status_color}]{cfg.link_info.current_speed_str} x{cfg.link_info.current_width}[/] (Max: {cfg.link_info.max_speed_str} x{cfg.link_info.max_width})",
+                Panel(
+                    f"[bold cyan]Kernel dmesg AER Diagnostic Report[/]\nFound {len(events)} AER event(s)"
                 )
-            if cfg.aer_analysis:
-                table.add_row(
-                    "AER Fatal / Non-Fatal / Corr",
-                    f"{cfg.aer_analysis.active_uncorr_fatal_count} / {cfg.aer_analysis.active_uncorr_nonfatal_count} / {cfg.aer_analysis.active_corr_count}",
-                )
-            console.print(table)
-            if cfg.link_info and cfg.link_info.is_degraded:
+            )
+            console.print(report_md)
+        else:
+            devices = PCIeAnalyzer.parse_multi_lspci_text(content)
+            if not devices:
+                bdf, raw_bytes = PCIeAnalyzer.parse_lspci_text(content)
+                devices = [PCIeAnalyzer.decode_config_space(raw_bytes, bdf=bdf)]
+            all_mds = []
+            for cfg in devices:
+                report_md = PCIeReporter.to_markdown(cfg)
+                all_mds.append(report_md)
                 console.print(
                     Panel(
-                        f"[bold red]🚨 {cfg.link_info.degradation_reason}[/]\n\n{cfg.link_info.root_cause_guide}",
-                        border_style="red",
+                        f"[bold green]PCIe Device Config Space Decoded (BDF: {cfg.bdf or 'N/A'})[/]"
                     )
                 )
-        if markdown_out:
-            markdown_out.write_text("\n\n---\n\n".join(all_mds), encoding="utf-8")
-            console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
+                table = Table(title="Device Overview", show_header=True)
+                table.add_column("Property", style="cyan")
+                table.add_column("Value", style="yellow")
+                table.add_row(
+                    "Vendor / Device ID", f"0x{cfg.vendor_id:04X} / 0x{cfg.device_id:04X}"
+                )
+                table.add_row(
+                    "Class",
+                    f"{cfg.class_name} (0x{cfg.base_class:02X}{cfg.sub_class:02X}{cfg.prog_if:02X})",
+                )
+                table.add_row("Header Type", f"{cfg.header_type.name}")
+                table.add_row("Standard Capabilities", str(len(cfg.standard_capabilities)))
+                table.add_row("Extended Capabilities", str(len(cfg.extended_capabilities)))
+                if cfg.link_info:
+                    status_color = "red" if cfg.link_info.is_degraded else "green"
+                    table.add_row(
+                        "Link Negotiation",
+                        f"[{status_color}]{cfg.link_info.current_speed_str} x{cfg.link_info.current_width}[/] (Max: {cfg.link_info.max_speed_str} x{cfg.link_info.max_width})",
+                    )
+                if cfg.aer_analysis:
+                    table.add_row(
+                        "AER Fatal / Non-Fatal / Corr",
+                        f"{cfg.aer_analysis.active_uncorr_fatal_count} / {cfg.aer_analysis.active_uncorr_nonfatal_count} / {cfg.aer_analysis.active_corr_count}",
+                    )
+                console.print(table)
+                if cfg.link_info and cfg.link_info.is_degraded:
+                    console.print(
+                        Panel(
+                            f"[bold red]🚨 {cfg.link_info.degradation_reason}[/]\n\n{cfg.link_info.root_cause_guide}",
+                            border_style="red",
+                        )
+                    )
+            if markdown_out:
+                markdown_out.write_text("\n\n---\n\n".join(all_mds), encoding="utf-8")
+                console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]Error: PCIe input is invalid: {exc}[/]")
+        raise typer.Exit(code=2) from exc
 
 
 @spi_app.command("analyze")
@@ -238,12 +247,16 @@ def analyze_uart_crash(
     ),
 ):
     """Analyze Linux Kernel Panic or ARM Cortex-M HardFault crash dumps."""
-    content = file_or_text
-    if "\n" not in file_or_text and len(file_or_text) < 256:
-        p = Path(file_or_text)
-        if p.exists():
-            content = p.read_text(encoding="utf-8")
-    report = UARTCrashParser.parse_log_text(content)
+    try:
+        content = file_or_text
+        if "\n" not in file_or_text and len(file_or_text) < 256:
+            p = Path(file_or_text)
+            if p.exists():
+                content = p.read_text(encoding="utf-8")
+        report = UARTCrashParser.parse_log_text(content)
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]Error: UART crash log is invalid: {exc}[/]")
+        raise typer.Exit(code=2) from exc
     UARTReporter.render_terminal(report, console=console)
     if markdown_out:
         markdown_out.write_text(UARTReporter.to_markdown(report), encoding="utf-8")
@@ -258,12 +271,16 @@ def analyze_mctp(
     ),
 ):
     """Decode MCTP (DSP0236/PLDM/SPDM) packets and IPMB server management frames."""
-    content = file_or_dump
-    if "\n" not in file_or_dump and len(file_or_dump) < 256:
-        p = Path(file_or_dump)
-        if p.exists():
-            content = p.read_text(encoding="utf-8")
-    report = ServerMgmtParser.parse_text_dump(content)
+    try:
+        content = file_or_dump
+        if "\n" not in file_or_dump and len(file_or_dump) < 256:
+            p = Path(file_or_dump)
+            if p.exists():
+                content = p.read_text(encoding="utf-8")
+        report = ServerMgmtParser.parse_text_dump(content)
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]Error: MCTP/IPMB input is invalid: {exc}[/]")
+        raise typer.Exit(code=2) from exc
     ServerMgmtReporter.render_terminal(report, console=console)
     if markdown_out:
         markdown_out.write_text(ServerMgmtReporter.to_markdown(report), encoding="utf-8")
@@ -281,7 +298,11 @@ def decode_register(
         console.print(f"[bold red]Error: YAML file {yaml_file} not found![/]")
         raise typer.Exit(code=1)
     catalog = RegisterMapCatalog()
-    catalog.load_from_yaml(yaml_file.read_text(encoding="utf-8"))
+    try:
+        catalog.load_from_yaml(yaml_file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]Error: Register YAML is invalid: {exc}[/]")
+        raise typer.Exit(code=2) from exc
     try:
         val = int(raw_value, 0)
     except ValueError:
@@ -321,10 +342,18 @@ def generate_c_header(
     if not yaml_file.exists():
         console.print(f"[bold red]Error: YAML file {yaml_file} not found![/]")
         raise typer.Exit(code=1)
-    gen = CHeaderGenerator.from_yaml_file(yaml_file)
-    header_text = gen.generate_header(module_name=module_name)
+    try:
+        gen = CHeaderGenerator.from_yaml_file(yaml_file)
+        header_text = gen.generate_header(module_name=module_name)
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]Error: C header input is invalid: {exc}[/]")
+        raise typer.Exit(code=2) from exc
     if output_header:
-        output_header.write_text(header_text, encoding="utf-8")
+        try:
+            output_header.write_text(header_text, encoding="utf-8")
+        except OSError as exc:
+            console.print(f"[bold red]Error: cannot write C header: {exc}[/]")
+            raise typer.Exit(code=2) from exc
         console.print(f"[green]✔ C Header generated and saved to {output_header}[/]")
     else:
         console.print(Panel(header_text, title=f"Generated C Header: {module_name}.h"))
@@ -344,9 +373,17 @@ def generate_dts(
             f"[bold red]Error: Invalid MUX address '{mux_addr}' (must be hex like 0x70)![/]"
         )
         raise typer.Exit(code=1)
-    dts_text = DeviceTreeGenerator.generate_dts_from_topology(bus_num=bus_num, mux_addr=m_addr)
+    try:
+        dts_text = DeviceTreeGenerator.generate_dts_from_topology(bus_num=bus_num, mux_addr=m_addr)
+    except (TypeError, ValueError) as exc:
+        console.print(f"[bold red]Error: Device Tree input is invalid: {exc}[/]")
+        raise typer.Exit(code=2) from exc
     if output_dts:
-        output_dts.write_text(dts_text, encoding="utf-8")
+        try:
+            output_dts.write_text(dts_text, encoding="utf-8")
+        except OSError as exc:
+            console.print(f"[bold red]Error: cannot write Device Tree: {exc}[/]")
+            raise typer.Exit(code=2) from exc
         console.print(f"[green]✔ Device Tree generated and saved to {output_dts}[/]")
     else:
         console.print(Panel(dts_text, title="Generated Device Tree Source (.dts)"))

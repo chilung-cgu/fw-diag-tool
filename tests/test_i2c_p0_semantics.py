@@ -52,6 +52,7 @@ def test_missing_csv_evidence_remains_unknown_and_timing_unavailable():
 
     timeline = I2CTimingCharts.create_bus_activity_timeline(report)
     assert all(value is None for trace in timeline.data for value in trace.x)
+    assert "timestamps unavailable" in timeline.layout.title.text
     assert "| 1 | n/a |" in I2CReporter.generate_markdown(report)
 
 
@@ -90,7 +91,9 @@ def test_source_provided_byte_duration_produces_frequency_measurement():
     assert report.timing_stats.frequency_sample_count == 2
     assert report.timing_stats.frequency_evidence == "source-provided"
     assert not any(issue.code == "I2C_TIMING_UNAVAILABLE" for issue in report.data_quality_issues)
-    assert len(I2CTimingCharts.create_frequency_distribution(report).data) == 1
+    frequency_figure = I2CTimingCharts.create_frequency_distribution(report)
+    assert len(frequency_figure.data) == 1
+    assert "Samples: 2" in frequency_figure.layout.title.text
 
 
 def test_final_controller_read_nack_is_neutral_in_timeline_and_health():

@@ -48,7 +48,12 @@ class I2CTimingCharts:
             df,
             x="SCL Clock Frequency (kHz)",
             nbins=30,
-            title=f"<b>SCL Clock Frequency Distribution</b> (Avg: {report.timing_stats.avg_frequency_khz:.1f} kHz, Jitter: {report.timing_stats.frequency_jitter_pct:.1f}%)",
+            title=(
+                "<b>SCL Clock Frequency Distribution</b> "
+                f"(Avg: {report.timing_stats.avg_frequency_khz:.1f} kHz, "
+                f"Jitter: {report.timing_stats.frequency_jitter_pct:.1f}%, "
+                f"Samples: {len(bitrates)})"
+            ),
             template="plotly_dark",
             color_discrete_sequence=["#00CC96"],
         )
@@ -89,6 +94,18 @@ class I2CTimingCharts:
             fig.update_layout(title="No transactions to display", template="plotly_dark")
             return fig
 
+        timestamp_count = sum(1 for tx in report.transactions if tx.timestamp_available)
+        if timestamp_count == 0:
+            timeline_title = (
+                "<b>Bus Transaction Timeline & Active Device Map</b> (timestamps unavailable)"
+            )
+        elif timestamp_count < len(report.transactions):
+            timeline_title = (
+                "<b>Bus Transaction Timeline & Active Device Map</b> (partial timestamps)"
+            )
+        else:
+            timeline_title = "<b>Bus Transaction Timeline & Active Device Map</b>"
+
         scatter_args: dict[str, Any] = {
             "data_frame": df,
             "x": "Start Time (s)",
@@ -102,7 +119,7 @@ class I2CTimingCharts:
                 "ACK UNKNOWN": "#7F7F7F",
             },
             "hover_data": ["Transaction ID", "Direction", "Bytes", "Duration (ms)"],
-            "title": "<b>Bus Transaction Timeline & Active Device Map</b>",
+            "title": timeline_title,
             "template": "plotly_dark",
         }
         if any(tx.timestamp_available and tx.duration_us > 0 for tx in report.transactions):
