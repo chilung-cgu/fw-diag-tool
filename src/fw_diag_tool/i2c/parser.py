@@ -24,9 +24,13 @@ def parse_hex_or_int(val: Any) -> int | None:
     """Parse integer from hex string (0x50, 50h), decimal ('80'), or numeric type."""
     if val is None:
         return None
+    if isinstance(val, bool):
+        return None
     if isinstance(val, int):
         return val
     if isinstance(val, float):
+        if not math.isfinite(val) or not val.is_integer():
+            return None
         return int(val)
 
     s = str(val).strip().strip("'").strip('"')
@@ -130,6 +134,8 @@ class I2CParser:
         col_map: dict[str, int] = {}
         for idx, col in enumerate(header):
             c = col.strip().lower().replace(" ", "_").replace("[s]", "").replace('"', "").strip("_")
+            if c in col_map:
+                raise ValueError(f"duplicate CSV column name after normalization: {col!r}")
             col_map[c] = idx
 
         def first_column(*names: str) -> int | None:
@@ -151,6 +157,9 @@ class I2CParser:
                 continue
 
             source_error: str | None = None
+            structural_source_error = False
+            if len(row) != len(header):
+                source_error = f"row has {len(row)} fields but header declares {len(header)} fields"
 
             timestamp = 0.0
             timestamp_available = False
@@ -164,13 +173,18 @@ class I2CParser:
                 if not timestamp_available:
                     timestamp = 0.0
             except (IndexError, TypeError, ValueError):
-                pass
+                if time_idx is not None and time_idx < len(row) and row[time_idx].strip():
+                    source_error = source_error or "timestamp token is not finite and non-negative"
 
             packet_id = (
                 parse_hex_or_int(row[packet_id_idx])
                 if packet_id_idx is not None and packet_id_idx < len(row)
                 else None
             )
+            if packet_id is None and packet_id_idx is not None and packet_id_idx < len(row):
+                packet_cell = row[packet_id_idx].strip()
+                if packet_cell and packet_cell.lower() not in ("none", "null", "n/a", "-"):
+                    source_error = source_error or f"packet id token {packet_cell!r} is not numeric"
             raw_type_str = (
                 row[type_idx].strip().upper()
                 if type_idx is not None and type_idx < len(row)
@@ -190,16 +204,26 @@ class I2CParser:
             )
             if raw_addr is None and raw_addr_cell.lower() not in ("", "-", "none", "null", "n/a"):
                 source_error = f"address token {raw_addr_cell!r} is not a numeric byte"
+                structural_source_error = True
             if raw_addr is not None and not 0 <= raw_addr <= 0xFF:
                 source_error = (
                     f"address {raw_addr} is outside the supported 7-bit/8-bit range 0..0xFF"
                 )
+                structural_source_error = True
                 raw_addr = None
 
             # Parse direction
             raw_rw = (
                 parse_direction(row[rw_idx]) if rw_idx is not None and rw_idx < len(row) else None
             )
+            if rw_idx is not None and rw_idx < len(row):
+                rw_cell = row[rw_idx].strip()
+                if (
+                    rw_cell
+                    and rw_cell.lower() not in ("none", "null", "n/a", "-")
+                    and raw_rw is None
+                ):
+                    source_error = source_error or f"direction token {rw_cell!r} is not READ/WRITE"
 
             # If direction not separate column, check if raw_type_str or address embeds it
             if raw_rw is None:
@@ -232,6 +256,7 @@ class I2CParser:
                 ]
                 if any(token is None for token in parsed_data_tokens):
                     source_error = source_error or "one or more data tokens are not numeric bytes"
+                    structural_source_error = True
                 if any(
                     token is not None and not 0 <= token <= 0xFF for token in parsed_data_tokens
                 ):
@@ -241,12 +266,13 @@ class I2CParser:
                         if token is not None and not 0 <= token <= 0xFF
                     )
                     source_error = source_error or f"data byte {invalid} is outside 0..0xFF"
+                    structural_source_error = True
                 raw_data_tokens = [
                     token
                     for token in parsed_data_tokens
                     if token is not None and 0 <= token <= 0xFF
                 ]
-                if source_error:
+                if structural_source_error:
                     # Do not allow a malformed combined row to become a plausible
                     # partial transaction. Preserve the row as quality evidence.
                     raw_data_tokens = []
@@ -258,6 +284,14 @@ class I2CParser:
                 if ack_idx is not None and ack_idx < len(row)
                 else AckType.NONE
             )
+            if ack_idx is not None and ack_idx < len(row):
+                ack_cell = row[ack_idx].strip()
+                if (
+                    ack_cell
+                    and ack_cell.lower() not in ("none", "null", "n/a", "-")
+                    and ack_val == AckType.NONE
+                ):
+                    source_error = source_error or f"ACK token {ack_cell!r} is not ACK/NACK"
 
             # Duration & Bitrate
             dur = (
@@ -265,11 +299,17 @@ class I2CParser:
                 if duration_idx is not None and duration_idx < len(row)
                 else None
             )
+            if duration_idx is not None and duration_idx < len(row):
+                duration_cell = row[duration_idx].strip()
+                if duration_cell and _positive_finite_float(duration_cell) is None:
+                    source_error = source_error or "duration is not a positive finite number"
             bitrate = None
             if bitrate_idx is not None and bitrate_idx < len(row):
                 b_val = _positive_finite_float(row[bitrate_idx].strip())
                 if b_val is not None:
                     bitrate = b_val / 1000.0 if b_val > 10000 else b_val
+                elif row[bitrate_idx].strip():
+                    source_error = source_error or "bitrate is not a positive finite number"
 
             # Determine event type
             if "START" in raw_type_str and "REPEATED" not in raw_type_str:
@@ -326,7 +366,7 @@ class I2CParser:
                         )
                     )
             else:
-                if source_error:
+                if structural_source_error:
                     ev_type = RawEventType.UNKNOWN
                 events.append(
                     RawI2CEvent(

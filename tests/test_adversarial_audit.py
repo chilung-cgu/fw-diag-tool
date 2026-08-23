@@ -264,6 +264,20 @@ def test_engine_rejects_malformed_direct_event_and_reports_unknown_csv_rows():
     )
 
 
+def test_i2c_parser_does_not_coerce_malformed_numeric_or_schema_values():
+    assert parse_hex_or_int(1.5) is None
+    assert parse_hex_or_int(float("nan")) is None
+    assert parse_hex_or_int(True) is None
+    with pytest.raises(ValueError, match="duplicate"):
+        I2CParser.parse_csv_string("Time,Address,address,Data\n0,0x50,0x51,0x01\n")
+
+    report = I2CDiagnosticEngine().analyze_csv_content(
+        "Time,Packet ID,Address,Read/Write,Data,ACK/NACK,Duration\n"
+        "0,not-a-number,0x50,SIDEWAYS,0x01,WHAT,nan\n"
+    )
+    assert any(issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in report.data_quality_issues)
+
+
 def test_reused_engine_does_not_leak_mux_state_between_captures():
     engine = I2CDiagnosticEngine()
     first = engine.analyze_csv_content(
