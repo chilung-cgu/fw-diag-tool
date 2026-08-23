@@ -354,15 +354,43 @@ class SPIParser:
                         }
                     )
 
-            # 4. Erase Commands (0x20, 0x52, 0xD8, 0xC7)
+            # 4. Addressed and chip erase commands.  These commands have a
+            # fixed frame width; extra bytes are not silently folded into the
+            # command because they may indicate CS/framing corruption.
             elif opcode in (
                 SPIOpcode.SECTOR_ERASE_4K,
                 SPIOpcode.BLOCK_ERASE_32K,
                 SPIOpcode.BLOCK_ERASE_64K,
             ):
-                if len(mosi) >= 4:
+                if len(mosi) < 4:
+                    details.update(
+                        {
+                            "response_truncated": True,
+                            "required_mosi_bytes": 4,
+                            "received_mosi_bytes": len(mosi),
+                        }
+                    )
+                elif len(mosi) > 4:
+                    details.update(
+                        {
+                            "response_overlong": True,
+                            "max_mosi_bytes": 4,
+                            "received_mosi_bytes": len(mosi),
+                        }
+                    )
+                else:
                     address = (mosi[1] << 16) | (mosi[2] << 8) | mosi[3]
                     details["erase_address"] = f"0x{address:06X}"
+
+            elif opcode in (SPIOpcode.CHIP_ERASE, SPIOpcode.CHIP_ERASE_ALT):
+                if len(mosi) > 1:
+                    details.update(
+                        {
+                            "response_overlong": True,
+                            "max_mosi_bytes": 1,
+                            "received_mosi_bytes": len(mosi),
+                        }
+                    )
 
             # 5. Read Status Registers (0x05, 0x35, 0x15)
             elif opcode in (

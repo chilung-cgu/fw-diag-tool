@@ -259,6 +259,25 @@ def test_spi_status_write_overlong_payload_is_data_quality():
     assert any(issue.code == "SPI_RESPONSE_OVERLONG" for issue in report.data_quality_issues)
 
 
+@pytest.mark.parametrize(
+    ("opcode", "extra"),
+    [(0x20, [0x00, 0x00, 0x00, 0xAA]), (0xC7, [0x00])],
+)
+def test_spi_fixed_width_erase_frames_report_overlong_evidence(opcode, extra):
+    mosi = [opcode, *extra]
+    miso = [0x00] * len(mosi)
+    tx = SPIParser.decode_single_transaction(1, 0.0, 0.001, mosi, miso)
+    assert tx.decoded_details["response_overlong"] is True
+    report = SPIDiagnosticEngine().analyze_csv_content(
+        "Time,MOSI,MISO,Enable\n"
+        + "\n".join(
+            f"0.{index + 1:03d},0x{tx_byte:02X},0x00,0" for index, tx_byte in enumerate(mosi)
+        )
+        + "\n0.010,0x00,0x00,1\n"
+    )
+    assert any(issue.code == "SPI_RESPONSE_OVERLONG" for issue in report.data_quality_issues)
+
+
 def test_spi_device_reset_clears_observed_wel_before_program():
     rows = [
         "0.001,0x06,0x00,0",
