@@ -191,6 +191,26 @@ class I2CDiagnosticEngine:
                     and ev.packet_id != getattr(current_tx, "_packet_id", None)
                 )
 
+                # A second address without a new START/repeated-START or
+                # packet boundary is malformed framing.  The old code
+                # overwrote the first address and merged both payloads into a
+                # single transaction, which could produce a plausible but
+                # false device semantic result.
+                duplicate_address = (
+                    current_tx is not None
+                    and not is_placeholder
+                    and not packet_id_changed
+                    and getattr(current_tx, "_has_address", False)
+                )
+
+                if duplicate_address:
+                    finish_at_event(current_tx, ev)
+                    current_tx.has_stop = False
+                    current_tx.source_error = True
+                    transactions.append(current_tx)
+                    current_tx = None
+                    is_placeholder = False
+
                 if current_tx is None or (not is_placeholder and packet_id_changed):
                     if current_tx is not None and (
                         current_tx.byte_packets or getattr(current_tx, "_has_address", False)
@@ -306,12 +326,19 @@ class I2CDiagnosticEngine:
                     and current_tx.address_available
                     and ev.address_7bit != current_tx.address_7bit
                 )
-                if current_tx is None or pkt_changed or dir_changed or addr_changed:
+                implicit_boundary = dir_changed or addr_changed
+                if current_tx is None or pkt_changed or implicit_boundary:
                     if current_tx is not None and (
                         current_tx.byte_packets or getattr(current_tx, "_has_address", False)
                     ):
                         finish_at_event(current_tx, ev)
-                        current_tx.has_stop = True
+                        # A packet-id change is an explicit analyzer frame
+                        # boundary.  An address/direction change without one
+                        # is only an inferred boundary and must not fabricate
+                        # a STOP or a clean transaction result.
+                        current_tx.has_stop = not implicit_boundary
+                        if implicit_boundary:
+                            current_tx.source_error = True
                         transactions.append(current_tx)
                     # Implicit transaction start without explicit START/ADDRESS event
                     addr_7b = ev.address_7bit if ev.address_7bit is not None else 0x00
@@ -328,7 +355,7 @@ class I2CDiagnosticEngine:
                         timestamp_available=ev.timestamp_available,
                         address_available=ev.address_7bit is not None,
                         direction_available=ev.direction is not None,
-                        source_error=event_source_error,
+                        source_error=event_source_error or implicit_boundary,
                     )
                     current_tx._packet_id = ev.packet_id
                     current_tx._has_address = ev.address_7bit is not None
@@ -432,6 +459,8 @@ class I2CDiagnosticEngine:
         sensor_truncated = 0
         sensor_overlong = 0
         address_nack_data = 0
+        address_nack_semantic_unavailable = 0
+        data_nack_semantic_unavailable = 0
         semantic_source_error = 0
 
         for tx in transactions:
@@ -496,6 +525,39 @@ class I2CDiagnosticEngine:
                 tx.device_category = "General I2C Peripheral"
                 tx.protocol = "I2C"
                 tx.identity_confidence = "unknown"
+
+            # An address NACK means the target did not accept this transfer.
+            # It can still be useful evidence for address diagnostics (and the
+            # anomaly detector may identify EEPROM ACK polling), but it is not
+            # evidence of a valid command/probe payload.  Do not label it as a
+            # successful "address probe" or feed it into device context.
+            if tx.address_ack == AckType.NACK:
+                tx.semantic_summary = (
+                    "Address NACK; target did not acknowledge the address; "
+                    "semantic decoding withheld"
+                )
+                tx.decoded_values = {
+                    "evidence": "address-nack",
+                    "address_accepted": False,
+                }
+                address_nack_semantic_unavailable += 1
+                continue
+
+            # A NACK on write data or before the final byte of a read means the
+            # payload was rejected/terminated early.  The final controller
+            # NACK on a read is intentionally excluded by
+            # ``has_unexpected_data_nack`` and remains normal termination.
+            if tx.has_unexpected_data_nack:
+                tx.semantic_summary = (
+                    "Unexpected data NACK; payload was not fully accepted; "
+                    "semantic decoding withheld"
+                )
+                tx.decoded_values = {
+                    "evidence": "data-nack-present",
+                    "payload_accepted": False,
+                }
+                data_nack_semantic_unavailable += 1
+                continue
 
             ctx = device_context.setdefault(
                 addr,
@@ -834,6 +896,30 @@ class I2CDiagnosticEngine:
                         "transaction address, so semantic payload decoding was withheld."
                     ),
                     count=address_nack_data,
+                )
+            )
+        if address_nack_semantic_unavailable:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_ADDRESS_NACK_SEMANTIC_UNAVAILABLE",
+                    message=(
+                        "Transactions whose address byte was NACKed were retained for "
+                        "address diagnostics, but were not treated as accepted device or "
+                        "command evidence."
+                    ),
+                    count=address_nack_semantic_unavailable,
+                )
+            )
+        if data_nack_semantic_unavailable:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_DATA_NACK_SEMANTIC_UNAVAILABLE",
+                    message=(
+                        "A write-data NACK or an intermediate read NACK occurred; the "
+                        "captured payload was not treated as a complete accepted command "
+                        "or telemetry value."
+                    ),
+                    count=data_nack_semantic_unavailable,
                 )
             )
         if semantic_source_error:

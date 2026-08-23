@@ -492,6 +492,11 @@ class I2CParser:
                             packet_id=packet_id,
                         )
                     )
+                    # A repeated START begins a new address phase.  Do not let
+                    # a following byte inherit the previous transaction's
+                    # address/direction when the trace omits the new address.
+                    current_addr = None
+                    current_rw = None
                 elif tok_upper in ("P", "STOP"):
                     events.append(
                         RawI2CEvent(
@@ -502,6 +507,11 @@ class I2CParser:
                         )
                     )
                     packet_id += 1
+                    # Bytes after STOP are outside this transaction until a
+                    # new START/address is observed.  Reset parser context so
+                    # malformed text cannot be promoted to a valid DATA row.
+                    current_addr = None
+                    current_rw = None
                 elif tok_upper in ("W", "WRITE", "WR"):
                     current_rw = I2CDirection.WRITE
                 elif tok_upper in ("R", "READ", "RD"):

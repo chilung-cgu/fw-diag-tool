@@ -181,6 +181,103 @@ def test_address_and_write_data_nacks_remain_failures():
     assert "I2C_DATA_NACK" in issue_codes
 
 
+def test_nacked_address_or_payload_is_not_decoded_as_accepted_semantics():
+    events = [
+        RawI2CEvent(0.0, RawEventType.START),
+        RawI2CEvent(
+            0.00001,
+            RawEventType.ADDRESS,
+            address_7bit=0x50,
+            direction=I2CDirection.WRITE,
+            ack=AckType.NACK,
+        ),
+        RawI2CEvent(0.00002, RawEventType.STOP),
+        RawI2CEvent(0.001, RawEventType.START),
+        RawI2CEvent(
+            0.00101,
+            RawEventType.ADDRESS,
+            address_7bit=0x50,
+            direction=I2CDirection.WRITE,
+            ack=AckType.ACK,
+        ),
+        RawI2CEvent(
+            0.00102,
+            RawEventType.DATA,
+            address_7bit=0x50,
+            direction=I2CDirection.WRITE,
+            data_byte=0x00,
+            ack=AckType.NACK,
+        ),
+        RawI2CEvent(0.00103, RawEventType.STOP),
+    ]
+
+    report = I2CDiagnosticEngine(eeprom_profile="24C02").analyze(events)
+
+    assert report.transactions[0].decoded_values["evidence"] == "address-nack"
+    assert report.transactions[1].decoded_values["evidence"] == "data-nack-present"
+    assert "Address Probe" not in (report.transactions[0].semantic_summary or "")
+    assert "EEPROM" not in (report.transactions[1].semantic_summary or "")
+    assert {
+        issue.code for issue in report.data_quality_issues
+    } >= {
+        "I2C_ADDRESS_NACK_SEMANTIC_UNAVAILABLE",
+        "I2C_DATA_NACK_SEMANTIC_UNAVAILABLE",
+    }
+
+
+def test_text_trace_resets_context_after_repeated_start_and_stop():
+    events = I2CParser.parse_text_trace("S 0x50 W 0x00 A Sr 0x12 A P 0x01")
+
+    address_events = [event for event in events if event.event_type == RawEventType.ADDRESS]
+    assert len(address_events) == 3
+    assert address_events[0].address_7bit == 0x50
+    assert address_events[1].address_7bit == 0x12
+    assert address_events[1].direction is None
+    assert address_events[1].extra.get("source_error")
+    assert address_events[2].address_7bit == 0x01
+    assert address_events[2].direction is None
+    assert address_events[2].extra.get("source_error")
+
+    report = I2CDiagnosticEngine(eeprom_profile="24C02").analyze(events)
+    assert any(issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in report.data_quality_issues)
+    assert all(
+        tx.direction_available is False
+        and "withheld" in (tx.semantic_summary or "")
+        for tx in report.transactions[1:]
+    )
+
+
+def test_implicit_address_change_does_not_fabricate_stop():
+    events = [
+        RawI2CEvent(0.0, RawEventType.ADDRESS, address_7bit=0x50, direction=I2CDirection.WRITE),
+        RawI2CEvent(
+            0.00001,
+            RawEventType.DATA,
+            address_7bit=0x50,
+            direction=I2CDirection.WRITE,
+            data_byte=0x00,
+        ),
+        RawI2CEvent(0.00002, RawEventType.ADDRESS, address_7bit=0x60, direction=I2CDirection.WRITE),
+        RawI2CEvent(
+            0.00003,
+            RawEventType.DATA,
+            address_7bit=0x60,
+            direction=I2CDirection.WRITE,
+            data_byte=0x01,
+        ),
+    ]
+
+    report = I2CDiagnosticEngine().analyze(events)
+
+    assert len(report.transactions) == 2
+    assert report.transactions[0].has_stop is False
+    assert report.transactions[0].source_error is True
+    assert any(
+        issue.code == "I2C_MISSING_STOP" and issue.transaction_id == report.transactions[0].id
+        for issue in report.issues
+    )
+
+
 def test_ambiguous_address_is_presented_as_candidates_not_exact_identity():
     candidates = get_all_matching_devices(0x50)
     assert len(candidates) > 1
