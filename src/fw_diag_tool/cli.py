@@ -107,8 +107,8 @@ def analyze_i2c_trace(
     if not file_path.exists():
         console.print(f"[bold red]Error: File {file_path} not found![/]")
         raise typer.Exit(code=1)
-    engine = I2CDiagnosticEngine(smbus_timeout_ms=smbus_timeout)
     try:
+        engine = I2CDiagnosticEngine(smbus_timeout_ms=smbus_timeout)
         if raw_digital:
             result = analyze_raw_i2c_csv(
                 file_path.read_bytes(),
@@ -119,18 +119,18 @@ def analyze_i2c_trace(
             report = engine.analyze(raw_decode_to_events(result))
         else:
             report = engine.analyze_csv_file(str(file_path))
+        I2CReporter.render_terminal(report, console=console)
+        if markdown_out:
+            md_text = I2CReporter.generate_markdown(report)
+            markdown_out.write_text(md_text, encoding="utf-8")
+            console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
+        if json_out:
+            json_out.write_text(report.to_json(indent=2), encoding="utf-8")
+            console.print(f"[green]✔ JSON report exported to {json_out}[/]")
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
         label = "raw digital capture" if raw_digital else "I2C trace"
-        console.print(f"[bold red]Error: {label} is invalid: {exc}[/]")
+        console.print(f"[bold red]Error: {label} or report generation failed: {exc}[/]")
         raise typer.Exit(code=2) from exc
-    I2CReporter.render_terminal(report, console=console)
-    if markdown_out:
-        md_text = I2CReporter.generate_markdown(report)
-        markdown_out.write_text(md_text, encoding="utf-8")
-        console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
-    if json_out:
-        json_out.write_text(report.to_json(indent=2), encoding="utf-8")
-        console.print(f"[green]✔ JSON report exported to {json_out}[/]")
 
 
 @pcie_app.command("analyze")

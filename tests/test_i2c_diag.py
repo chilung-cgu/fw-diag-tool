@@ -301,3 +301,14 @@ def test_cli_runner(tmp_path):
     assert out_md.exists()
     assert out_json.exists()
     assert "READ_VIN" in out_md.read_text(encoding="utf-8")
+
+
+def test_cli_reports_invalid_smbus_timeout_without_traceback(tmp_path):
+    runner = CliRunner()
+    csv_path = Path(__file__).parent / "data" / "saleae_normal_pmbus_eeprom.csv"
+
+    result = runner.invoke(app, ["i2c", "analyze", str(csv_path), "--smbus-timeout", "nan"])
+
+    assert result.exit_code == 2
+    assert "I2C trace or report generation failed" in result.output
+    assert "Traceback" not in result.output

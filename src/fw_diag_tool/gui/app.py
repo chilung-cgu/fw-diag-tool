@@ -12,6 +12,7 @@ from fw_diag_tool.codegen.driver_gen import I2CDriverCodeGenerator
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
 from fw_diag_tool.gui.uploads import MAX_UPLOAD_BYTES, decode_uploaded_text
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
+from fw_diag_tool.i2c.models import I2CDirection
 from fw_diag_tool.i2c.raw_adapter import raw_decode_to_events, raw_decode_to_waveform
 from fw_diag_tool.i2c.raw_capture import analyze_raw_i2c_csv
 from fw_diag_tool.i2c.reporter import I2CReporter
@@ -170,7 +171,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                 tx_options = [
                     f"Tx #{t.id}: "
                     f"{f'0x{t.address_7bit:02X}' if t.address_available else 'address n/a'} "
-                    f"({t.direction.value if t.direction_available else 'UNKNOWN'}) - "
+                    f"({t.direction.value if t.direction_available and isinstance(t.direction, I2CDirection) else 'UNKNOWN'}) - "
                     f"{t.semantic_summary or t.hex_dump}"
                     for t in report.transactions
                 ]
@@ -221,6 +222,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                         direction_text = (
                             selected_tx.direction.value
                             if selected_tx.direction_available
+                            and isinstance(selected_tx.direction, I2CDirection)
                             else "UNKNOWN"
                         )
                         fig = reconstructor.create_plotly_figure(
@@ -279,7 +281,11 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                     "ID": t.id,
                     "Time (s)": f"{t.start_time:.6f}" if t.timestamp_available else "n/a",
                     "Address": f"0x{t.address_7bit:02X}" if t.address_available else "n/a",
-                    "Direction": t.direction.value if t.direction_available else "UNKNOWN",
+                    "Direction": (
+                        t.direction.value
+                        if t.direction_available and isinstance(t.direction, I2CDirection)
+                        else "UNKNOWN"
+                    ),
                     "ACK": t.address_ack.value,
                     "Topology": t.mux_topology or "-",
                     "Bytes": len(t.data_bytes),
