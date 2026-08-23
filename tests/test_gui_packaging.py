@@ -195,3 +195,6 @@ def test_gui_fault_arena_runs_without_exception():
 
     assert not at.exception
     assert any("案例分析" in item.value for item in at.info)
+    at.button[0].click().run()
+    assert not at.exception
+    assert any("自動診斷分析結果" in item.value for item in at.markdown)
