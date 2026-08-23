@@ -287,6 +287,33 @@ def test_raw_capture_public_boundary_rejects_wrong_types_and_delimiters() -> Non
         raw_decode_to_waveform(None)  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize(
+    "sample_mutation",
+    [
+        lambda sample: replace(sample, bit_timestamps_s=()),
+        lambda sample: replace(sample, ack=None),
+        lambda sample: replace(sample, bit_timestamps_s=(float("nan"),) * 8),
+    ],
+)
+def test_raw_adapter_rejects_malformed_nested_samples(sample_mutation) -> None:
+    builder = _CaptureBuilder()
+    builder.start()
+    builder.byte(0xA0, 0)
+    builder.stop()
+    decoded = analyze_raw_i2c_csv(builder.csv())
+    transaction = decoded.transactions[0]
+    malformed_transaction = replace(
+        transaction,
+        address_sample=sample_mutation(transaction.address_sample),
+    )
+    malformed = replace(decoded, transactions=(malformed_transaction,))
+
+    with pytest.raises(RawCaptureValidationError):
+        raw_decode_to_events(malformed)
+    with pytest.raises(RawCaptureValidationError):
+        raw_decode_to_waveform(malformed)
+
+
 def test_level_sampled_unchanged_rows_do_not_break_stop_detection() -> None:
     builder = _CaptureBuilder()
     builder.start()

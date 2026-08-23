@@ -8,6 +8,7 @@ claiming that a reconstructed analyzer-table waveform was measured.
 
 from __future__ import annotations
 
+import math
 from itertools import pairwise
 from statistics import median
 from typing import TYPE_CHECKING
@@ -20,11 +21,16 @@ from fw_diag_tool.i2c.models import (
 )
 from fw_diag_tool.i2c.raw_capture import (
     RawAck,
+    RawAckRole,
     RawByteKind,
+    RawCaptureValidationError,
     RawConditionKind,
     RawI2CByteSample,
+    RawI2CCondition,
     RawI2CDecodeResult,
     RawI2CDirection,
+    RawI2CTransaction,
+    decode_i2c_capture,
 )
 
 if TYPE_CHECKING:
@@ -39,6 +45,7 @@ def raw_decode_to_events(result: RawI2CDecodeResult) -> list[RawI2CEvent]:
     """
     if not isinstance(result, RawI2CDecodeResult):
         raise TypeError("result must be a RawI2CDecodeResult")
+    _validate_decode_result(result)
     events: list[RawI2CEvent] = []
     for packet_id, transaction in enumerate(result.transactions):
         # A capture can legally contain transactions at different controller
@@ -150,6 +157,7 @@ def raw_decode_to_waveform(result: RawI2CDecodeResult) -> I2CWaveformData:
     """Build a measured digital-level waveform with protocol annotations."""
     if not isinstance(result, RawI2CDecodeResult):
         raise TypeError("result must be a RawI2CDecodeResult")
+    _validate_decode_result(result)
     from fw_diag_tool.i2c.waveform import I2CWaveformData, ProtocolAnnotation
 
     time_us = [transition.timestamp_s * 1_000_000.0 for transition in result.capture.transitions]
@@ -231,6 +239,88 @@ def _next_transition_us(times: list[float], timestamp_s: float) -> float:
         if candidate > timestamp_s:
             return candidate * 1_000_000.0
     return timestamp_s * 1_000_000.0
+
+
+def _validate_decode_result(result: RawI2CDecodeResult) -> None:
+    """Validate nested raw-decoder objects before exposing them downstream."""
+    # This also validates a manually constructed/mutated RawDigitalCapture.  The
+    # CSV parser already enforces these invariants, but dataclasses are public and
+    # can be instantiated without going through that parser.
+    decode_i2c_capture(result.capture)
+    if not isinstance(result.conditions, (tuple, list)):
+        raise RawCaptureValidationError("raw decode conditions must be a sequence")
+    for index, condition in enumerate(result.conditions):
+        if not isinstance(condition, RawI2CCondition):
+            raise RawCaptureValidationError(f"raw condition {index} is malformed")
+        _validate_timestamp(condition.timestamp_s, f"raw condition {index}")
+
+    if not isinstance(result.transactions, (tuple, list)) or not result.transactions:
+        raise RawCaptureValidationError("raw decode transactions must be a non-empty sequence")
+    for index, transaction in enumerate(result.transactions):
+        _validate_transaction(transaction, index)
+
+
+def _validate_transaction(transaction: RawI2CTransaction, index: int) -> None:
+    if not isinstance(transaction, RawI2CTransaction):
+        raise RawCaptureValidationError(f"raw transaction {index} is malformed")
+    _validate_timestamp(transaction.start_time_s, f"raw transaction {index} start")
+    _validate_timestamp(transaction.end_time_s, f"raw transaction {index} end")
+    if transaction.end_time_s < transaction.start_time_s:
+        raise RawCaptureValidationError(f"raw transaction {index} end precedes start")
+    if (
+        isinstance(transaction.address_7bit, bool)
+        or not isinstance(transaction.address_7bit, int)
+        or not 0 <= transaction.address_7bit <= 0x7F
+    ):
+        raise RawCaptureValidationError(f"raw transaction {index} address must be a 7-bit integer")
+    if not isinstance(transaction.direction, RawI2CDirection):
+        raise RawCaptureValidationError(f"raw transaction {index} direction is malformed")
+    _validate_sample(transaction.address_sample, index, expected_kind=RawByteKind.ADDRESS)
+    for sample_index, sample in enumerate(transaction.data_samples):
+        _validate_sample(sample, index, expected_kind=RawByteKind.DATA, sample_index=sample_index)
+
+
+def _validate_sample(
+    sample: RawI2CByteSample,
+    transaction_index: int,
+    *,
+    expected_kind: RawByteKind,
+    sample_index: int | None = None,
+) -> None:
+    label = f"raw transaction {transaction_index} sample"
+    if sample_index is not None:
+        label += f" {sample_index}"
+    if not isinstance(sample, RawI2CByteSample) or sample.kind != expected_kind:
+        raise RawCaptureValidationError(f"{label} kind is malformed")
+    if (
+        isinstance(sample.value, bool)
+        or not isinstance(sample.value, int)
+        or not 0 <= sample.value <= 0xFF
+    ):
+        raise RawCaptureValidationError(f"{label} value must be an integer in range 0..0xFF")
+    if not isinstance(sample.ack, RawAck) or not isinstance(sample.ack_role, RawAckRole):
+        raise RawCaptureValidationError(f"{label} ACK metadata is malformed")
+    if not isinstance(sample.bit_timestamps_s, (tuple, list)) or len(sample.bit_timestamps_s) != 8:
+        raise RawCaptureValidationError(f"{label} must contain exactly eight bit timestamps")
+    previous: float | None = None
+    for timestamp in sample.bit_timestamps_s:
+        _validate_timestamp(timestamp, label)
+        if previous is not None and timestamp <= previous:
+            raise RawCaptureValidationError(f"{label} bit timestamps must be strictly increasing")
+        previous = float(timestamp)
+    _validate_timestamp(sample.ack_timestamp_s, f"{label} ACK")
+    if sample.ack_timestamp_s <= previous:
+        raise RawCaptureValidationError(f"{label} ACK timestamp must follow the eight data bits")
+
+
+def _validate_timestamp(value: object, label: str) -> None:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or value < 0
+    ):
+        raise RawCaptureValidationError(f"{label} timestamp must be finite and nonnegative")
 
 
 __all__ = ["raw_decode_to_events", "raw_decode_to_waveform"]
