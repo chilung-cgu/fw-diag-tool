@@ -59,8 +59,8 @@ class DeviceTreeGenerator:
         if not 0 <= bus <= 0xFFFF:
             raise ValueError("bus_num must be between 0 and 65535")
         frequency = cls._parse_int("clock_frequency", clock_frequency)
-        if frequency <= 0:
-            raise ValueError("clock_frequency must be greater than zero")
+        if not 1 <= frequency <= 0xFFFFFFFF:
+            raise ValueError("clock_frequency must be between 1 and 0xFFFFFFFF")
         cls._validate_node_name(node_name)
         m_addr = cls._validate_address("mux_addr", mux_addr)
         mux_compat = cls._validate_compatible(mux_compatible)

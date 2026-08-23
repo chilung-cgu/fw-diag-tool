@@ -219,6 +219,40 @@ registers:
     assert "REG_STATUS_ENABLE_SET(reg, val)" in header
 
 
+def test_c_header_w1c_emits_direct_clear_mask_not_rmw_setter():
+    generator = CHeaderGenerator.from_yaml_str(
+        """
+registers:
+  - name: STATUS
+    offset: 0
+    size: 8
+    fields:
+      - name: ERROR
+        bits: 0
+        access: W1C
+"""
+    )
+    header = generator.generate_header("TEST")
+    assert "REG_STATUS_ERROR_W1C_MASK" in header
+    assert "REG_STATUS_ERROR_SET(reg, val)" not in header
+    assert "do not use read-modify-write" in header
+
+
+def test_c_header_rejects_unknown_access_mode():
+    with pytest.raises(ValueError, match="unsupported"):
+        CHeaderGenerator.from_yaml_str(
+            """
+registers:
+  - name: STATUS
+    offset: 0
+    fields:
+      - name: ERROR
+        bits: 0
+        access: INVALID
+"""
+        )
+
+
 def test_c_header_does_not_invent_unspecified_reset():
     generator = CHeaderGenerator.from_yaml_str(
         """
@@ -425,6 +459,45 @@ registers:
     assert catalog.decode_register("010", 0).offset == 0x0A
     with pytest.raises(ValueError, match="valid integer"):
         catalog.decode_register("0xZZ", 0)
+
+
+def test_unknown_symbolic_register_name_has_no_fabricated_offset():
+    catalog = RegisterMapCatalog()
+    catalog.load_from_yaml(
+        """
+registers:
+  - name: STATUS
+    offset: 0x10
+    fields: []
+"""
+    )
+    result = catalog.decode_register("NOT_IN_CATALOG", 0)
+    assert result.offset is None
+    assert result.description == "Unknown / Custom Register"
+
+
+def test_register_decode_rejects_overlapping_fields_not_only_c_header():
+    catalog = RegisterMapCatalog()
+    catalog.load_from_yaml(
+        """
+registers:
+  - name: STATUS
+    offset: 0x00
+    size: 8
+    fields:
+      - name: FIRST
+        bits: "3:0"
+      - name: SECOND
+        bits: "2:1"
+"""
+    )
+    with pytest.raises(ValueError, match="overlaps"):
+        catalog.decode_register("STATUS", 0)
+
+
+def test_dts_rejects_clock_frequency_that_does_not_fit_one_cell():
+    with pytest.raises(ValueError, match="clock_frequency"):
+        DeviceTreeGenerator.generate_dts_from_topology(clock_frequency=0x1_0000_0000)
 
 
 def test_register_decoder_rejects_values_outside_declared_width():

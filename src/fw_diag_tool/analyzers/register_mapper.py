@@ -4,6 +4,11 @@ from typing import Any
 
 import yaml
 
+# Keep the schema deliberately small until each access mode has an explicit
+# code-generation contract.  Treating an unknown token as RW is unsafe: a
+# typo can generate a read-modify-write sequence for a side-effect register.
+VALID_FIELD_ACCESS = frozenset({"RO", "RW", "W1C"})
+
 
 @dataclass
 class BitField:
@@ -67,7 +72,7 @@ class DecodedFieldResult:
 @dataclass
 class DecodedRegisterResult:
     reg_name: str
-    offset: int
+    offset: int | None
     raw_val: int
     hex_val: str
     description: str
@@ -144,6 +149,12 @@ class RegisterMapCatalog:
                 access = f.get("access", "RW")
                 if not isinstance(access, str):
                     raise TypeError(f"field {field_name!r} access must be a string")
+                access = access.strip().upper()
+                if access not in VALID_FIELD_ACCESS:
+                    allowed = ", ".join(sorted(VALID_FIELD_ACCESS))
+                    raise ValueError(
+                        f"field {field_name!r} access {access!r} is unsupported; choose one of: {allowed}"
+                    )
                 val_map: dict[int, str] = {}
                 raw_values = f.get("values", {})
                 if not isinstance(raw_values, dict):
@@ -218,19 +229,18 @@ class RegisterMapCatalog:
         else:
             raise TypeError("register offset/name must be an integer offset or string name")
         if not reg_def:
-            offset = (
-                offset_or_name
-                if isinstance(offset_or_name, int)
-                else (
-                    self._parse_int(offset_or_name, "register offset")
-                    if str(offset_or_name).strip().lower().startswith("0x")
-                    or str(offset_or_name).strip().lstrip("+-").isdigit()
-                    else 0
-                )
-            )
+            if isinstance(offset_or_name, int):
+                unknown_offset: int | None = offset_or_name
+            elif isinstance(offset_or_name, str) and is_numeric:
+                unknown_offset = self._parse_int(offset_or_name, "register offset")
+            else:
+                # A symbolic name that is not in the catalog has no
+                # evidence-backed numeric offset.  Returning 0 here made a
+                # typo look like register 0x00 in reports and GUI output.
+                unknown_offset = None
             return DecodedRegisterResult(
                 reg_name=str(offset_or_name),
-                offset=offset,
+                offset=unknown_offset,
                 raw_val=value,
                 hex_val=f"0x{value:08X}",
                 description="Unknown / Custom Register",
@@ -253,6 +263,8 @@ class RegisterMapCatalog:
                 raise ValueError(
                     f"field {reg_def.name}.{f.name} bits exceed {reg_def.size}-bit register width"
                 )
+            if f.bit_mask & covered_mask:
+                raise ValueError(f"field {reg_def.name}.{f.name} overlaps another field")
             f_val = f.extract_value(value)
             covered_mask |= f.bit_mask
             meaning = f.values.get(f_val, f"Raw value: {f_val}")

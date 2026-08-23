@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
+from fw_diag_tool.analyzers.register_mapper import VALID_FIELD_ACCESS, RegisterMapCatalog
 
 
 class CHeaderGenerator:
@@ -72,6 +72,14 @@ class CHeaderGenerator:
                         f"duplicate generated field name {field_name!r} in register {reg.name!r}"
                     )
                 field_names.add(field_name)
+
+                access = field.access.strip().upper()
+                if access not in VALID_FIELD_ACCESS:
+                    allowed = ", ".join(sorted(VALID_FIELD_ACCESS))
+                    raise ValueError(
+                        f"field {reg.name}.{field.name} access {access!r} is unsupported; "
+                        f"choose one of: {allowed}"
+                    )
 
                 high, low = field.high_bit, field.low_bit
                 if low < 0 or high >= reg.size:
@@ -146,9 +154,17 @@ class CHeaderGenerator:
                 lines.append(
                     f"#define REG_{r_name}_{f_name}_GET(val)   (((val) & REG_{r_name}_{f_name}_MSK) >> REG_{r_name}_{f_name}_POS)"
                 )
-                if f.access.strip().upper() != "RO":
+                access = f.access.strip().upper()
+                if access == "RW":
                     lines.append(
                         f"#define REG_{r_name}_{f_name}_SET(reg, val) (((reg) & ~REG_{r_name}_{f_name}_MSK) | (((uint32_t)(val) << REG_{r_name}_{f_name}_POS) & REG_{r_name}_{f_name}_MSK))"
+                    )
+                elif access == "W1C":
+                    lines.append(
+                        "/* W1C: write a 1 to clear; do not use read-modify-write. */"
+                    )
+                    lines.append(
+                        f"#define REG_{r_name}_{f_name}_W1C_MASK (REG_{r_name}_{f_name}_MSK)"
                     )
 
                 if f.values:
