@@ -9,8 +9,29 @@ from __future__ import annotations
 from typing import Any
 
 
+def _validate_bytes(data_bytes: list[int]) -> None:
+    if not isinstance(data_bytes, list):
+        raise TypeError("data_bytes must be a list of integers")
+    for index, value in enumerate(data_bytes):
+        if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFF:
+            raise ValueError(f"data_bytes[{index}] must be an integer in range 0..0xFF")
+
+
+def _validate_pointer(reg_pointer: int | None) -> int | None:
+    if reg_pointer is None:
+        return None
+    if (
+        isinstance(reg_pointer, bool)
+        or not isinstance(reg_pointer, int)
+        or not 0 <= reg_pointer <= 0xFF
+    ):
+        raise ValueError("reg_pointer must be None or an integer in range 0..0xFF")
+    return reg_pointer
+
+
 def decode_lm75_temperature(data_bytes: list[int]) -> dict[str, Any]:
     """Decode 9-bit/12-bit two's complement temperature from LM75/TMP75/TMP102."""
+    _validate_bytes(data_bytes)
     if len(data_bytes) < 2:
         if len(data_bytes) == 1:
             raw_8bit = data_bytes[0]
@@ -49,6 +70,8 @@ def decode_lm75_temperature(data_bytes: list[int]) -> dict[str, Any]:
 
 def decode_ina2xx_power(reg_pointer: int | None, data_bytes: list[int]) -> dict[str, Any]:
     """Decode INA219 / INA226 Voltage, Current, and Power registers."""
+    _validate_bytes(data_bytes)
+    _validate_pointer(reg_pointer)
     ptr = reg_pointer if reg_pointer is not None else 0x00
     reg_names = {
         0x00: "CONFIGURATION",
@@ -93,6 +116,8 @@ def decode_ina2xx_power(reg_pointer: int | None, data_bytes: list[int]) -> dict[
 
 def decode_pca9555_gpio(reg_pointer: int | None, data_bytes: list[int]) -> dict[str, Any]:
     """Decode PCA9555 / TCA9539 16-bit GPIO expander register accesses."""
+    _validate_bytes(data_bytes)
+    _validate_pointer(reg_pointer)
     ptr = reg_pointer if reg_pointer is not None else 0x00
     reg_names = {
         0x00: "INPUT_PORT_0",

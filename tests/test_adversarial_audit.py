@@ -14,6 +14,11 @@ from fw_diag_tool.i2c.pmbus import (
     encode_linear11,
     parse_vout_mode_exponent,
 )
+from fw_diag_tool.i2c.sensor_decoders import (
+    decode_ina2xx_power,
+    decode_lm75_temperature,
+    decode_pca9555_gpio,
+)
 from fw_diag_tool.pcie.diagnostics import diagnose_pcie_device
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
@@ -276,6 +281,17 @@ def test_i2c_parser_does_not_coerce_malformed_numeric_or_schema_values():
         "0,not-a-number,0x50,SIDEWAYS,0x01,WHAT,nan\n"
     )
     assert any(issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in report.data_quality_issues)
+
+
+def test_sensor_decoders_reject_invalid_direct_byte_inputs():
+    with pytest.raises(ValueError, match="data_bytes"):
+        decode_lm75_temperature([256])
+    with pytest.raises(ValueError, match="data_bytes"):
+        decode_ina2xx_power(0x02, [-1, 0])
+    with pytest.raises(ValueError, match="data_bytes"):
+        decode_pca9555_gpio(0x00, [0x100])
+    with pytest.raises(ValueError, match="reg_pointer"):
+        decode_ina2xx_power(0x100, [0, 0])
 
 
 def test_reused_engine_does_not_leak_mux_state_between_captures():
