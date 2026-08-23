@@ -7,7 +7,7 @@ from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
 
 
 class CHeaderGenerator:
-    # Generates MISRA-compliant C register definitions and bitfield RMW macros
+    # Generates C register definitions and bitfield RMW macros
 
     def __init__(self, catalog: RegisterMapCatalog | None = None):
         self.catalog = catalog or RegisterMapCatalog()
@@ -30,8 +30,78 @@ class CHeaderGenerator:
         s = re.sub(r"[^A-Za-z0-9_]", "_", name.strip())
         return s.upper()
 
+    def _validate_catalog(self) -> None:
+        register_names: set[str] = set()
+        for offset, reg in self.catalog.registers.items():
+            if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+                raise ValueError(f"register {reg.name!r} has an invalid offset")
+            if isinstance(reg.size, bool) or reg.size not in (8, 16, 32):
+                raise ValueError(f"register {reg.name!r} size must be 8, 16, or 32 bits")
+            if reg.reset_val is not None:
+                if isinstance(reg.reset_val, bool) or not isinstance(reg.reset_val, int):
+                    raise ValueError(f"register {reg.name!r} reset value must be an integer")
+                if not 0 <= reg.reset_val < (1 << reg.size):
+                    raise ValueError(f"register {reg.name!r} reset value exceeds its width")
+
+            register_name = self._sanitize_name(reg.name)
+            if not register_name:
+                raise ValueError("register name must contain at least one identifier character")
+            if register_name in register_names:
+                raise ValueError(f"duplicate generated register name: {register_name}")
+            register_names.add(register_name)
+
+            used_mask = 0
+            field_names: set[str] = set()
+            for field in reg.fields:
+                field_name = self._sanitize_name(field.name)
+                if not field_name:
+                    raise ValueError(
+                        f"field in register {reg.name!r} must contain an identifier character"
+                    )
+                if field_name in field_names:
+                    raise ValueError(
+                        f"duplicate generated field name {field_name!r} in register {reg.name!r}"
+                    )
+                field_names.add(field_name)
+
+                high, low = field.high_bit, field.low_bit
+                if low < 0 or high >= reg.size:
+                    raise ValueError(
+                        f"field {reg.name}.{field.name} bits exceed {reg.size}-bit register width"
+                    )
+                if field.bit_mask & used_mask:
+                    raise ValueError(f"field {reg.name}.{field.name} overlaps another field")
+                used_mask |= field.bit_mask
+
+                max_value = (1 << (high - low + 1)) - 1
+                if any(value < 0 or value > max_value for value in field.values):
+                    raise ValueError(
+                        f"field {reg.name}.{field.name} enum value exceeds field width"
+                    )
+                if any(value < 0 or value > max_value for value in field.warning_values):
+                    raise ValueError(
+                        f"field {reg.name}.{field.name} warning value exceeds field width"
+                    )
+
+                value_labels: set[str] = set()
+                for meaning in field.values.values():
+                    label = self._sanitize_name(meaning)
+                    if not label:
+                        raise ValueError(
+                            f"field {reg.name}.{field.name} enum label is not a valid identifier"
+                        )
+                    if label in value_labels:
+                        raise ValueError(
+                            f"field {reg.name}.{field.name} has duplicate generated enum labels"
+                        )
+                    value_labels.add(label)
+
     def generate_header(self, module_name: str = "CHIP_REGS") -> str:
-        guard_name = f"_{self._sanitize_name(module_name)}_H_"
+        module_identifier = self._sanitize_name(module_name)
+        if not module_identifier or module_identifier[0].isdigit():
+            raise ValueError("module_name must produce a valid C identifier")
+        self._validate_catalog()
+        guard_name = f"{module_identifier}_H"
         lines: list[str] = [
             "/**",
             f" * @file {module_name.lower()}.h",
@@ -56,7 +126,7 @@ class CHeaderGenerator:
             desc_comment = f" /* {reg.description} */" if reg.description else ""
             lines.append(f"/* Register: {r_name} (0x{reg.offset:04X}){desc_comment} */")
             lines.append(f"#define REG_{r_name}_OFFSET              (0x{reg.offset:04X}U)")
-            if reg.reset_val:
+            if reg.reset_val is not None:
                 lines.append(f"#define REG_{r_name}_RESET               (0x{reg.reset_val:08X}U)")
             lines.append("")
 
@@ -69,9 +139,10 @@ class CHeaderGenerator:
                 lines.append(
                     f"#define REG_{r_name}_{f_name}_GET(val)   (((val) & REG_{r_name}_{f_name}_MSK) >> REG_{r_name}_{f_name}_POS)"
                 )
-                lines.append(
-                    f"#define REG_{r_name}_{f_name}_SET(reg, val) (((reg) & ~REG_{r_name}_{f_name}_MSK) | (((uint32_t)(val) << REG_{r_name}_{f_name}_POS) & REG_{r_name}_{f_name}_MSK))"
-                )
+                if f.access.strip().upper() != "RO":
+                    lines.append(
+                        f"#define REG_{r_name}_{f_name}_SET(reg, val) (((reg) & ~REG_{r_name}_{f_name}_MSK) | (((uint32_t)(val) << REG_{r_name}_{f_name}_POS) & REG_{r_name}_{f_name}_MSK))"
+                    )
 
                 if f.values:
                     lines.append(f"/* Values for {r_name}.{f_name} */")

@@ -16,10 +16,12 @@ class BitField:
 
     def _parse_bits(self) -> tuple[int, int]:
         cleaned = re.sub(r"[\[\]\s]", "", str(self.bit_range))
+        if not re.fullmatch(r"\d+(?::\d+)?", cleaned):
+            raise ValueError(f"invalid bit range: {self.bit_range!r}")
         if ":" in cleaned:
-            parts = [int(p) for p in cleaned.split(":") if p]
+            parts = [int(p) for p in cleaned.split(":")]
             return max(parts), min(parts)
-        val = int(cleaned) if cleaned else 0
+        val = int(cleaned)
         return val, val
 
     @property
@@ -45,7 +47,7 @@ class RegisterDef:
     name: str
     offset: int
     size: int = 32
-    reset_val: int = 0
+    reset_val: int | None = None
     description: str = ""
     fields: list[BitField] = field(default_factory=list)
 
@@ -103,11 +105,13 @@ class RegisterMapCatalog:
                         warning_values=warns,
                     )
                 )
+            raw_size = r.get("size", 32)
+            raw_reset = r.get("reset")
             reg_def = RegisterDef(
                 name=r["name"],
                 offset=offset,
-                size=r.get("size", 32),
-                reset_val=int(str(r.get("reset", 0)), 0) if r.get("reset") is not None else 0,
+                size=int(str(raw_size), 0),
+                reset_val=int(str(raw_reset), 0) if raw_reset is not None else None,
                 description=r.get("description", ""),
                 fields=fields,
             )

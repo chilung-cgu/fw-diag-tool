@@ -230,20 +230,24 @@ def test_dts_gen_empty_devices_list():
     assert 'compatible = "national,lm75";' not in dts
 
 
-def test_dts_gen_string_hex_and_duplicate_nodes():
-    # Passing string addresses and multiple devices on the same channel
+def test_dts_gen_rejects_duplicate_address_on_same_channel():
+    # String addresses are accepted, but duplicate unit addresses are invalid Device Tree.
     devices = [
-        {"addr": "0x50", "type": "EEPROM", "channel": "0", "name": "eeprom"},
-        {"addr": "0x50", "type": "EEPROM", "channel": "0", "name": "eeprom"},
-        {"addr": 0x48, "type": "Temperature Sensor", "channel": 1, "name": "temp-sensor"},
+        {
+            "addr": "0x50",
+            "channel": "0",
+            "name": "eeprom",
+            "compatible": "atmel,24c64",
+        },
+        {
+            "addr": "0x50",
+            "channel": "0",
+            "name": "eeprom-copy",
+            "compatible": "atmel,24c64",
+        },
     ]
-    dts = DeviceTreeGenerator.generate_dts_from_topology(
-        bus_num=2, mux_addr="0x70", devices=devices
-    )
-    assert "&i2c2 {" in dts
-    assert "i2c-mux@70 {" in dts
-    assert "eeprom@50 {" in dts
-    assert "eeprom_1@50 {" in dts
+    with pytest.raises(ValueError, match="duplicate I2C address"):
+        DeviceTreeGenerator.generate_dts_from_topology(bus_num=2, mux_addr="0x70", devices=devices)
 
 
 def test_waveform_diff_identical_traces_figure():

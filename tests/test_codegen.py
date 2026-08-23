@@ -26,7 +26,8 @@ registers:
 """
     gen = CHeaderGenerator.from_yaml_str(sample_yaml)
     h_code = gen.generate_header(module_name="TEST_CHIP")
-    assert "#ifndef _TEST_CHIP_H_" in h_code
+    assert "#ifndef TEST_CHIP_H" in h_code
+    assert "#ifndef _TEST_CHIP_H_" not in h_code
     assert "#define REG_DEVICE_CTRL_OFFSET              (0x0008U)" in h_code
     assert "#define REG_DEVICE_CTRL_ENABLE_POS        (0U)" in h_code
     assert "#define REG_DEVICE_CTRL_ENABLE_MSK        (0x00000001U)" in h_code

@@ -5,118 +5,224 @@ class I2CDriverCodeGenerator:
     # Generates ready-to-use C driver snippets across 4 mainstream firmware platforms
 
     @staticmethod
+    def _validate_int(name: str, value: int, minimum: int, maximum: int) -> int:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError(f"{name} must be an integer")
+        if not minimum <= value <= maximum:
+            raise ValueError(f"{name} must be between {minimum} and {maximum}")
+        return value
+
+    @classmethod
     def generate_all_snippets(
+        cls,
         addr_7bit: int,
         reg_offset: int | None = None,
         data_bytes: list[int] | None = None,
         is_read: bool = False,
         bus_num: int = 1,
+        read_length: int | None = None,
+        register_width: int = 8,
     ) -> dict[str, str]:
-        data = data_bytes or [0x00]
-        addr_hex = f"0x{addr_7bit:02X}"
-        reg_hex = f"0x{reg_offset:02X}" if reg_offset is not None else "0x00"
-        data_hex = f"0x{data[0]:02X}" if data else "0x00"
-        data_len = len(data)
+        cls._validate_int("addr_7bit", addr_7bit, 0x08, 0x77)
+        cls._validate_int("bus_num", bus_num, 0, 0xFFFF)
+        cls._validate_int("register_width", register_width, 8, 16)
+        if register_width not in (8, 16):
+            raise ValueError("register_width must be 8 or 16 bits")
+        if not isinstance(is_read, bool):
+            raise TypeError("is_read must be a boolean")
 
-        snippets = {}
+        if reg_offset is not None:
+            cls._validate_int("reg_offset", reg_offset, 0, (1 << register_width) - 1)
 
-        # 1. Linux Userspace i2c-dev
+        if data_bytes is not None and not isinstance(data_bytes, list):
+            raise TypeError("data_bytes must be a list of byte values")
+        data = list(data_bytes or [])
+        for index, value in enumerate(data):
+            cls._validate_int(f"data_bytes[{index}]", value, 0, 0xFF)
+
         if is_read:
+            rx_length = read_length if read_length is not None else (len(data) or 1)
+            cls._validate_int("read_length", rx_length, 1, 0xFF)
+        else:
+            if read_length is not None:
+                raise ValueError("read_length is only valid for read operations")
+            if not data:
+                raise ValueError("write operations require at least one data byte")
+            rx_length = 0
+
+        addr_hex = f"0x{addr_7bit:02X}"
+        if reg_offset is None:
+            reg_bytes: list[int] = []
+            reg_hex = ""
+        elif register_width == 8:
+            reg_bytes = [reg_offset]
+            reg_hex = f"0x{reg_offset:02X}"
+        else:
+            reg_bytes = [(reg_offset >> 8) & 0xFF, reg_offset & 0xFF]
+            reg_hex = f"0x{reg_offset:04X}"
+
+        tx_bytes = reg_bytes + data
+        snippets: dict[str, str] = {}
+
+        if is_read and reg_bytes:
+            reg_array = ", ".join(f"0x{value:02X}" for value in reg_bytes)
             snippets["Linux Userspace (i2c-dev)"] = "\n".join(
                 [
-                    "// Linux Userspace i2c-dev Read",
+                    "// Linux Userspace i2c-dev combined register read",
+                    f'int file = open("/dev/i2c-{bus_num}", O_RDWR);',
+                    f"uint8_t reg_buf[{len(reg_bytes)}] = {{ {reg_array} }};",
+                    f"uint8_t rx_buf[{rx_length}];",
+                    "struct i2c_msg msgs[2] = {",
+                    f"    {{ .addr = {addr_hex}, .flags = 0, .len = sizeof(reg_buf), .buf = reg_buf }},",
+                    f"    {{ .addr = {addr_hex}, .flags = I2C_M_RD, .len = sizeof(rx_buf), .buf = rx_buf }},",
+                    "};",
+                    "struct i2c_rdwr_ioctl_data transfer = { .msgs = msgs, .nmsgs = 2 };",
+                    "if (ioctl(file, I2C_RDWR, &transfer) < 0) {",
+                    '    perror("Failed to read from I2C device");',
+                    "}",
+                ]
+            )
+        elif is_read:
+            snippets["Linux Userspace (i2c-dev)"] = "\n".join(
+                [
+                    "// Linux Userspace i2c-dev direct read",
                     f'int file = open("/dev/i2c-{bus_num}", O_RDWR);',
                     f"ioctl(file, I2C_SLAVE, {addr_hex});",
-                    f"int32_t res = i2c_smbus_read_byte_data(file, {reg_hex});",
-                    "if (res < 0) {",
+                    f"uint8_t rx_buf[{rx_length}];",
+                    "if (read(file, rx_buf, sizeof(rx_buf)) != sizeof(rx_buf)) {",
                     '    perror("Failed to read from I2C device");',
-                    "} else {",
-                    "    uint8_t data = (uint8_t)res;",
                     "}",
                 ]
             )
         else:
+            tx_array = ", ".join(f"0x{value:02X}" for value in tx_bytes)
             snippets["Linux Userspace (i2c-dev)"] = "\n".join(
                 [
-                    "// Linux Userspace i2c-dev Write",
+                    "// Linux Userspace i2c-dev write",
                     f'int file = open("/dev/i2c-{bus_num}", O_RDWR);',
                     f"ioctl(file, I2C_SLAVE, {addr_hex});",
-                    f"if (i2c_smbus_write_byte_data(file, {reg_hex}, {data_hex}) < 0) {{",
+                    f"uint8_t tx_buf[{len(tx_bytes)}] = {{ {tx_array} }};",
+                    "if (write(file, tx_buf, sizeof(tx_buf)) != sizeof(tx_buf)) {",
                     '    perror("Failed to write to I2C device");',
                     "}",
                 ]
             )
 
-        # 2. OpenBMC / Linux CLI i2c-tools
-        if is_read:
+        reg_cli = " ".join(f"0x{value:02X}" for value in reg_bytes)
+        if is_read and reg_bytes:
             snippets["OpenBMC / Linux CLI (i2c-tools)"] = "\n".join(
                 [
-                    f"# Read 1 byte from device {addr_hex} register {reg_hex}",
-                    f"i2cget -y -f {bus_num} {addr_hex} {reg_hex} b",
-                    "",
-                    "# Or block read using i2ctransfer:",
-                    f"i2ctransfer -y {bus_num} w1@{addr_hex} {reg_hex} r{data_len}",
+                    f"# Combined register read from {addr_hex} using a repeated START",
+                    (
+                        f"i2ctransfer -y {bus_num} w{len(reg_bytes)}@{addr_hex} "
+                        f"{reg_cli} r{rx_length}"
+                    ),
+                ]
+            )
+        elif is_read:
+            snippets["OpenBMC / Linux CLI (i2c-tools)"] = "\n".join(
+                [
+                    f"# Direct read of {rx_length} byte(s) from {addr_hex}",
+                    f"i2ctransfer -y {bus_num} r{rx_length}@{addr_hex}",
                 ]
             )
         else:
+            tx_cli = " ".join(f"0x{value:02X}" for value in tx_bytes)
             snippets["OpenBMC / Linux CLI (i2c-tools)"] = "\n".join(
                 [
-                    f"# Write byte {data_hex} to device {addr_hex} register {reg_hex}",
-                    f"i2cset -y -f {bus_num} {addr_hex} {reg_hex} {data_hex} b",
+                    f"# Write {len(data)} data byte(s) to {addr_hex}",
+                    f"i2ctransfer -y {bus_num} w{len(tx_bytes)}@{addr_hex} {tx_cli}",
                 ]
             )
 
-        # 3. STM32 HAL
-        if is_read:
+        data_array = ", ".join(f"0x{value:02X}" for value in data)
+        mem_size = f"I2C_MEMADD_SIZE_{register_width}BIT"
+        if is_read and reg_offset is not None:
             snippets["STM32 HAL C Driver"] = "\n".join(
                 [
-                    "// STM32 HAL Memory Read",
-                    f"uint8_t rx_buf[{data_len}];",
-                    f"HAL_StatusTypeDef status = HAL_I2C_Mem_Read(&hi2c1, ({addr_hex} << 1), {reg_hex}, I2C_MEMADD_SIZE_8BIT, rx_buf, {data_len}, 100);",
+                    "// STM32 HAL combined memory read",
+                    f"uint8_t rx_buf[{rx_length}];",
+                    (
+                        "HAL_StatusTypeDef status = HAL_I2C_Mem_Read(&hi2c1, "
+                        f"({addr_hex} << 1), {reg_hex}, {mem_size}, rx_buf, "
+                        f"{rx_length}, 100);"
+                    ),
                     "if (status != HAL_OK) {",
-                    "    // Handle I2C NACK or Timeout Error",
+                    "    // Handle I2C NACK or timeout",
+                    "}",
+                ]
+            )
+        elif is_read:
+            snippets["STM32 HAL C Driver"] = "\n".join(
+                [
+                    "// STM32 HAL direct read",
+                    f"uint8_t rx_buf[{rx_length}];",
+                    (
+                        "HAL_StatusTypeDef status = HAL_I2C_Master_Receive(&hi2c1, "
+                        f"({addr_hex} << 1), rx_buf, {rx_length}, 100);"
+                    ),
+                    "if (status != HAL_OK) {",
+                    "    // Handle I2C NACK or timeout",
+                    "}",
+                ]
+            )
+        elif reg_offset is not None:
+            snippets["STM32 HAL C Driver"] = "\n".join(
+                [
+                    "// STM32 HAL memory write",
+                    f"uint8_t tx_buf[{len(data)}] = {{ {data_array} }};",
+                    (
+                        "HAL_StatusTypeDef status = HAL_I2C_Mem_Write(&hi2c1, "
+                        f"({addr_hex} << 1), {reg_hex}, {mem_size}, tx_buf, "
+                        f"{len(data)}, 100);"
+                    ),
+                    "if (status != HAL_OK) {",
+                    "    // Handle I2C error",
                     "}",
                 ]
             )
         else:
-            data_arr = ", ".join(f"0x{b:02X}" for b in data)
             snippets["STM32 HAL C Driver"] = "\n".join(
                 [
-                    "// STM32 HAL Memory Write",
-                    f"uint8_t tx_buf[{data_len}] = {{ {data_arr} }};",
-                    f"HAL_StatusTypeDef status = HAL_I2C_Mem_Write(&hi2c1, ({addr_hex} << 1), {reg_hex}, I2C_MEMADD_SIZE_8BIT, tx_buf, {data_len}, 100);",
+                    "// STM32 HAL direct write",
+                    f"uint8_t tx_buf[{len(data)}] = {{ {data_array} }};",
+                    (
+                        "HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, "
+                        f"({addr_hex} << 1), tx_buf, {len(data)}, 100);"
+                    ),
                     "if (status != HAL_OK) {",
-                    "    // Handle I2C Error",
+                    "    // Handle I2C error",
                     "}",
                 ]
             )
 
-        # 4. Arduino Wire
+        arduino_reg_lines = [f"Wire.write(0x{value:02X});" for value in reg_bytes]
         if is_read:
-            snippets["Arduino / Wire.h"] = "\n".join(
+            arduino_lines = ["// Arduino Wire combined register read"]
+            if reg_bytes:
+                arduino_lines.extend([f"Wire.beginTransmission({addr_hex});", *arduino_reg_lines])
+                arduino_lines.append("Wire.endTransmission(false); // Repeated START")
+            arduino_lines.extend(
                 [
-                    "// Arduino Wire Read",
-                    f"Wire.beginTransmission({addr_hex});",
-                    f"Wire.write({reg_hex});",
-                    "Wire.endTransmission(false); // Repeated Start",
-                    f"Wire.requestFrom({addr_hex}, {data_len});",
-                    "if (Wire.available()) {",
-                    "    uint8_t val = Wire.read();",
+                    f"uint8_t rx_buf[{rx_length}];",
+                    f"uint8_t received = Wire.requestFrom({addr_hex}, {rx_length});",
+                    "for (uint8_t i = 0; (i < received) && Wire.available(); ++i) {",
+                    "    rx_buf[i] = Wire.read();",
                     "}",
                 ]
             )
+            snippets["Arduino / Wire.h"] = "\n".join(arduino_lines)
         else:
-            snippets["Arduino / Wire.h"] = "\n".join(
-                [
-                    "// Arduino Wire Write",
-                    f"Wire.beginTransmission({addr_hex});",
-                    f"Wire.write({reg_hex});",
-                    f"Wire.write({data_hex});",
-                    "uint8_t err = Wire.endTransmission();",
-                    "if (err != 0) {",
-                    "    // 1: Data too long, 2: NACK on address, 3: NACK on data, 4: Other",
-                    "}",
-                ]
-            )
+            arduino_lines = [
+                "// Arduino Wire write",
+                f"Wire.beginTransmission({addr_hex});",
+                *arduino_reg_lines,
+                *[f"Wire.write(0x{value:02X});" for value in data],
+                "uint8_t err = Wire.endTransmission();",
+                "if (err != 0) {",
+                "    // Handle address or data NACK",
+                "}",
+            ]
+            snippets["Arduino / Wire.h"] = "\n".join(arduino_lines)
 
         return snippets

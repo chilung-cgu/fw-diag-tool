@@ -1,19 +1,49 @@
 from __future__ import annotations
 
+import re
 from typing import Any
-
-COMPATIBLE_MAP = {
-    "EEPROM": ("atmel,24c64", "pagesize = <32>;"),
-    "Temperature Sensor": ("national,lm75", ""),
-    "Power Monitor": ("ti,ina226", "shunt-resistor = <1000>; /* 1 mOhm */"),
-    "PMBus": ("pmbus-device", ""),
-    "GPIO Expander": ("nxp,pca9555", "gpio-controller;\n                #gpio-cells = <2>;"),
-    "I2C Multiplexer": ("nxp,pca9548", ""),
-}
 
 
 class DeviceTreeGenerator:
     # Generates Linux Kernel and OpenBMC compliant Device Tree (.dts) nodes from topology
+
+    _NODE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9,._+\-]*$")
+    _COMPATIBLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9,._+\-]*,[A-Za-z0-9][A-Za-z0-9,._+\-]*$")
+
+    @staticmethod
+    def _parse_int(name: str, value: int | str) -> int:
+        if isinstance(value, bool) or not isinstance(value, (int, str)):
+            raise TypeError(f"{name} must be an integer")
+        try:
+            parsed = int(value, 0) if isinstance(value, str) else int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{name} must be an integer") from exc
+        return parsed
+
+    @classmethod
+    def _validate_address(cls, name: str, value: int | str) -> int:
+        address = cls._parse_int(name, value)
+        if not 0x08 <= address <= 0x77:
+            raise ValueError(f"{name} must be a non-reserved 7-bit I2C address (0x08..0x77)")
+        return address
+
+    @classmethod
+    def _validate_node_name(cls, name: str) -> str:
+        if not isinstance(name, str):
+            raise TypeError("device name must be a string")
+        if not cls._NODE_NAME_RE.fullmatch(name):
+            raise ValueError(
+                "device name must start with a letter and contain only Device Tree name characters"
+            )
+        return name
+
+    @classmethod
+    def _validate_compatible(cls, compatible: str) -> str:
+        if not isinstance(compatible, str):
+            raise TypeError("compatible must be a string")
+        if not cls._COMPATIBLE_RE.fullmatch(compatible):
+            raise ValueError("compatible must be an explicit 'vendor,device' string")
+        return compatible
 
     @classmethod
     def generate_dts_from_topology(
@@ -22,19 +52,39 @@ class DeviceTreeGenerator:
         mux_addr: int | str = 0x70,
         devices: list[dict[str, Any]] | None = None,
         node_name: str = "i2c_bus",
+        clock_frequency: int = 400000,
+        mux_compatible: str = "nxp,pca9548",
     ) -> str:
-        devs = (
-            devices
-            if devices is not None
-            else [
-                {"addr": 0x50, "type": "EEPROM", "channel": 0, "name": "eeprom"},
-                {"addr": 0x48, "type": "Temperature Sensor", "channel": 1, "name": "temp-sensor"},
-                {"addr": 0x40, "type": "Power Monitor", "channel": 2, "name": "power-monitor"},
-                {"addr": 0x58, "type": "PMBus", "channel": 3, "name": "vr-controller"},
-            ]
-        )
+        bus = cls._parse_int("bus_num", bus_num)
+        if not 0 <= bus <= 0xFFFF:
+            raise ValueError("bus_num must be between 0 and 65535")
+        frequency = cls._parse_int("clock_frequency", clock_frequency)
+        if frequency <= 0:
+            raise ValueError("clock_frequency must be greater than zero")
+        cls._validate_node_name(node_name)
+        m_addr = cls._validate_address("mux_addr", mux_addr)
+        mux_compat = cls._validate_compatible(mux_compatible)
+        if devices is not None and not isinstance(devices, list):
+            raise TypeError("devices must be a list of mappings")
 
-        m_addr = int(str(mux_addr), 0) if isinstance(mux_addr, str) else int(mux_addr)
+        channels: dict[int, list[tuple[int, str, str]]] = {ch: [] for ch in range(8)}
+        seen_addresses: set[tuple[int, int]] = set()
+        for index, device in enumerate(devices or []):
+            if not isinstance(device, dict):
+                raise TypeError(f"devices[{index}] must be a mapping")
+            if "addr" not in device:
+                raise ValueError(f"devices[{index}] is missing addr")
+            d_addr = cls._validate_address(f"devices[{index}].addr", device["addr"])
+            channel = cls._parse_int(f"devices[{index}].channel", device.get("channel", 0))
+            if not 0 <= channel <= 7:
+                raise ValueError(f"devices[{index}].channel must be between 0 and 7")
+            if (channel, d_addr) in seen_addresses:
+                raise ValueError(f"duplicate I2C address 0x{d_addr:02X} on MUX channel {channel}")
+            seen_addresses.add((channel, d_addr))
+
+            name = cls._validate_node_name(device.get("name", "device"))
+            compatible = cls._validate_compatible(device.get("compatible", ""))
+            channels[channel].append((d_addr, name, compatible))
 
         lines = [
             "// SPDX-License-Identifier: GPL-2.0+ or MIT",
@@ -43,12 +93,12 @@ class DeviceTreeGenerator:
             " * Generated by fw-diag-tool (Firmware Diagnostic Toolkit)",
             " */",
             "",
-            f"&i2c{bus_num} {{",
+            f"&i2c{bus} {{",
             '    status = "okay";',
-            "    bus-frequency = <400000>;",
+            f"    clock-frequency = <{frequency}>;",
             "",
             f"    i2c-mux@{m_addr:x} {{",
-            '        compatible = "nxp,pca9548";',
+            f'        compatible = "{mux_compat}";',
             f"        reg = <0x{m_addr:02x}>;",
             "        #address-cells = <1>;",
             "        #size-cells = <0>;",
@@ -56,37 +106,16 @@ class DeviceTreeGenerator:
             "",
         ]
 
-        # Group devices by MUX channel 0..7
-        channels: dict[int, list[dict[str, Any]]] = {ch: [] for ch in range(8)}
-        for d in devs:
-            raw_ch = d.get("channel", 0)
-            ch = int(str(raw_ch), 0) if isinstance(raw_ch, str) else int(raw_ch)
-            ch = max(0, min(7, ch))
-            channels[ch].append(d)
-
-        for ch in range(8):
-            ch_devs = channels.get(ch, [])
-            lines.append(f"        i2c@{ch} {{")
+        for channel in range(8):
+            lines.append(f"        i2c@{channel} {{")
             lines.append("            #address-cells = <1>;")
             lines.append("            #size-cells = <0>;")
-            lines.append(f"            reg = <{ch}>;")
+            lines.append(f"            reg = <{channel}>;")
             lines.append("")
-            seen_names: dict[str, int] = {}
-            for d in ch_devs:
-                raw_addr = d["addr"]
-                d_addr = int(str(raw_addr), 0) if isinstance(raw_addr, str) else int(raw_addr)
-                d_type = d.get("type", "EEPROM")
-                base_name = d.get("name", "dev").replace(" ", "-").replace("_", "-").lower()
-                seen_count = seen_names.get(base_name, 0)
-                seen_names[base_name] = seen_count + 1
-                d_name = base_name if seen_count == 0 else f"{base_name}_{seen_count}"
-                compat, extra = COMPATIBLE_MAP.get(d_type, ("generic,i2c-device", ""))
-                lines.append(f"            {d_name}@{d_addr:x} {{")
-                lines.append(f'                compatible = "{compat}";')
-                lines.append(f"                reg = <0x{d_addr:02x}>;")
-                if extra:
-                    for ex_line in extra.splitlines():
-                        lines.append(f"                {ex_line}")
+            for address, name, compatible in channels[channel]:
+                lines.append(f"            {name}@{address:x} {{")
+                lines.append(f'                compatible = "{compatible}";')
+                lines.append(f"                reg = <0x{address:02x}>;")
                 lines.append("            };")
                 lines.append("")
             lines.append("        };")

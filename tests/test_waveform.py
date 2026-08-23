@@ -41,9 +41,13 @@ def test_driver_code_generator():
     )
     assert "Linux Userspace (i2c-dev)" in snippets
     assert "0x50" in snippets["Linux Userspace (i2c-dev)"]
-    assert "i2cset -y -f 2 0x50 0x10 0xAB b" in snippets["OpenBMC / Linux CLI (i2c-tools)"]
+    assert "i2ctransfer -y 2 w3@0x50 0x10 0xAB 0xCD" in snippets["OpenBMC / Linux CLI (i2c-tools)"]
+    assert " -f " not in snippets["OpenBMC / Linux CLI (i2c-tools)"]
     assert "HAL_I2C_Mem_Write" in snippets["STM32 HAL C Driver"]
+    assert "0xAB, 0xCD" in snippets["STM32 HAL C Driver"]
     assert "Wire.beginTransmission(0x50)" in snippets["Arduino / Wire.h"]
+    assert "Wire.write(0xAB);" in snippets["Arduino / Wire.h"]
+    assert "Wire.write(0xCD);" in snippets["Arduino / Wire.h"]
 
 
 def test_timing_charts_and_health_radar():
