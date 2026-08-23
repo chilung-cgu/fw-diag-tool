@@ -1,3 +1,5 @@
+import pytest
+
 from fw_diag_tool.emulator.eeprom import VirtualEEPROM24C64
 from fw_diag_tool.emulator.lm75 import VirtualLM75
 from fw_diag_tool.emulator.spi_flash import VirtualSPIFlashW25Q128
@@ -55,3 +57,35 @@ def test_spi_flash_write_without_wren_returns_false():
     flash = VirtualSPIFlashW25Q128()
     ok = flash.page_program(address=0x000000, data=[0x55])
     assert ok is False
+
+
+def test_emulators_reject_invalid_boundaries_instead_of_silent_wrap_or_truncation():
+    eeprom = VirtualEEPROM24C64()
+    with pytest.raises(ValueError, match="length"):
+        eeprom.read(0, -1)
+    with pytest.raises(ValueError, match="page_size"):
+        VirtualEEPROM24C64(page_size=0)
+    with pytest.raises(ValueError, match="out of range"):
+        eeprom.write([0x20, 0x00, 0x01], preferred_address_bytes=2)
+    with pytest.raises(ValueError, match="data_bytes"):
+        eeprom.write([0x00, 0x100])
+    with pytest.raises(ValueError, match="start"):
+        eeprom.dump_memory(-1, 2)
+
+    flash = VirtualSPIFlashW25Q128(total_size=4096)
+    flash.write_enable()
+    with pytest.raises(ValueError, match="address"):
+        flash.page_program(-1, [0x01])
+    with pytest.raises(ValueError, match="length"):
+        flash.read_data(0, -1)
+    with pytest.raises(ValueError, match="capacity"):
+        flash.read_data(4095, 2)
+
+    sensor = VirtualLM75()
+    with pytest.raises(ValueError, match="num_bytes"):
+        sensor.read(-1)
+    assert sensor.read(0) == b""
+    with pytest.raises(ValueError, match="data_bytes"):
+        sensor.write([0x01, 0x100])
+    with pytest.raises(ValueError, match="finite"):
+        sensor.set_temperature(float("nan"))
