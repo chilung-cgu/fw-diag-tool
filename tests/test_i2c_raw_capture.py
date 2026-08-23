@@ -253,6 +253,26 @@ def test_raw_capture_public_boundary_rejects_wrong_types_and_delimiters() -> Non
         parse_transition_csv(bytearray(b"Time,SCL,SDA\n0,1,1\n"))  # type: ignore[arg-type]
     with pytest.raises(RawCaptureValidationError, match="exactly one"):
         parse_transition_csv("Time,SCL,SDA\n0,1,1\n", delimiter="")
+    with pytest.raises(TypeError, match="RawDigitalCapture"):
+        decode_i2c_capture(None)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="RawI2CDecodeResult"):
+        raw_decode_to_events(None)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="RawI2CDecodeResult"):
+        raw_decode_to_waveform(None)  # type: ignore[arg-type]
+
+
+def test_level_sampled_unchanged_rows_do_not_break_stop_detection() -> None:
+    builder = _CaptureBuilder()
+    builder.start()
+    builder.byte(0xA0, 0)
+    builder.stop()
+    before_stop = builder.rows[-2]
+    builder.rows.insert(-1, (before_stop[0] + 1e-7, before_stop[1], before_stop[2]))
+
+    result = analyze_raw_i2c_csv(builder.csv())
+
+    assert len(result.transactions) == 1
+    assert result.transactions[0].address_7bit == 0x50
 
 
 def test_raw_adapter_feeds_main_engine_without_losing_measured_evidence() -> None:

@@ -225,6 +225,8 @@ def parse_transition_csv(
 
 
 def decode_i2c_capture(capture: RawDigitalCapture) -> RawI2CDecodeResult:
+    if not isinstance(capture, RawDigitalCapture):
+        raise TypeError("capture must be a RawDigitalCapture")
     if len(capture.transitions) < 2:
         raise RawI2CDecodeError("raw capture needs at least two rows to contain an edge")
 
@@ -268,10 +270,13 @@ def decode_i2c_capture(capture: RawDigitalCapture) -> RawI2CDecodeResult:
             continue
 
         if active and previous.scl == 0 and current.scl == 1:
-            next_transition = (
-                capture.transitions[transition_index + 2]
-                if transition_index + 2 < len(capture.transitions)
-                else None
+            next_transition = next(
+                (
+                    candidate
+                    for candidate in capture.transitions[transition_index + 2 :]
+                    if candidate.scl != current.scl or candidate.sda != current.sda
+                ),
+                None,
             )
             is_stop_setup = bool(
                 next_transition

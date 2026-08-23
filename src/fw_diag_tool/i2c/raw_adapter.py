@@ -37,6 +37,8 @@ def raw_decode_to_events(result: RawI2CDecodeResult) -> list[RawI2CEvent]:
     Byte duration is derived only from the measured rising-edge period and is
     therefore source-backed.  No timestamps or ACK values are synthesized.
     """
+    if not isinstance(result, RawI2CDecodeResult):
+        raise TypeError("result must be a RawI2CDecodeResult")
     events: list[RawI2CEvent] = []
     for packet_id, transaction in enumerate(result.transactions):
         # A capture can legally contain transactions at different controller
@@ -146,6 +148,8 @@ def _sample_periods(sample: RawI2CByteSample) -> list[float]:
 
 def raw_decode_to_waveform(result: RawI2CDecodeResult) -> I2CWaveformData:
     """Build a measured digital-level waveform with protocol annotations."""
+    if not isinstance(result, RawI2CDecodeResult):
+        raise TypeError("result must be a RawI2CDecodeResult")
     from fw_diag_tool.i2c.waveform import I2CWaveformData, ProtocolAnnotation
 
     time_us = [transition.timestamp_s * 1_000_000.0 for transition in result.capture.transitions]
