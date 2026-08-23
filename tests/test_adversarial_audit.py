@@ -92,7 +92,9 @@ def test_spi_jedec_line_fault():
 
 def test_eeprom_zero_page_size_guard():
     res = decode_eeprom_write([0x00, 0x12, 0x34], page_size=0)
-    assert res["page_size"] == 0 or res["offset"] == 0
+    assert res["page_size"] == 1
+    assert res["rollover_hazard"] is True
+    assert "1 byte(s) will WRAP AROUND" in res["rollover_details"]
 
 
 def test_linear11_nan_inf_guard():

@@ -77,10 +77,10 @@ def decode_eeprom_write(
 
     if payload_len > (safe_page_size - offset_in_page):
         rollover_hazard = True
-        overflow_count = payload_len - (page_size - offset_in_page)
+        overflow_count = payload_len - (safe_page_size - offset_in_page)
         rollover_details = (
             f"Page rollover hazard: Write started at offset 0x{offset:04X} (page base 0x{page_start:04X}, "
-            f"page size {page_size}B). Payload length {payload_len}B exceeds remaining {safe_page_size - offset_in_page}B "
+            f"page size {safe_page_size}B). Payload length {payload_len}B exceeds remaining {safe_page_size - offset_in_page}B "
             f"in this page. {overflow_count} byte(s) will WRAP AROUND and overwrite offset 0x{page_start:04X}!"
         )
 
@@ -105,7 +105,7 @@ def decode_eeprom_write(
         "payload_len": payload_len,
         "payload": [f"0x{b:02X}" for b in payload],
         "summary": summary,
-        "page_size": page_size,
+        "page_size": safe_page_size,
         "rollover_hazard": rollover_hazard,
         "rollover_details": rollover_details,
     }
