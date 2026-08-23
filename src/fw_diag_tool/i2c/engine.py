@@ -118,6 +118,9 @@ class I2CDiagnosticEngine:
                 tx.duration_us = 0.0
 
         for ev in events:
+            event_source_error = bool(ev.extra and ev.extra.get("source_error"))
+            if current_tx is not None and event_source_error:
+                current_tx.source_error = True
             # Explicit START or REPEATED_START
             if ev.event_type in (RawEventType.START, RawEventType.REPEATED_START):
                 if current_tx is not None:
@@ -147,6 +150,7 @@ class I2CDiagnosticEngine:
                     timestamp_available=ev.timestamp_available,
                     address_available=ev.address_7bit is not None,
                     direction_available=ev.direction is not None,
+                    source_error=event_source_error,
                 )
                 current_tx._is_placeholder = True
                 current_tx._has_address = ev.address_7bit is not None
@@ -209,6 +213,7 @@ class I2CDiagnosticEngine:
                         timestamp_available=ev.timestamp_available,
                         address_available=ev.address_7bit is not None,
                         direction_available=ev.direction is not None,
+                        source_error=event_source_error,
                     )
                     current_tx._packet_id = ev.packet_id
                     current_tx._has_address = ev.address_7bit is not None
@@ -323,6 +328,7 @@ class I2CDiagnosticEngine:
                         timestamp_available=ev.timestamp_available,
                         address_available=ev.address_7bit is not None,
                         direction_available=ev.direction is not None,
+                        source_error=event_source_error,
                     )
                     current_tx._packet_id = ev.packet_id
                     current_tx._has_address = ev.address_7bit is not None
@@ -423,6 +429,9 @@ class I2CDiagnosticEngine:
         pmbus_overlong = 0
         pmbus_phase_mismatch = 0
         sensor_truncated = 0
+        sensor_overlong = 0
+        address_nack_data = 0
+        semantic_source_error = 0
 
         for tx in transactions:
             if not tx.address_available:
@@ -431,6 +440,11 @@ class I2CDiagnosticEngine:
                 tx.protocol = "I2C"
                 tx.identity_confidence = "unavailable"
                 tx.semantic_summary = "Address unavailable; semantic decoding withheld"
+                continue
+            if tx.source_error:
+                tx.semantic_summary = "Source field invalid; semantic decoding withheld"
+                tx.decoded_values = {"evidence": "source-error"}
+                semantic_source_error += 1
                 continue
             if not tx.direction_available:
                 tx.device_name = f"Possible Device (0x{tx.address_7bit:02X})"
@@ -444,6 +458,13 @@ class I2CDiagnosticEngine:
             ):
                 tx.semantic_summary = "Data byte unavailable; semantic decoding withheld"
                 tx.decoded_values = {"evidence": "data-unavailable"}
+                continue
+            if tx.address_ack == AckType.NACK and tx.data_bytes:
+                tx.semantic_summary = (
+                    "Address NACK with subsequent data; semantic decoding withheld"
+                )
+                tx.decoded_values = {"evidence": "address-nack-data-present"}
+                address_nack_data += 1
                 continue
             addr = tx.address_7bit
             candidates = get_all_matching_devices(addr)
@@ -632,6 +653,8 @@ class I2CDiagnosticEngine:
                         tx.decoded_values = decoded
                         if decoded.get("evidence") == "truncated":
                             sensor_truncated += 1
+                        elif decoded.get("evidence") == "overlong":
+                            sensor_overlong += 1
                     else:
                         tx.semantic_summary = f"Read Register 0x{ptr:02X}: " + " ".join(
                             f"0x{b:02X}" for b in tx.data_bytes
@@ -649,6 +672,8 @@ class I2CDiagnosticEngine:
                         tx.decoded_values = decoded
                         if decoded.get("evidence") == "truncated":
                             sensor_truncated += 1
+                        elif decoded.get("evidence") == "overlong":
+                            sensor_overlong += 1
                     else:
                         tx.semantic_summary = "INA2xx Address Probe"
                 else:
@@ -658,6 +683,8 @@ class I2CDiagnosticEngine:
                     tx.decoded_values = decoded
                     if decoded.get("evidence") == "truncated":
                         sensor_truncated += 1
+                    elif decoded.get("evidence") == "overlong":
+                        sensor_overlong += 1
 
             # 5. PCA9555 GPIO Expanders
             elif tx.device_category and "GPIO Expander" in tx.device_category:
@@ -769,6 +796,39 @@ class I2CDiagnosticEngine:
                         "the partial value is retained but not treated as a complete reading."
                     ),
                     count=sensor_truncated,
+                )
+            )
+        if sensor_overlong:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_SENSOR_PAYLOAD_OVERLONG",
+                    message=(
+                        "A sensor register response contained extra bytes beyond the fixed register width; "
+                        "the decoder withheld a complete sensor value."
+                    ),
+                    count=sensor_overlong,
+                )
+            )
+        if address_nack_data:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_ADDRESS_NACK_DATA_PRESENT",
+                    message=(
+                        "Data bytes followed an address NACK; the target did not acknowledge the "
+                        "transaction address, so semantic payload decoding was withheld."
+                    ),
+                    count=address_nack_data,
+                )
+            )
+        if semantic_source_error:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_SEMANTIC_EVIDENCE_INCOMPLETE",
+                    message=(
+                        "At least one transaction contains an invalid source field; protocol and "
+                        "device-specific semantic decoding was withheld for that transaction."
+                    ),
+                    count=semantic_source_error,
                 )
             )
         return quality_issues

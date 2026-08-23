@@ -32,6 +32,17 @@ def _validate_pointer(reg_pointer: int | None) -> int | None:
 def decode_lm75_temperature(data_bytes: list[int]) -> dict[str, Any]:
     """Decode 9-bit/12-bit two's complement temperature from LM75/TMP75/TMP102."""
     _validate_bytes(data_bytes)
+    if len(data_bytes) > 2:
+        return {
+            "evidence": "overlong",
+            "is_complete": False,
+            "required_bytes": 2,
+            "received_bytes": len(data_bytes),
+            "summary": (
+                f"Temperature response contains {len(data_bytes)} byte(s); "
+                "expected one 16-bit register"
+            ),
+        }
     if len(data_bytes) < 2:
         if len(data_bytes) == 1:
             raw_8bit = data_bytes[0]
@@ -94,7 +105,17 @@ def decode_ina2xx_power(reg_pointer: int | None, data_bytes: list[int]) -> dict[
         0x07: "ALERT_LIMIT",
     }
     reg_name = reg_names.get(ptr, f"REG_0x{ptr:02X}")
-
+    if len(data_bytes) > 2:
+        return {
+            "register": reg_name,
+            "evidence": "overlong",
+            "is_complete": False,
+            "required_bytes": 2,
+            "received_bytes": len(data_bytes),
+            "summary": (
+                f"Sensor response contains {len(data_bytes)} byte(s); expected one 16-bit register"
+            ),
+        }
     if len(data_bytes) < 2:
         return {
             "register": reg_name,

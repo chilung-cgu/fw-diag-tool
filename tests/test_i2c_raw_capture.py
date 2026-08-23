@@ -235,6 +235,17 @@ def test_stop_setup_edge_is_not_mistaken_for_a_missing_ack_clock() -> None:
         analyze_raw_i2c_csv(builder.csv())
 
 
+def test_rejects_extra_sampling_edge_instead_of_silently_dropping_it() -> None:
+    builder = _CaptureBuilder()
+    builder.start()
+    builder.byte(0xA0, 0)
+    builder.clock(0)
+    builder.stop()
+
+    with pytest.raises(RawI2CDecodeError, match="incomplete byte"):
+        analyze_raw_i2c_csv(builder.csv())
+
+
 def test_raw_capture_public_boundary_rejects_wrong_types_and_delimiters() -> None:
     with pytest.raises(RawCaptureValidationError, match="text or bytes"):
         parse_transition_csv(None)  # type: ignore[arg-type]
@@ -260,6 +271,25 @@ def test_raw_adapter_feeds_main_engine_without_losing_measured_evidence() -> Non
     assert report.timing_stats.avg_frequency_khz == pytest.approx(100.0)
     assert report.timing_stats.frequency_evidence == "source-provided"
     assert not report.data_quality_issues
+
+
+def test_raw_address_nack_with_data_withholds_semantic_decode() -> None:
+    builder = _CaptureBuilder()
+    builder.start()
+    builder.byte(0xA0, 1)
+    builder.byte(0x33, 0)
+    builder.stop()
+    decoded = analyze_raw_i2c_csv(builder.csv())
+
+    report = I2CDiagnosticEngine(eeprom_profile="24C02").analyze(raw_decode_to_events(decoded))
+
+    assert report.transactions[0].address_ack.value == "NACK"
+    assert report.transactions[0].semantic_summary == (
+        "Address NACK with subsequent data; semantic decoding withheld"
+    )
+    assert any(
+        issue.code == "I2C_ADDRESS_NACK_DATA_PRESENT" for issue in report.data_quality_issues
+    )
 
 
 def test_raw_adapter_keeps_nominal_scl_frequency_separate_from_stretch_duration() -> None:

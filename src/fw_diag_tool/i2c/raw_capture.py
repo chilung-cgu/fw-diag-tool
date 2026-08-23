@@ -391,7 +391,7 @@ def _finish_transaction(
     end_kind: RawConditionKind,
 ) -> RawI2CTransaction:
     samples = list(builder.samples)
-    if len(samples) % 9 == 1:
+    if end_kind == RawConditionKind.REPEATED_START and len(samples) % 9 == 1:
         samples.pop()
     if not samples or len(samples) % 9:
         raise RawI2CDecodeError(

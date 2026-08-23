@@ -438,6 +438,13 @@ def test_engine_rejects_malformed_direct_event_and_reports_unknown_csv_rows():
         I2CParser.parse_text_trace("S 0x50 W xyz 0x100 A P")
     )
     assert any(issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in text_report.data_quality_issues)
+    assert text_report.transactions[0].semantic_summary == (
+        "Source field invalid; semantic decoding withheld"
+    )
+    assert any(
+        issue.code == "I2C_SEMANTIC_EVIDENCE_INCOMPLETE"
+        for issue in text_report.data_quality_issues
+    )
 
 
 def test_i2c_parser_does_not_coerce_malformed_numeric_or_schema_values():
@@ -478,6 +485,14 @@ def test_sensor_short_register_response_is_explicitly_incomplete():
     assert result["evidence"] == "truncated"
     assert result["is_complete"] is False
     assert result["required_bytes"] == 2
+
+
+def test_sensor_overlong_register_response_is_not_silently_truncated():
+    result = decode_lm75_temperature([0x19, 0x80, 0xAA])
+    assert result["evidence"] == "overlong"
+    assert result["is_complete"] is False
+    result = decode_ina2xx_power(0x02, [0x00, 0x01, 0x02])
+    assert result["evidence"] == "overlong"
 
 
 def test_i2c_direct_timing_and_waveform_inputs_reject_nonfinite_values():
