@@ -30,13 +30,9 @@ class I2CReporter:
 
         # 1. Header Banner
         status_color = (
-            "green"
-            if not report.issues
-            else (
-                "red"
-                if any(i.severity in (Severity.CRITICAL, Severity.ERROR) for i in report.issues)
-                else "yellow"
-            )
+            "red"
+            if any(i.severity in (Severity.CRITICAL, Severity.ERROR) for i in report.issues)
+            else ("yellow" if report.issues or report.data_quality_issues else "green")
         )
         title_text = Text("I2C / SMBus / PMBus Protocol Diagnostic Report", style="bold cyan")
         subtitle_text = Text(report.summary_text, style="dim")

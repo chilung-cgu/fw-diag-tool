@@ -610,6 +610,17 @@ class I2CDiagnosticEngine:
             devices_detected[addr_hex]["transaction_count"] += 1
 
         data_quality_issues: list[DataQualityIssue] = list(semantic_quality_issues)
+        if not events:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_SOURCE_EMPTY",
+                    message=(
+                        "The capture contains no data rows after ignoring blank/comment lines; "
+                        "there is no protocol evidence to classify as clean."
+                    ),
+                    count=1,
+                )
+            )
         unknown_event_count = sum(event.event_type == RawEventType.UNKNOWN for event in events)
         if unknown_event_count:
             data_quality_issues.append(

@@ -1,5 +1,6 @@
 from io import StringIO
 
+import pytest
 from rich.console import Console
 
 from fw_diag_tool.i2c.chip_db import get_all_matching_devices, lookup_device
@@ -85,6 +86,27 @@ def test_terminal_report_shows_quality_limits_even_with_protocol_findings():
     assert report.data_quality_issues
     assert "Data Quality Limitations" in rendered
     assert "I2C_ACK_UNAVAILABLE" in rendered
+
+
+def test_empty_i2c_sources_are_insufficient_evidence_not_clean():
+    engine = I2CDiagnosticEngine()
+    for source in ("", "   \n# Saleae export had no rows\n", "Time,Address,Data\n"):
+        report = engine.analyze_csv_content(source)
+        assert report.total_events == 0
+        assert report.total_transactions == 0
+        assert any(issue.code == "I2C_SOURCE_EMPTY" for issue in report.data_quality_issues)
+        output = StringIO()
+        I2CReporter.render_terminal(
+            report, console=Console(file=output, force_terminal=False, color_system=None)
+        )
+        rendered = output.getvalue()
+        assert "Data Quality Limitations" in rendered
+        assert "All Transactions Passed Cleanly" not in rendered
+
+
+def test_i2c_csv_string_requires_text_input():
+    with pytest.raises(TypeError, match="text"):
+        I2CParser.parse_csv_string(None)  # type: ignore[arg-type]
 
 
 def test_multibyte_summary_row_does_not_invent_per_byte_timestamps():

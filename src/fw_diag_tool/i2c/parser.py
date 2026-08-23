@@ -108,6 +108,8 @@ class I2CParser:
     @classmethod
     def parse_csv_stream(cls, f: TextIO) -> list[RawI2CEvent]:
         """Parse CSV data from an open text stream (e.g. Saleae Logic 2 or Generic CSV)."""
+        if not hasattr(f, "read") or not hasattr(f, "seek"):
+            raise TypeError("CSV input must be a seekable text stream")
         events: list[RawI2CEvent] = []
 
         # Read header and detect delimiter
@@ -348,6 +350,8 @@ class I2CParser:
     @classmethod
     def parse_csv_string(cls, csv_text: str) -> list[RawI2CEvent]:
         """Parse CSV formatted string into RawI2CEvents."""
+        if not isinstance(csv_text, str):
+            raise TypeError("CSV input must be text")
         return cls.parse_csv_stream(io.StringIO(csv_text.strip()))
 
     @classmethod
