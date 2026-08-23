@@ -267,6 +267,16 @@ def _validate_transaction(transaction: RawI2CTransaction, index: int) -> None:
     _validate_timestamp(transaction.end_time_s, f"raw transaction {index} end")
     if transaction.end_time_s < transaction.start_time_s:
         raise RawCaptureValidationError(f"raw transaction {index} end precedes start")
+    if not isinstance(transaction.start_kind, RawConditionKind) or not isinstance(
+        transaction.end_kind, RawConditionKind
+    ):
+        raise RawCaptureValidationError(f"raw transaction {index} condition kind is malformed")
+    if not isinstance(transaction.data_samples, (tuple, list)):
+        raise RawCaptureValidationError(f"raw transaction {index} data samples must be a sequence")
+    if not isinstance(transaction.controller_terminated_read, bool):
+        raise RawCaptureValidationError(
+            f"raw transaction {index} controller termination flag must be boolean"
+        )
     if (
         isinstance(transaction.address_7bit, bool)
         or not isinstance(transaction.address_7bit, int)
@@ -276,6 +286,13 @@ def _validate_transaction(transaction: RawI2CTransaction, index: int) -> None:
     if not isinstance(transaction.direction, RawI2CDirection):
         raise RawCaptureValidationError(f"raw transaction {index} direction is malformed")
     _validate_sample(transaction.address_sample, index, expected_kind=RawByteKind.ADDRESS)
+    expected_address_octet = (transaction.address_7bit << 1) | (
+        transaction.direction == RawI2CDirection.READ
+    )
+    if transaction.address_sample.value != expected_address_octet:
+        raise RawCaptureValidationError(
+            f"raw transaction {index} address sample contradicts address/direction metadata"
+        )
     for sample_index, sample in enumerate(transaction.data_samples):
         _validate_sample(sample, index, expected_kind=RawByteKind.DATA, sample_index=sample_index)
 
