@@ -366,7 +366,7 @@ class PCIeAnalyzer:
             next_ext_ptr = (header_dw >> 20) & 0xFFF
             cap_name = PCI_EXT_CAP_NAMES.get(ext_cap_id, f"Extended Cap 0x{ext_cap_id:04X}")
 
-            decoded_ext = {}
+            decoded_ext: dict[str, Any] = {}
             if ext_cap_id == PCI_EXT_CAP_ID_AER:
                 if ext_ptr + 0x2C > source_length:
                     message = (

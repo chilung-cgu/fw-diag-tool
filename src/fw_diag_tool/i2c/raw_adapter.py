@@ -341,7 +341,7 @@ def _validate_sample(
             raise RawCaptureValidationError(f"{label} bit timestamps must be strictly increasing")
         previous = float(timestamp)
     _validate_timestamp(sample.ack_timestamp_s, f"{label} ACK")
-    if sample.ack_timestamp_s <= previous:
+    if previous is not None and sample.ack_timestamp_s <= previous:
         raise RawCaptureValidationError(f"{label} ACK timestamp must follow the eight data bits")
 
 

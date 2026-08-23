@@ -213,7 +213,7 @@ class I2CDiagnosticEngine:
                     and getattr(current_tx, "_has_address", False)
                 )
 
-                if duplicate_address:
+                if duplicate_address and current_tx is not None:
                     finish_at_event(current_tx, ev)
                     current_tx.has_stop = False
                     current_tx.source_error = True
@@ -322,7 +322,7 @@ class I2CDiagnosticEngine:
                 ev.event_type == RawEventType.UNKNOWN and ev.data_byte is not None
             ):
                 data_available = ev.data_byte is not None
-                data_val = ev.data_byte if data_available else 0x00
+                data_val: int = ev.data_byte if ev.data_byte is not None else 0x00
 
                 pkt_changed = (
                     ev.packet_id is not None
@@ -709,7 +709,7 @@ class I2CDiagnosticEngine:
                             else (
                                 self.default_eeprom_address_bytes
                                 if self.default_eeprom_address_bytes is not None
-                                else chip.default_register_len
+                                else (chip.default_register_len if chip is not None else 1)
                             )
                         )
                         eep_page_size = (

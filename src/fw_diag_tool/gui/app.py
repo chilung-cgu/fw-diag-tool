@@ -23,7 +23,7 @@ from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
-from fw_diag_tool.resources import load_i2c_sample
+from fw_diag_tool.resources import load_i2c_sample, load_spi_sample
 from fw_diag_tool.session.session_manager import SessionManager
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.spi.reporter import SPIReporter
@@ -547,17 +547,24 @@ elif menu == "🚀 PCIe Config & AER 診斷":
 # 8. SPI Flash
 elif menu == "⚡ SPI Flash 協定診斷":
     st.header("SPI / QSPI Flash 協定解析與寫入異常診斷")
-    uploaded_spi = st.file_uploader(
-        "選擇 Saleae SPI CSV 檔案",
-        type=["csv", "txt"],
-        max_upload_size=MAX_UPLOAD_MIB,
-    )
+    spi_col1, spi_col2 = st.columns([3, 1])
+    with spi_col1:
+        uploaded_spi = st.file_uploader(
+            "選擇 Saleae SPI CSV 檔案",
+            type=["csv", "txt"],
+            max_upload_size=MAX_UPLOAD_MIB,
+        )
+    with spi_col2:
+        use_spi_sample = st.button("載入內建 SPI 測試波形")
     csv_text = None
     if uploaded_spi is not None:
         try:
             csv_text = decode_uploaded_text(uploaded_spi, allowed_extensions={".csv", ".txt"})
         except ValueError as exc:
             st.error(f"無法讀取 SPI trace：{exc}")
+    elif use_spi_sample:
+        csv_text = load_spi_sample()
+        st.info("已載入內建 SPI 範例 CSV (Winbond W25Q128)！")
     if csv_text is not None:
         try:
             rep = SPIDiagnosticEngine().analyze_csv_content(csv_text)

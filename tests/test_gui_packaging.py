@@ -158,3 +158,40 @@ def test_gui_sop_page_explains_all_layers_and_evidence_terms():
     assert not at.exception
     assert any("L1" in item.value and "L7" in item.value for item in at.subheader)
     assert any("Measured" in str(item.value) for item in at.table)
+
+
+def test_gui_spi_flash_page_sample_runs_without_exception():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("⚡ SPI Flash 協定診斷").run()
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert any(metric.label == "總傳輸次數" and metric.value == "4" for metric in at.metric)
+    assert any("Winbond W25Q128" in info.value for info in at.info)
+
+
+def test_gui_uart_crash_page_sample_runs_without_exception():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("📟 UART Crash & HardFault 分析").run()
+    at.radio[0].set_value("載入範例 Linux Kernel Panic Log").run()
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert any("nvme_pci_complete_rq" in item.value for item in at.markdown)
+
+
+def test_gui_mctp_page_sample_runs_without_exception():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🌐 MCTP / IPMB 伺服器協定解析").run()
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert any("MCTP Packets" in item.value for item in at.markdown)
+
+
+def test_gui_fault_arena_runs_without_exception():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🏆 Junior FW 實戰除錯實驗室 (Fault Arena)").run()
+
+    assert not at.exception
+    assert any("案例分析" in item.value for item in at.info)
