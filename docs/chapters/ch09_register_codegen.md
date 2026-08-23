@@ -24,7 +24,7 @@
 
 在嵌入式 C 開發中，操作暫存器需要定義大量的 `#define` 巨集。
 手寫容易出錯（bit shift 算錯、mask 遺漏、型別不安全）。
-這個工具讓你上傳 YAML 定義檔，自動產出符合 MISRA-C 規範的安全代碼：
+目前 GUI 讓你從內建 YAML 範本選擇定義，產出具固定寬度型別與遮罩的 MISRA-oriented 起始模板：
 
 ```c
 #define REG_STATUS_WORD_OFFSET              (0x0079U)
@@ -34,9 +34,8 @@
 #define REG_STATUS_WORD_VOUT_FAULT_SET(reg, val) (((reg) & ~REG_STATUS_WORD_VOUT_FAULT_MSK) | (((uint32_t)(val) << REG_STATUS_WORD_VOUT_FAULT_POS) & REG_STATUS_WORD_VOUT_FAULT_MSK))
 ```
 
-**為什麼要強制 `(uint32_t)(val)` 轉型？**
-在 C99/C11 中，對 signed 負數進行左移是 Undefined Behavior（違反 MISRA C:2012 Rule 10.1）。
-強制轉型為 unsigned 可以避免編譯器警告與潛在的硬體行為差異。
+**為什麼要使用固定寬度 unsigned 型別？**
+這可降低 integer promotion 與 signed shift 帶來的風險，但單一 cast 不足以證明整份 header 符合 MISRA-C。產物仍要依專案的 register access policy、compiler warning 與 MISRA checker 驗證。
 
 ## 怎麼操作 C Header 產生器？
 
@@ -45,3 +44,6 @@
 3. 輸入模組名稱（如 `PMBUS_REGS`）。
 4. 頁面即時顯示完整的 C 標頭檔代碼。
 5. 點擊 **「下載 pmbus_regs.h」** 按鈕存檔。
+
+> [!CAUTION]
+> 產生器只建立巨集模板，不知道硬體的 read-only、write-one-to-clear、副作用或存取順序，除非 YAML schema 明確提供並通過驗證。套用到 driver 前仍須對照 datasheet。

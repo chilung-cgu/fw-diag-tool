@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 - UART Crash Dump analyzer for Linux Kernel Panic and ARM Cortex-M HardFault
 - MCTP (DSP0236/DSP0240 PLDM/SPDM) and IPMB server management protocol decoders
 - Device Tree (.dts) auto-generator for Linux/OpenBMC BSP development
-- C Header code generator producing MISRA-C compliant RMW bitfield macros
+- C Header code generator producing MISRA-oriented RMW bitfield templates
 - Multi-platform I2C driver snippet generator (Linux/OpenBMC/STM32 HAL/Arduino)
 - Golden vs Failing Waveform Diff engine for A/B hardware comparison
 - Virtual device emulators: EEPROM 24C64, LM75 temperature sensor, W25Q128 SPI Flash

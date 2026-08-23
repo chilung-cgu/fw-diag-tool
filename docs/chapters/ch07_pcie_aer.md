@@ -12,7 +12,7 @@ PCIe 設備（GPU、NVMe SSD、網卡）在開機時，BIOS/UEFI 會讀取每個
 1. 進入 GUI 第 7 頁 **「🚀 PCIe Config & AER 診斷」**。
 2. 選擇輸入方式：
    - **貼上 lspci -xxxx**：分析設備身份、BAR、Capability 鏈表與 Link 速度。
-   - **貼上 dmesg AER Log**：分析 PCIe Bus Error 的 TLP 封包詳情與 Root Cause。
+   - **貼上 dmesg AER Log**：解析目前支援的 PCIe Bus Error 與 TLP header 欄位，列出可能排查方向。
 3. 點擊 **「執行 PCIe 分析」** 按鈕。
 
 ## 怎麼看懂輸出結果？
@@ -28,7 +28,7 @@ PCIe 設備（GPU、NVMe SSD、網卡）在開機時，BIOS/UEFI 會讀取每個
 
 ### Link 降級偵測 (Link Health)
 
-這是最重要的診斷功能之一！
+Link capability 與 negotiated status 的差異可指出「目前沒有跑到最大能力」，但不會單獨證明原因。
 
 | 欄位 | 意義 | 白話解釋 |
 |---|---|---|
@@ -63,8 +63,11 @@ PCIe 設備（GPU、NVMe SSD、網卡）在開機時，BIOS/UEFI 會讀取每個
 
 | 錯誤類型 | 白話解釋 | 排查方向 |
 |---|---|---|
-| **Completion Timeout** | 發出讀取請求但等不到回應 | 檢查目標設備是否 Hang 或未正確初始化 |
-| **Unsupported Request** | 收到不支援的存取 | 檢查 BAR 映射是否正確、MSE 是否開啟 |
-| **Malformed TLP** | 封包格式違規 | 檢查 Max Payload Size 設定是否一致 |
-| **Poisoned TLP** | 資料帶有 ECC 錯誤標記 | 排查上游主記憶體的 ECC 錯誤來源 |
-| **Surprise Down** | 連線無預警斷開 | 檢查供電、PERST# 訊號或實體接觸 |
+| **Completion Timeout** | Request 沒在規定時間取得 Completion | 檢查 Requester/Completer 狀態、路由、timeout 設定與先前錯誤；不能直接等同設備 Hang |
+| **Unsupported Request** | Completer 回報該 request 不受支援 | 檢查 address/BAR、權限、request type 與裝置狀態 |
+| **Malformed TLP** | 接收端判定 TLP 格式不合法 | 需要更多 header、Requester 與 link evidence 才能定位來源 |
+| **Poisoned TLP** | TLP 帶有 poisoned indication | 追蹤 poison 產生端與資料路徑；不一定是主記憶體 ECC |
+| **Surprise Down** | Link 非預期離開正常運作狀態 | 檢查 power、reset、hot-plug、link log 與實體連接等多種可能原因 |
+
+> [!NOTE]
+> 本頁分析 Config Space、`lspci` 與 AER log，不是 PCIe protocol analyzer、LTSSM trace 或高速差分電氣量測工具。

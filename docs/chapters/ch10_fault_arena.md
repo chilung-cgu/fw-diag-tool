@@ -2,8 +2,8 @@
 
 ## 這個頁面在做什麼？
 
-這是一個互動式的故障案例學習庫，收錄了 20 個來自伺服器、嵌入式與資料中心一線大廠的真實硬韌體故障情境。
-每個案例都包含：故障現象描述、標準排查 SOP、Root Cause 診斷。
+這是一個互動式學習庫，收錄 20 個 synthetic 故障情境，題材涵蓋伺服器與嵌入式系統。
+目前案例用於練習「現象、可能假設、驗證步驟」的關係，不是實際公司 capture，也不保證情境文字中的可能原因就是唯一 root cause。
 
 ## 怎麼操作？
 
@@ -15,7 +15,7 @@
 
 ### I2C / SMBus 類 (Case 01~05)
 
-| 案例 | 故障現象 | Root Cause | 排查關鍵字 |
+| 案例 | 故障現象 | 練習假設 | 排查關鍵字 |
 |---|---|---|---|
 | Case 01 | Address NACK | Slave 未上電 / A0A1A2 浮接 / 7-bit vs 8-bit 搞混 | 量 VCC, 查位址腳位 |
 | Case 02 | Data NACK | EEPROM 內部 tWR 寫入週期忙碌 | 等 5ms 或 ACK Polling |
@@ -25,7 +25,7 @@
 
 ### PMBus / PCIe 類 (Case 06~10)
 
-| 案例 | 故障現象 | Root Cause | 排查關鍵字 |
+| 案例 | 故障現象 | 練習假設 | 排查關鍵字 |
 |---|---|---|---|
 | Case 06 | VOUT_TRIM 顯示 127V | Linear16 有號補碼未處理 | signed=True |
 | Case 07 | PCIe Gen4 降為 Gen1 | 金手指髒污 / SI 劣化 | 檢查金手指, REFCLK |
@@ -35,7 +35,7 @@
 
 ### SPI Flash 類 (Case 11~14)
 
-| 案例 | 故障現象 | Root Cause | 排查關鍵字 |
+| 案例 | 故障現象 | 練習假設 | 排查關鍵字 |
 |---|---|---|---|
 | Case 11 | Page Program 無效 | 未發送 0x06 WREN | 檢查 WEL bit |
 | Case 12 | 資料覆蓋 | 256B Page Buffer Wrap-Around | 計算 chunk 大小 |
@@ -44,7 +44,7 @@
 
 ### Crash Dump 類 (Case 15~18)
 
-| 案例 | 故障現象 | Root Cause | 排查關鍵字 |
+| 案例 | 故障現象 | 練習假設 | 排查關鍵字 |
 |---|---|---|---|
 | Case 15 | Kernel NULL Pointer | kzalloc 失敗未檢查 | addr2line -e vmlinux |
 | Case 16 | DIVBYZERO | 分母為 0 | 加 if(denom==0) 防護 |
@@ -53,7 +53,10 @@
 
 ### 伺服器管理協定類 (Case 19~20)
 
-| 案例 | 故障現象 | Root Cause | 排查關鍵字 |
+| 案例 | 故障現象 | 練習假設 | 排查關鍵字 |
 |---|---|---|---|
 | Case 19 | PLDM 封包順序錯亂 | PktSeq 未正確管理 | 檢查 SOM/EOM/Seq |
 | Case 20 | IPMB Checksum FAIL | 資料損毀或位址錯誤 | 檢查 (sum+chk)&0xFF==0 |
+
+> [!NOTE]
+> 表中的「練習假設」只是第一個要驗證的方向。實際工作應保留替代假設，並以 schematic、datasheet、register、log 與量測結果逐一排除。
