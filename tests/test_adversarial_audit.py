@@ -461,6 +461,16 @@ def test_i2c_parser_does_not_coerce_malformed_numeric_or_schema_values():
     assert any(issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in report.data_quality_issues)
 
 
+def test_text_trace_without_direction_does_not_guess_write():
+    report = I2CDiagnosticEngine(eeprom_profile="24C02").analyze(
+        I2CParser.parse_text_trace("S 0x50 0x00 A P")
+    )
+    tx = report.transactions[0]
+    assert tx.direction_available is False
+    assert tx.semantic_summary == "Read/write direction unavailable; semantic decoding withheld"
+    assert any(issue.code == "I2C_DIRECTION_UNAVAILABLE" for issue in report.data_quality_issues)
+
+
 def test_i2c_row_width_mismatch_is_not_decoded_as_a_transaction():
     report = I2CDiagnosticEngine().analyze_csv_content(
         "Time,Type,Address,Data,ACK\n0,DATA,0x50,0x01,ACK,unexpected\n"

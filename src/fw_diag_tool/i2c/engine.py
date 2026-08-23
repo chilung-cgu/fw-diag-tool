@@ -441,17 +441,17 @@ class I2CDiagnosticEngine:
                 tx.identity_confidence = "unavailable"
                 tx.semantic_summary = "Address unavailable; semantic decoding withheld"
                 continue
-            if tx.source_error:
-                tx.semantic_summary = "Source field invalid; semantic decoding withheld"
-                tx.decoded_values = {"evidence": "source-error"}
-                semantic_source_error += 1
-                continue
             if not tx.direction_available:
                 tx.device_name = f"Possible Device (0x{tx.address_7bit:02X})"
                 tx.device_category = "Direction unavailable"
                 tx.protocol = "I2C"
                 tx.identity_confidence = "address-only"
                 tx.semantic_summary = "Read/write direction unavailable; semantic decoding withheld"
+                continue
+            if tx.source_error:
+                tx.semantic_summary = "Source field invalid; semantic decoding withheld"
+                tx.decoded_values = {"evidence": "source-error"}
+                semantic_source_error += 1
                 continue
             if any(
                 not packet.byte_available for packet in tx.byte_packets if not packet.is_address

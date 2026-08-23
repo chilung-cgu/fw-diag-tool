@@ -553,8 +553,12 @@ class I2CParser:
                                 current_rw = (
                                     I2CDirection.READ if (val & 0x01) else I2CDirection.WRITE
                                 )
-                            else:
-                                current_rw = current_rw or I2CDirection.WRITE
+
+                            address_extra = {}
+                            if current_rw is None:
+                                address_extra = {
+                                    "source_error": "7-bit address is missing a READ/WRITE token"
+                                }
 
                             events.append(
                                 RawI2CEvent(
@@ -565,6 +569,7 @@ class I2CParser:
                                     address_7bit=current_addr,
                                     direction=current_rw,
                                     ack=AckType.NONE,
+                                    extra=address_extra,
                                 )
                             )
                         else:
@@ -579,6 +584,11 @@ class I2CParser:
                                     direction=current_rw,
                                     data_byte=val,
                                     ack=AckType.NONE,
+                                    extra=(
+                                        {"source_error": "data direction is unavailable"}
+                                        if current_rw is None
+                                        else {}
+                                    ),
                                 )
                             )
                 idx += 1
