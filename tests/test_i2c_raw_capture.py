@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+from dataclasses import replace
 
 import pytest
 from typer.testing import CliRunner
@@ -244,6 +245,31 @@ def test_rejects_extra_sampling_edge_instead_of_silently_dropping_it() -> None:
 
     with pytest.raises(RawI2CDecodeError, match="incomplete byte"):
         analyze_raw_i2c_csv(builder.csv())
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda transition: replace(transition, timestamp_s=float("nan")),
+        lambda transition: replace(transition, timestamp_s=float("inf")),
+        lambda transition: replace(transition, timestamp_s=-1.0),
+        lambda transition: replace(transition, scl=2),
+        lambda transition: replace(transition, sda=-1),
+    ],
+)
+def test_decode_rejects_malformed_nested_capture_transitions(mutation) -> None:
+    builder = _CaptureBuilder()
+    builder.start()
+    builder.byte(0xA0, 0)
+    builder.stop()
+    capture = parse_transition_csv(builder.csv())
+    index = 4
+    transitions = list(capture.transitions)
+    transitions[index] = mutation(transitions[index])
+    malformed = replace(capture, transitions=tuple(transitions))
+
+    with pytest.raises(RawCaptureValidationError):
+        decode_i2c_capture(malformed)
 
 
 def test_raw_capture_public_boundary_rejects_wrong_types_and_delimiters() -> None:

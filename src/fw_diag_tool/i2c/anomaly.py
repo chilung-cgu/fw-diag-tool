@@ -26,6 +26,8 @@ from fw_diag_tool.i2c.models import (
 class I2CAnomalyDetector:
     """Detects bus anomalies and generates step-by-step junior engineer advice."""
 
+    _EEPROM_ACK_POLL_WINDOW_S = 0.010
+
     def __init__(self, smbus_timeout_ms: float = 25.0, high_jitter_threshold_pct: float = 35.0):
         self.smbus_timeout_ms = self._positive_finite_config(
             "smbus_timeout_ms", smbus_timeout_ms, maximum=60_000.0
@@ -63,14 +65,7 @@ class I2CAnomalyDetector:
             if tx.address_ack == AckType.NACK:
                 # Check if this is EEPROM Acknowledge Polling (expected during internal write cycle)
                 is_eeprom = bool(tx.device_category and "EEPROM" in tx.device_category)
-                prev_was_write = (
-                    i > 0
-                    and transactions[i - 1].direction_available
-                    and transactions[i - 1].direction == I2CDirection.WRITE
-                    and transactions[i - 1].address_7bit == tx.address_7bit
-                )
-
-                if is_eeprom and prev_was_write:
+                if is_eeprom and self._is_confirmed_eeprom_ack_poll(transactions, i):
                     issues.append(
                         I2CDiagnosticIssue(
                             code="I2C_EEPROM_ACK_POLL",
@@ -311,3 +306,58 @@ class I2CAnomalyDetector:
             )
 
         return issues
+
+    @classmethod
+    def _is_confirmed_eeprom_ack_poll(
+        cls, transactions: list[I2CTransaction], nack_index: int
+    ) -> bool:
+        """Require evidence for an EEPROM write-cycle polling interpretation.
+
+        A lone address NACK is not enough to call something normal ACK polling: it
+        may instead indicate a missing device or a permanently failed bus.  We
+        therefore require an accepted, stopped write immediately before the NACK,
+        no rejected data in that write, and a later accepted probe within a bounded
+        tWR-style window.  Missing timestamps deliberately disable this inference.
+        """
+        if not 0 <= nack_index < len(transactions):
+            return False
+        nack = transactions[nack_index]
+        if (
+            nack.address_ack != AckType.NACK
+            or nack.data_bytes
+            or not nack.timestamp_available
+            or not nack.has_stop
+            or nack_index == 0
+        ):
+            return False
+
+        previous = transactions[nack_index - 1]
+        if (
+            not previous.timestamp_available
+            or not previous.has_stop
+            or not previous.direction_available
+            or previous.direction != I2CDirection.WRITE
+            or previous.address_7bit != nack.address_7bit
+            or previous.address_ack != AckType.ACK
+            or not previous.data_bytes
+            or previous.has_unexpected_data_nack
+        ):
+            return False
+
+        for candidate in transactions[nack_index + 1 :]:
+            if not candidate.timestamp_available:
+                continue
+            elapsed = candidate.start_time - nack.start_time
+            if elapsed < 0:
+                continue
+            if elapsed > cls._EEPROM_ACK_POLL_WINDOW_S:
+                break
+            if (
+                candidate.address_7bit == nack.address_7bit
+                and candidate.direction_available
+                and candidate.direction == I2CDirection.WRITE
+                and candidate.address_ack == AckType.ACK
+                and candidate.has_stop
+            ):
+                return True
+        return False

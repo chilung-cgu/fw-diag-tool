@@ -227,6 +227,7 @@ def parse_transition_csv(
 def decode_i2c_capture(capture: RawDigitalCapture) -> RawI2CDecodeResult:
     if not isinstance(capture, RawDigitalCapture):
         raise TypeError("capture must be a RawDigitalCapture")
+    _validate_capture(capture)
     if len(capture.transitions) < 2:
         raise RawI2CDecodeError("raw capture needs at least two rows to contain an edge")
 
@@ -297,6 +298,54 @@ def decode_i2c_capture(capture: RawDigitalCapture) -> RawI2CDecodeResult:
 
     timing = _calculate_timing(capture.transitions, transactions)
     return RawI2CDecodeResult(capture, tuple(conditions), tuple(transactions), timing)
+
+
+def _validate_capture(capture: RawDigitalCapture) -> None:
+    """Validate nested transition invariants for callers bypassing CSV parsing."""
+    columns = capture.columns
+    if not isinstance(columns, RawCaptureColumns):
+        raise RawCaptureValidationError("raw capture columns are malformed")
+    if any(
+        not isinstance(name, str) or not name.strip()
+        for name in (columns.time, columns.scl, columns.sda)
+    ):
+        raise RawCaptureValidationError("raw capture column names must be non-empty strings")
+    if len({columns.time, columns.scl, columns.sda}) != 3:
+        raise RawCaptureValidationError("raw capture column names must be distinct")
+    if not isinstance(capture.transitions, (tuple, list)):
+        raise RawCaptureValidationError("raw capture transitions must be a sequence")
+
+    previous_timestamp: float | None = None
+    for index, transition in enumerate(capture.transitions):
+        if not isinstance(transition, RawDigitalTransition):
+            raise RawCaptureValidationError(f"transition {index} is malformed")
+        if (
+            isinstance(transition.timestamp_s, bool)
+            or not isinstance(transition.timestamp_s, (int, float))
+            or not math.isfinite(float(transition.timestamp_s))
+            or transition.timestamp_s < 0
+        ):
+            raise RawCaptureValidationError(
+                f"transition {index} timestamp must be finite and nonnegative"
+            )
+        if previous_timestamp is not None and transition.timestamp_s <= previous_timestamp:
+            raise RawCaptureValidationError(
+                f"transition {index} timestamp must be strictly greater than the previous row"
+            )
+        previous_timestamp = float(transition.timestamp_s)
+        for channel, value in (("SCL", transition.scl), ("SDA", transition.sda)):
+            if isinstance(value, bool) or not isinstance(value, int) or value not in {0, 1}:
+                raise RawCaptureValidationError(
+                    f"transition {index} {channel} level must be exactly 0 or 1"
+                )
+        if (
+            isinstance(transition.source_row, bool)
+            or not isinstance(transition.source_row, int)
+            or transition.source_row < 1
+        ):
+            raise RawCaptureValidationError(
+                f"transition {index} source_row must be a positive integer"
+            )
 
 
 def analyze_raw_i2c_csv(
