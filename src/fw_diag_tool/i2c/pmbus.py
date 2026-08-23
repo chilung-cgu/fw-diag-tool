@@ -667,6 +667,21 @@ def decode_pmbus_payload(
         # PMBus Block read has byte count as first byte
         declared_count = data_bytes[0]
         actual_count = len(data_bytes) - 1
+        if declared_count > 32:
+            result.update(
+                {
+                    "evidence": "block-count-invalid",
+                    "is_complete": False,
+                    "declared_count": declared_count,
+                    "received_count": actual_count,
+                    "max_block_bytes": 32,
+                    "summary": (
+                        f"{cmd_def.name}: block count {declared_count} exceeds the "
+                        "PMBus/SMBus 32-byte limit"
+                    ),
+                }
+            )
+            return result
         if declared_count != actual_count:
             result.update(
                 {

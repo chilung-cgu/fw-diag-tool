@@ -426,6 +426,7 @@ class I2CDiagnosticEngine:
         eeprom_out_of_range = 0
         pmbus_truncated = 0
         pmbus_block_mismatch = 0
+        pmbus_block_invalid = 0
         pmbus_overlong = 0
         pmbus_phase_mismatch = 0
         sensor_truncated = 0
@@ -518,6 +519,8 @@ class I2CDiagnosticEngine:
                             pmbus_truncated += 1
                         elif decoded.get("evidence") == "block-count-mismatch":
                             pmbus_block_mismatch += 1
+                        elif decoded.get("evidence") == "block-count-invalid":
+                            pmbus_block_invalid += 1
                         elif decoded.get("evidence") == "overlong":
                             pmbus_overlong += 1
                         elif decoded.get("evidence") == "phase-mismatch":
@@ -548,6 +551,8 @@ class I2CDiagnosticEngine:
                         pmbus_truncated += 1
                     elif decoded.get("evidence") == "block-count-mismatch":
                         pmbus_block_mismatch += 1
+                    elif decoded.get("evidence") == "block-count-invalid":
+                        pmbus_block_invalid += 1
                     elif decoded.get("evidence") == "overlong":
                         pmbus_overlong += 1
                     elif decoded.get("evidence") == "phase-mismatch":
@@ -763,6 +768,17 @@ class I2CDiagnosticEngine:
                         "string/telemetry result is incomplete."
                     ),
                     count=pmbus_block_mismatch,
+                )
+            )
+        if pmbus_block_invalid:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_PMBUS_BLOCK_COUNT_INVALID",
+                    message=(
+                        "A PMBus block-read count exceeded the SMBus/PMBus 32-byte limit; "
+                        "the manufacturer data was withheld."
+                    ),
+                    count=pmbus_block_invalid,
                 )
             )
         if pmbus_overlong:

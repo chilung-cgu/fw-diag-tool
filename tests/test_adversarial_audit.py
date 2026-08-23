@@ -367,6 +367,13 @@ def test_pmbus_rejects_overlong_or_phase_invalid_payloads(cmd_code, payload, pha
     assert result["is_complete"] is False
 
 
+def test_pmbus_block_read_enforces_32_byte_limit():
+    result = decode_pmbus_payload(0x99, [33] + [0x41] * 33)
+    assert result["evidence"] == "block-count-invalid"
+    assert result["is_complete"] is False
+    assert result["max_block_bytes"] == 32
+
+
 def test_engine_surfaces_pmbus_overlong_payload_as_data_quality():
     report = I2CDiagnosticEngine().analyze_records(
         [
