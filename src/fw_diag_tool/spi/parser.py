@@ -76,7 +76,7 @@ class SPIParser:
         if isinstance(page_size, bool) or not isinstance(page_size, int) or page_size <= 0:
             raise ValueError("page_size must be a positive integer")
         reader = csv.reader(io.StringIO(csv_text.strip()))
-        rows = [r for r in reader if r and not r[0].startswith("#")]
+        rows = [r for r in reader if r and not r[0].strip().startswith("#")]
         if not rows:
             return []
 
@@ -106,6 +106,10 @@ class SPIParser:
             miso_idx = 2
         if mosi_idx < 0 or miso_idx < 0:
             raise ValueError("SPI CSV must provide MOSI and MISO columns")
+        if cs_idx < 0:
+            raise ValueError(
+                "SPI CSV must provide a CS/Enable column so transactions can be framed safely"
+            )
 
         transactions: list[SPITransaction] = []
         cur_mosi: list[int] = []
@@ -137,6 +141,11 @@ class SPIParser:
 
             mosi_val = cls._parse_byte_cell(row[mosi_idx], row_number, "MOSI")
             miso_val = cls._parse_byte_cell(row[miso_idx], row_number, "MISO")
+            if mosi_val is None or miso_val is None:
+                raise ValueError(
+                    f"CSV row {row_number} must provide both MOSI and MISO bytes; "
+                    "empty channel data is incomplete evidence"
+                )
 
             # Check CS state if column present
             cs_state = (
@@ -185,6 +194,7 @@ class SPIParser:
                 cur_miso,
                 page_size=page_size,
             )
+            tx.decoded_details["capture_incomplete"] = True
             transactions.append(tx)
 
         return transactions
@@ -201,6 +211,25 @@ class SPIParser:
     ) -> SPITransaction:
         if isinstance(page_size, bool) or not isinstance(page_size, int) or page_size <= 0:
             raise ValueError("page_size must be a positive integer")
+        if isinstance(index, bool) or not isinstance(index, int) or index <= 0:
+            raise ValueError("index must be a positive integer")
+        for name, value in (("start_time", start_time), ("end_time", end_time)):
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+            ):
+                raise ValueError(f"{name} must be finite and non-negative")
+            if value < 0:
+                raise ValueError(f"{name} must be finite and non-negative")
+        if end_time < start_time:
+            raise ValueError("end_time must not precede start_time")
+        for name, values in (("mosi", mosi), ("miso", miso)):
+            if not isinstance(values, list) or not values:
+                raise ValueError(f"{name} must be a non-empty list of bytes")
+            for byte_index, value in enumerate(values):
+                if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFF:
+                    raise ValueError(f"{name}[{byte_index}] must be an integer in range 0..0xFF")
         dur_us = max(0.0, (end_time - start_time) * 1_000_000.0)
         opcode = mosi[0] if mosi else None
         opcode_name = (

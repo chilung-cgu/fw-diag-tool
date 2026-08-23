@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .anomaly import SPIAnomalyDetector
 from .models import (
+    SPIDataQualityIssue,
     SPIOpcode,
     SPIReport,
     SPIReportSummary,
@@ -24,8 +25,49 @@ class SPIDiagnosticEngine:
         self.max_page_size = max_page_size
 
     def analyze_csv_content(self, csv_text: str) -> SPIReport:
+        if not isinstance(csv_text, str):
+            raise TypeError("csv_text must be a string")
         transactions = self.parser.parse_csv_content(csv_text, page_size=self.max_page_size)
         anomalies = self.anomaly_detector.analyze(transactions)
+        meaningful_lines = [
+            line
+            for line in csv_text.splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        ]
+        data_quality_issues: list[SPIDataQualityIssue] = []
+        if len(meaningful_lines) <= 1:
+            data_quality_issues.append(
+                SPIDataQualityIssue(
+                    code="SPI_SOURCE_EMPTY",
+                    message=(
+                        "The capture has no data rows after removing the header/comments; "
+                        "no SPI protocol conclusion can be established."
+                    ),
+                )
+            )
+        elif not transactions:
+            data_quality_issues.append(
+                SPIDataQualityIssue(
+                    code="SPI_NO_TRANSACTIONS",
+                    message=(
+                        "Input rows were present but no CS-framed SPI transaction was decoded; "
+                        "check chip-select polarity and capture framing."
+                    ),
+                )
+            )
+        incomplete_count = sum(
+            bool(tx.decoded_details.get("capture_incomplete")) for tx in transactions
+        )
+        if incomplete_count:
+            data_quality_issues.append(
+                SPIDataQualityIssue(
+                    code="SPI_CS_UNTERMINATED",
+                    message=(
+                        "The capture ended while CS was still asserted; the final transaction may be truncated."
+                    ),
+                    count=incomplete_count,
+                )
+            )
 
         read_count = 0
         write_count = 0
@@ -51,6 +93,7 @@ class SPIDiagnosticEngine:
                 SPIOpcode.BLOCK_ERASE_32K,
                 SPIOpcode.BLOCK_ERASE_64K,
                 SPIOpcode.CHIP_ERASE,
+                SPIOpcode.CHIP_ERASE_ALT,
             ):
                 erase_count += 1
             elif op in (
@@ -74,7 +117,12 @@ class SPIDiagnosticEngine:
             detected_flash_chip=detected_chip,
         )
 
-        return SPIReport(summary=summary, transactions=transactions, anomalies=anomalies)
+        return SPIReport(
+            summary=summary,
+            transactions=transactions,
+            anomalies=anomalies,
+            data_quality_issues=data_quality_issues,
+        )
 
     def analyze_csv_file(self, file_path: str | Path) -> SPIReport:
         p = Path(file_path)

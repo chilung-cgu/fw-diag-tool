@@ -75,7 +75,8 @@ def test_spi_volatile_wren_and_chip_erase_alt():
     engine = SPIDiagnosticEngine()
     report = engine.analyze_csv_content(csv_data)
     assert report.summary.anomaly_count == 1
-    assert report.anomalies[0].code == "SPI_WRITE_NO_WREN"
+    assert report.summary.erase_count == 1
+    assert report.anomalies[0].code == "SPI_WEL_NOT_LATCHED"
     assert report.anomalies[0].transaction_id == 3
 
 

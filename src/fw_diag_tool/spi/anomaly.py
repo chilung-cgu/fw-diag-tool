@@ -20,7 +20,9 @@ class SPIAnomalyDetector:
 
     def analyze(self, transactions: list[SPITransaction]) -> list[SPIDiagnosticIssue]:
         issues: list[SPIDiagnosticIssue] = []
-        wel_latched = False
+        # A capture may begin after WREN.  ``None`` means the latch state was
+        # not observed, not that the flash was proven to have WEL=0.
+        wel_latched: bool | None = None
         volatile_wel_latched = False
 
         for tx in transactions:
@@ -77,6 +79,15 @@ class SPIAnomalyDetector:
                 wel_latched = False
                 volatile_wel_latched = False
 
+            if op == SPIOpcode.READ_STATUS_REG_1:
+                observed_wel = tx.decoded_details.get("wel")
+                if isinstance(observed_wel, bool):
+                    wel_latched = observed_wel
+                    tx.wel_state_before = observed_wel
+                    tx.decoded_details["wel_evidence"] = "status-read"
+                else:
+                    tx.wel_state_before = wel_latched
+
             # 3. Write / Program / Erase without WREN Checks
             is_array_write_or_erase = op in (
                 SPIOpcode.PAGE_PROGRAM,
@@ -94,31 +105,63 @@ class SPIAnomalyDetector:
             )
 
             if is_array_write_or_erase:
-                if not wel_latched:
+                tx.wel_state_before = wel_latched
+                if wel_latched is False:
                     issues.append(
                         SPIDiagnosticIssue(
-                            code="SPI_WRITE_NO_WREN",
-                            title=f"Write/Erase without Write Enable (0x06) @ Tx #{tx.index}",
-                            severity=SPISeverity.CRITICAL,
+                            code="SPI_WEL_NOT_LATCHED",
+                            title=f"Write/Erase observed with WEL=0 @ Tx #{tx.index}",
+                            severity=SPISeverity.WARNING,
                             timestamp=tx.start_time,
                             transaction_id=tx.index,
                             description=(
-                                f"Command {tx.opcode_name} was issued to Flash memory without a preceding "
-                                "0x06 (WREN) command. Flash hardware ignores this write."
+                                f"Command {tx.opcode_name} was issued while the most recent observed "
+                                "status register reported WEL=0. The flash may reject the operation."
                             ),
                             root_cause_guide=(
-                                "【Root Cause 排查建議】\n"
-                                "1. 寫入記憶體陣列 (Program/Erase) 前必須發送單獨的 0x06 WREN 封包（0x50 僅能修改狀態暫存器）。\n"
-                                "2. 注意：每次 Program 或 Erase 完成後，WEL 會自動歸零，下一次寫入必須重新發送 0x06！"
+                                "【排查建議】確認 WREN 是否真的被送出並讀回 WEL=1；檢查 WP#、保護區域與狀態暫存器寫入流程。"
                             ),
-                            details={"opcode": f"0x{op:02X}", "wel_state": False},
+                            details={
+                                "opcode": f"0x{op:02X}",
+                                "wel_state": False,
+                                "evidence": "status-read",
+                            },
                         )
                     )
-                wel_latched = False
+                elif wel_latched is None:
+                    issues.append(
+                        SPIDiagnosticIssue(
+                            code="SPI_WEL_STATE_UNKNOWN",
+                            title=f"Write/Erase WEL state was not observed @ Tx #{tx.index}",
+                            severity=SPISeverity.WARNING,
+                            timestamp=tx.start_time,
+                            transaction_id=tx.index,
+                            description=(
+                                f"No WREN or status-read evidence before {tx.opcode_name} was present "
+                                "inside this capture; the operation's latch state cannot be proven."
+                            ),
+                            root_cause_guide=(
+                                "【排查建議】擴大擷取範圍至 WREN 與 RDSR，確認 WEL=1 後再判斷寫入是否被接受。"
+                            ),
+                            details={
+                                "opcode": f"0x{op:02X}",
+                                "wel_state": None,
+                                "evidence": "unobserved",
+                            },
+                        )
+                    )
+                if wel_latched is True:
+                    # A successful array operation normally clears WEL.  Keep
+                    # the post-operation state conservative if it was not
+                    # explicitly observed.
+                    wel_latched = False
+                else:
+                    wel_latched = None
                 volatile_wel_latched = False
 
             elif is_sr_write:
-                if not (wel_latched or volatile_wel_latched):
+                tx.wel_state_before = wel_latched
+                if wel_latched is False and not volatile_wel_latched:
                     issues.append(
                         SPIDiagnosticIssue(
                             code="SPI_WRITE_NO_WREN",
@@ -129,6 +172,26 @@ class SPIAnomalyDetector:
                             description=f"Status Register write {tx.opcode_name} issued without 0x06 (WREN) or 0x50 (Volatile WREN).",
                             root_cause_guide="【Root Cause 排查建議】寫入狀態暫存器前需發送 0x06 或 0x50 指令。\n",
                             details={"opcode": f"0x{op:02X}"},
+                        )
+                    )
+                elif wel_latched is None and not volatile_wel_latched:
+                    issues.append(
+                        SPIDiagnosticIssue(
+                            code="SPI_WEL_STATE_UNKNOWN",
+                            title=f"Status-register write WEL state was not observed @ Tx #{tx.index}",
+                            severity=SPISeverity.WARNING,
+                            timestamp=tx.start_time,
+                            transaction_id=tx.index,
+                            description=(
+                                f"No WREN or status evidence was captured before {tx.opcode_name}; "
+                                "the write-enable precondition cannot be proven."
+                            ),
+                            root_cause_guide="擴大擷取範圍至 WREN/RDSR，確認狀態暫存器寫入前的 WEL 狀態。",
+                            details={
+                                "opcode": f"0x{op:02X}",
+                                "wel_state": None,
+                                "evidence": "unobserved",
+                            },
                         )
                     )
                 wel_latched = False

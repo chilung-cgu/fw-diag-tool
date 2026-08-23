@@ -128,8 +128,8 @@ class SPITransaction:
     address: int | None = None
     data_payload_len: int = 0
     decoded_details: dict[str, Any] = field(default_factory=dict)
-    wel_state_before: bool = False
-    busy_state_after: bool = False
+    wel_state_before: bool | None = None
+    busy_state_after: bool | None = None
 
 
 @dataclass
@@ -156,7 +156,15 @@ class SPIReportSummary:
 
 
 @dataclass
+class SPIDataQualityIssue:
+    code: str
+    message: str
+    count: int = 1
+
+
+@dataclass
 class SPIReport:
     summary: SPIReportSummary
     transactions: list[SPITransaction] = field(default_factory=list)
     anomalies: list[SPIDiagnosticIssue] = field(default_factory=list)
+    data_quality_issues: list[SPIDataQualityIssue] = field(default_factory=list)

@@ -3,7 +3,7 @@ from typer.testing import CliRunner
 
 from fw_diag_tool.cli import app
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
-from fw_diag_tool.spi.models import SPISeverity
+from fw_diag_tool.spi.models import SPIReport, SPIReportSummary, SPISeverity, SPITransaction
 from fw_diag_tool.spi.parser import SPIParser
 from fw_diag_tool.spi.reporter import SPIReporter
 
@@ -54,8 +54,41 @@ def test_spi_write_without_wren_anomaly():
     engine = SPIDiagnosticEngine()
     report = engine.analyze_csv_content(csv_data)
     assert report.summary.anomaly_count == 1
-    assert report.anomalies[0].code == "SPI_WRITE_NO_WREN"
-    assert report.anomalies[0].severity == SPISeverity.CRITICAL
+    assert report.anomalies[0].code == "SPI_WEL_STATE_UNKNOWN"
+    assert report.anomalies[0].severity == SPISeverity.WARNING
+
+
+def test_spi_status_wel_evidence_controls_program_diagnosis():
+    status_then_program = """Time [s],MOSI,MISO,Enable
+0.001,0x05,0x00,0
+0.002,0x00,0x02,0
+0.003,0x00,0x00,1
+0.010,0x02,0x00,0
+0.011,0x00,0x00,0
+0.012,0x00,0x00,0
+0.013,0x00,0x00,0
+0.014,0x55,0x00,0
+0.015,0x00,0x00,1
+"""
+    report = SPIDiagnosticEngine().analyze_csv_content(status_then_program)
+    assert report.summary.anomaly_count == 0
+    assert report.transactions[0].wel_state_before is True
+
+    wren_then_wel_clear = """Time [s],MOSI,MISO,Enable
+0.001,0x06,0x00,0
+0.002,0x00,0x00,1
+0.010,0x05,0x00,0
+0.011,0x00,0x00,0
+0.012,0x00,0x00,1
+0.020,0x02,0x00,0
+0.021,0x00,0x00,0
+0.022,0x00,0x00,0
+0.023,0x00,0x00,0
+0.024,0x55,0x00,0
+0.025,0x00,0x00,1
+"""
+    cleared = SPIDiagnosticEngine().analyze_csv_content(wren_then_wel_clear)
+    assert [issue.code for issue in cleared.anomalies] == ["SPI_WEL_NOT_LATCHED"]
 
 
 def test_spi_page_program_wrap_around_hazard():
@@ -118,6 +151,64 @@ def test_spi_page_size_rejects_non_positive_or_boolean_values():
 def test_spi_parser_rejects_invalid_cells_instead_of_silently_wrapping(csv_text):
     with pytest.raises(ValueError):
         SPIParser.parse_csv_content(csv_text)
+
+
+def test_spi_parser_requires_cs_framing_and_rejects_one_sided_rows():
+    with pytest.raises(ValueError, match="CS/Enable"):
+        SPIParser.parse_csv_content("Time,MOSI,MISO\n0.001,0x06,0x00\n")
+    with pytest.raises(ValueError, match="both MOSI and MISO"):
+        SPIParser.parse_csv_content("Time,MOSI,MISO,Enable\n0.001,,0x00,0\n")
+
+
+def test_spi_direct_decoder_rejects_malformed_time_and_bytes():
+    with pytest.raises(ValueError, match="finite"):
+        SPIParser.decode_single_transaction(1, float("nan"), 1.0, [0x06], [0x00])
+    with pytest.raises(ValueError, match="end_time"):
+        SPIParser.decode_single_transaction(1, 2.0, 1.0, [0x06], [0x00])
+    with pytest.raises(ValueError, match="range"):
+        SPIParser.decode_single_transaction(1, 1.0, 1.0, [0x06, 256], [0x00])
+    with pytest.raises(ValueError, match="non-empty"):
+        SPIParser.decode_single_transaction(1, 1.0, 1.0, [], [0x00])
+
+
+@pytest.mark.parametrize(
+    "csv_text", ["", "   \n", "# comment only\n", "Time [s],MOSI,MISO,Enable\n"]
+)
+def test_spi_empty_or_header_only_capture_is_not_reported_clean(csv_text):
+    report = SPIDiagnosticEngine().analyze_csv_content(csv_text)
+
+    assert report.summary.total_transactions == 0
+    assert any(issue.code == "SPI_SOURCE_EMPTY" for issue in report.data_quality_issues)
+
+
+def test_spi_unterminated_or_unframed_capture_is_marked_incomplete():
+    unterminated = SPIDiagnosticEngine().analyze_csv_content(
+        "Time [s],MOSI,MISO,Enable\n0.001,0x06,0x00,0\n"
+    )
+    assert any(issue.code == "SPI_CS_UNTERMINATED" for issue in unterminated.data_quality_issues)
+
+    no_transaction = SPIDiagnosticEngine().analyze_csv_content(
+        "Time [s],MOSI,MISO,Enable\n0.001,0x06,0x00,1\n"
+    )
+    assert any(issue.code == "SPI_NO_TRANSACTIONS" for issue in no_transaction.data_quality_issues)
+
+
+def test_spi_markdown_reporter_handles_unavailable_timestamps():
+    report = SPIReport(
+        summary=SPIReportSummary(total_transactions=1),
+        transactions=[
+            SPITransaction(
+                index=1,
+                start_time=None,  # type: ignore[arg-type]
+                end_time=None,  # type: ignore[arg-type]
+                duration_us=0.0,
+                mosi_bytes=[0x06],
+                miso_bytes=[0x00],
+            )
+        ],
+    )
+    markdown = SPIReporter.to_markdown(report)
+    assert "n/a" in markdown
 
 
 def test_spi_cli_reports_invalid_csv_without_traceback(tmp_path):

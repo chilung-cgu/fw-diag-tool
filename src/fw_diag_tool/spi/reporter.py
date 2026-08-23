@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -8,6 +10,12 @@ from .models import SPIReport, SPISeverity
 
 
 class SPIReporter:
+    @staticmethod
+    def _format_time(value: object) -> str:
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value):
+            return f"{value:.6f}"
+        return "n/a"
+
     @staticmethod
     def render_terminal(report: SPIReport, console: Console | None = None) -> None:
         c = console or Console()
@@ -35,6 +43,11 @@ class SPIReporter:
         )
         c.print(sum_table)
 
+        if report.data_quality_issues:
+            c.print("\n[yellow]⚠ SPI source evidence limitations:[/]")
+            for issue in report.data_quality_issues:
+                c.print(f"[yellow]• {issue.code} ({issue.count}): {issue.message}[/]")
+
         if report.anomalies:
             c.print("\n[bold red]🚨 Detected Flash Protocol Anomalies & Hazards:[/]")
             for a in report.anomalies:
@@ -50,8 +63,10 @@ class SPIReporter:
                         border_style=color,
                     )
                 )
-        else:
+        elif not report.data_quality_issues:
             c.print("\n[green]✔ No SPI / Flash anomalies detected. All transactions compliant.[/]")
+        else:
+            c.print("\n[yellow]⚠ No SPI anomaly was proven; the source evidence is incomplete.[/]")
 
     @staticmethod
     def to_markdown(report: SPIReport) -> str:
@@ -65,11 +80,17 @@ class SPIReporter:
         )
         lines.append(f"- **Anomalies Detected**: `{report.summary.anomaly_count}`\n")
 
+        if report.data_quality_issues:
+            lines.append("## ⚠ Data Quality Limitations")
+            for issue in report.data_quality_issues:
+                lines.append(f"- **{issue.code}** ({issue.count}): {issue.message}")
+            lines.append("")
+
         if report.anomalies:
             lines.append("## 🚨 Detected Protocol Anomalies & Root Cause Analysis")
             for idx, a in enumerate(report.anomalies, 1):
                 lines.append(
-                    f"### #{idx}: [{a.severity.value}] {a.title} @ Time: {a.timestamp:.6f}s"
+                    f"### #{idx}: [{a.severity.value}] {a.title} @ Time: {SPIReporter._format_time(a.timestamp)}s"
                 )
                 lines.append(f"- **Description**: {a.description}")
                 lines.append(f"\n```text\n{a.root_cause_guide}\n```\n")
@@ -86,7 +107,7 @@ class SPIReporter:
             )
             op_hex = f"0x{tx.opcode:02X}" if tx.opcode is not None else "-"
             lines.append(
-                f"| #{tx.index} | `{tx.start_time:.6f}` | `{op_hex}` | {tx.opcode_name} | `{addr_str}` | {tx.data_payload_len} B | {detail_str} |"
+                f"| #{tx.index} | `{SPIReporter._format_time(tx.start_time)}` | `{op_hex}` | {tx.opcode_name} | `{addr_str}` | {tx.data_payload_len} B | {detail_str} |"
             )
 
         return "\n".join(lines)
