@@ -106,3 +106,27 @@ def test_gui_respects_pcie_mode_and_rejects_invalid_register_value():
     assert not at.exception
     assert any("暫存器值格式錯誤" in error.value for error in at.error)
     assert not at.table
+
+
+def test_gui_packet_builder_read_template_is_explicit_about_length():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🎨 I2C 封包模擬器與驅動產生").run()
+    at.selectbox[0].set_value("Read").run()
+    at.number_input[0].set_value(4).run()
+
+    assert not at.exception
+    assert any("rx_buf[4]" in block.value for block in at.code)
+    assert any("r4" in block.value for block in at.code)
+    assert any("不是硬體量測" in caption.value for caption in at.caption)
+
+
+def test_gui_dts_generator_requires_and_renders_explicit_device_topology():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🌲 Device Tree (.dts) 產生器").run()
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert not at.error
+    assert len(at.code) == 1
+    assert "clock-frequency = <400000>;" in at.code[0].value
+    assert 'compatible = "atmel,24c64";' in at.code[0].value

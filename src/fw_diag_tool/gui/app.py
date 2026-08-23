@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import streamlit as st
+import yaml
 
 from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
@@ -251,7 +252,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             tx_data = [
                 {
                     "ID": t.id,
-                    "Time (s)": f"{t.start_time:.6f}",
+                    "Time (s)": f"{t.start_time:.6f}" if t.timestamp_available else "n/a",
                     "Address": f"0x{t.address_7bit:02X}",
                     "Direction": t.direction.value,
                     "ACK": t.address_ack.value,
@@ -272,7 +273,10 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
 # 2. Packet Builder & Driver CodeGen
 elif menu == "🎨 I2C 封包模擬器與驅動產生":
     st.header("I2C 封包自訂建構、理想波形生成與多平台 C 驅動產出")
-    b_col1, b_col2, b_col3, b_col4 = st.columns(4)
+    st.caption(
+        "這一頁產生的是協定示意與程式碼模板，不是硬體量測；Read 的回傳 bytes 必須由實際裝置或 raw capture 提供。"
+    )
+    b_col1, b_col2, b_col3, b_col4, b_col5 = st.columns(5)
     with b_col1:
         builder_addr_str = st.text_input("Slave 7-bit Address", value="0x50")
     with b_col2:
@@ -280,7 +284,11 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
     with b_col3:
         builder_reg_str = st.text_input("Register Offset", value="0x00")
     with b_col4:
-        builder_data_str = st.text_input("Data Bytes (Hex)", value="0x12 0x34")
+        builder_data_str = st.text_input("Write Data Bytes (Hex)", value="0x12 0x34")
+    with b_col5:
+        builder_read_length = st.number_input(
+            "Read Length (bytes)", min_value=1, max_value=255, value=2, step=1
+        )
     try:
         b_addr = int(builder_addr_str, 16)
         b_reg = int(builder_reg_str, 16)
@@ -295,7 +303,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
             address_7bit=b_addr,
             address_8bit=(b_addr << 1) | (1 if is_read_op else 0),
             direction=I2CDirection.READ if is_read_op else I2CDirection.WRITE,
-            data_bytes=b_data if not is_read_op else ([b_reg] if b_reg is not None else []),
+            data_bytes=[] if is_read_op else b_data,
             address_ack=AckType.ACK,
             has_stop=True,
             command_code=b_reg,
@@ -310,7 +318,11 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         )
         st.subheader("一鍵生成多平台 C 語言驅動代碼")
         snippets = I2CDriverCodeGenerator.generate_all_snippets(
-            addr_7bit=b_addr, reg_offset=b_reg, data_bytes=b_data, is_read=is_read_op
+            addr_7bit=b_addr,
+            reg_offset=b_reg,
+            data_bytes=[] if is_read_op else b_data,
+            is_read=is_read_op,
+            read_length=int(builder_read_length) if is_read_op else None,
         )
         for plat, code_txt in snippets.items():
             with st.expander(f"💻 {plat}", expanded=True):
@@ -394,16 +406,44 @@ elif menu == "🌐 MCTP / IPMB 伺服器協定解析":
 # 6. Device Tree Generator
 elif menu == "🌲 Device Tree (.dts) 產生器":
     st.header("Linux Kernel & OpenBMC Device Tree Source (.dts) 自動生成")
-    dt_b1, dt_b2 = st.columns(2)
+    st.caption(
+        "DTS 只有在實際 board binding、MUX 型號與裝置 compatible 都確認後才可套用；工具不會替你猜測裝置。"
+    )
+    dt_b1, dt_b2, dt_b3 = st.columns(3)
     with dt_b1:
         dts_bus = st.number_input("I2C Bus Number (&i2c...)", min_value=0, max_value=32, value=1)
     with dt_b2:
         dts_mux = st.text_input("PCA9548A MUX Address", value="0x70")
-    dts_code = DeviceTreeGenerator.generate_dts_from_topology(
-        bus_num=dts_bus, mux_addr=int(dts_mux, 16)
+    with dt_b3:
+        dts_clock = st.number_input("clock-frequency (Hz)", min_value=1, value=400000, step=10000)
+    dts_mux_compatible = st.text_input("MUX compatible", value="nxp,pca9548")
+    dts_devices_text = st.text_area(
+        "裝置清單（YAML；每個 device 必須有 addr/channel/name/compatible）",
+        value="""- addr: 0x50
+  channel: 0
+  name: eeprom
+  compatible: atmel,24c64
+- addr: 0x48
+  channel: 1
+  name: temp-sensor
+  compatible: national,lm75
+""",
+        height=180,
     )
-    st.code(dts_code, language="dts")
-    st.download_button("下載 i2c_bus.dtsi", dts_code, file_name=f"i2c_bus{dts_bus}.dtsi")
+    if st.button("產生 Device Tree"):
+        try:
+            devices = yaml.safe_load(dts_devices_text) or []
+            dts_code = DeviceTreeGenerator.generate_dts_from_topology(
+                bus_num=int(dts_bus),
+                mux_addr=dts_mux,
+                devices=devices,
+                clock_frequency=int(dts_clock),
+                mux_compatible=dts_mux_compatible,
+            )
+            st.code(dts_code, language="dts")
+            st.download_button("下載 i2c_bus.dtsi", dts_code, file_name=f"i2c_bus{dts_bus}.dtsi")
+        except (TypeError, ValueError, yaml.YAMLError) as exc:
+            st.error(f"DTS 輸入錯誤：{exc}")
 
 # 7. PCIe
 elif menu == "🚀 PCIe Config & AER 診斷":

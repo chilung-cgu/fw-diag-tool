@@ -32,6 +32,19 @@ class WaveformDiffReport:
 class WaveformDiffEngine:
     # Compares Golden (Normal) vs Failing (Defective) I2C traces and pinpoints root divergence
 
+    @staticmethod
+    def _ack_outcome(tx: I2CTransaction) -> str:
+        """Return a comparison-safe ACK outcome, excluding normal read termination NACK."""
+        if tx.address_ack == AckType.NACK:
+            return "address_nack"
+        if tx.has_unexpected_data_nack:
+            return "data_nack"
+        if tx.address_ack == AckType.NONE or any(
+            packet.ack == AckType.NONE for packet in tx.byte_packets if not packet.is_address
+        ):
+            return "unknown"
+        return "ok"
+
     @classmethod
     def compare_reports(
         cls,
@@ -87,21 +100,24 @@ class WaveformDiffEngine:
                     )
                     break
 
-                g_nack = g.address_ack == AckType.NACK or any(
-                    p.ack == AckType.NACK for p in g.byte_packets
-                )
-                f_nack = f.address_ack == AckType.NACK or any(
-                    p.ack == AckType.NACK for p in f.byte_packets
-                )
-                if g_nack != f_nack:
+                g_ack_outcome = cls._ack_outcome(g)
+                f_ack_outcome = cls._ack_outcome(f)
+                if g_ack_outcome != f_ack_outcome:
                     divergences.append(
                         DivergencePoint(
                             tx_index=idx + 1,
                             golden_tx=g,
                             failing_tx=f,
                             mismatch_type="NACK_MISMATCH",
-                            description=f"ACK mismatch on 0x{g.address_7bit:02X}: Golden NACK={g_nack}, Failing NACK={f_nack}",
-                            root_cause_hint="Slave 晶片在故障板卡上返回 NACK (可能未上電、被 Reset 或內部忙碌)。",
+                            description=(
+                                f"ACK outcome mismatch on 0x{g.address_7bit:02X}: "
+                                f"Golden={g_ack_outcome}, Failing={f_ack_outcome}. "
+                                "A final controller NACK on a read is treated as normal termination."
+                            ),
+                            root_cause_hint=(
+                                "先確認 NACK 是 address、write-data、read 終止，還是來源欄位缺失；"
+                                "只有 address/data NACK 才進一步檢查供電、reset、busy 與 command。"
+                            ),
                         )
                     )
                     break
