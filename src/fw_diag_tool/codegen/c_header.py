@@ -30,6 +30,15 @@ class CHeaderGenerator:
         s = re.sub(r"[^A-Za-z0-9_]", "_", name.strip())
         return s.upper()
 
+    @classmethod
+    def _require_identifier(cls, kind: str, name: str) -> str:
+        if not isinstance(name, str):
+            raise TypeError(f"{kind} must be a string")
+        sanitized = cls._sanitize_name(name)
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", sanitized):
+            raise ValueError(f"{kind} must produce a C identifier beginning with a letter")
+        return sanitized
+
     def _validate_catalog(self) -> None:
         register_names: set[str] = set()
         for offset, reg in self.catalog.registers.items():
@@ -43,9 +52,7 @@ class CHeaderGenerator:
                 if not 0 <= reg.reset_val < (1 << reg.size):
                     raise ValueError(f"register {reg.name!r} reset value exceeds its width")
 
-            register_name = self._sanitize_name(reg.name)
-            if not register_name:
-                raise ValueError("register name must contain at least one identifier character")
+            register_name = self._require_identifier("register name", reg.name)
             if register_name in register_names:
                 raise ValueError(f"duplicate generated register name: {register_name}")
             register_names.add(register_name)
@@ -53,11 +60,7 @@ class CHeaderGenerator:
             used_mask = 0
             field_names: set[str] = set()
             for field in reg.fields:
-                field_name = self._sanitize_name(field.name)
-                if not field_name:
-                    raise ValueError(
-                        f"field in register {reg.name!r} must contain an identifier character"
-                    )
+                field_name = self._require_identifier(f"field in register {reg.name!r}", field.name)
                 if field_name in field_names:
                     raise ValueError(
                         f"duplicate generated field name {field_name!r} in register {reg.name!r}"
@@ -85,11 +88,9 @@ class CHeaderGenerator:
 
                 value_labels: set[str] = set()
                 for meaning in field.values.values():
-                    label = self._sanitize_name(meaning)
-                    if not label:
-                        raise ValueError(
-                            f"field {reg.name}.{field.name} enum label is not a valid identifier"
-                        )
+                    label = self._require_identifier(
+                        f"field {reg.name}.{field.name} enum label", meaning
+                    )
                     if label in value_labels:
                         raise ValueError(
                             f"field {reg.name}.{field.name} has duplicate generated enum labels"
@@ -97,9 +98,7 @@ class CHeaderGenerator:
                     value_labels.add(label)
 
     def generate_header(self, module_name: str = "CHIP_REGS") -> str:
-        module_identifier = self._sanitize_name(module_name)
-        if not module_identifier or module_identifier[0].isdigit():
-            raise ValueError("module_name must produce a valid C identifier")
+        module_identifier = self._require_identifier("module_name", module_name)
         self._validate_catalog()
         guard_name = f"{module_identifier}_H"
         lines: list[str] = [

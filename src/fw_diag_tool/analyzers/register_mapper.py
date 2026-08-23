@@ -115,6 +115,8 @@ class RegisterMapCatalog:
                 description=r.get("description", ""),
                 fields=fields,
             )
+            if offset in self.registers:
+                raise ValueError(f"duplicate register offset: 0x{offset:X}")
             self.registers[offset] = reg_def
             self.name_map[reg_def.name.lower()] = reg_def
 

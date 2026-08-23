@@ -330,3 +330,32 @@ registers:
     )
     with pytest.raises(ValueError, match="invalid bit range"):
         generator.generate_header("TEST")
+
+
+@pytest.mark.parametrize("module_name", ["123-chip", "_private", "!!!"])
+def test_c_header_rejects_nonportable_generated_identifiers(module_name):
+    generator = CHeaderGenerator.from_yaml_str(
+        """
+registers:
+  - name: STATUS
+    offset: 0
+    fields: []
+"""
+    )
+    with pytest.raises(ValueError, match="C identifier"):
+        generator.generate_header(module_name)
+
+
+def test_register_catalog_rejects_duplicate_offsets_instead_of_overwriting():
+    with pytest.raises(ValueError, match="duplicate register offset"):
+        CHeaderGenerator.from_yaml_str(
+            """
+registers:
+  - name: FIRST
+    offset: 0x00
+    fields: []
+  - name: SECOND
+    offset: 0x00
+    fields: []
+"""
+        )
