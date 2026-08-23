@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import plotly.graph_objects as go
@@ -42,13 +43,32 @@ class I2CWaveformReconstructor:
     }
 
     def __init__(self, default_clock_khz: float = 100.0):
+        self._validate_clock(default_clock_khz, "default_clock_khz")
         self.default_clock_khz = default_clock_khz
+
+    @staticmethod
+    def _validate_clock(clock_khz: float, name: str) -> None:
+        if (
+            isinstance(clock_khz, bool)
+            or not isinstance(clock_khz, (int, float))
+            or not math.isfinite(float(clock_khz))
+            or clock_khz <= 0
+        ):
+            raise ValueError(f"{name} must be a positive finite number")
 
     def reconstruct_transaction_waveform(
         self, tx: I2CTransaction, clock_khz: float | None = None, t_offset_us: float = 0.0
     ) -> I2CWaveformData:
-        clk_khz = clock_khz if (clock_khz is not None and clock_khz > 0) else self.default_clock_khz
-        clk_khz = max(1.0, clk_khz)
+        if clock_khz is not None:
+            self._validate_clock(clock_khz, "clock_khz")
+        clk_khz = self.default_clock_khz if clock_khz is None else clock_khz
+        if (
+            isinstance(t_offset_us, bool)
+            or not isinstance(t_offset_us, (int, float))
+            or not math.isfinite(float(t_offset_us))
+            or t_offset_us < 0
+        ):
+            raise ValueError("t_offset_us must be finite and non-negative")
         t_half_period_us = max(0.5, 500.0 / clk_khz)  # 5µs for 100kHz, 1.25µs for 400kHz
 
         time_us: list[float] = []

@@ -19,6 +19,7 @@ from fw_diag_tool.i2c.sensor_decoders import (
     decode_lm75_temperature,
     decode_pca9555_gpio,
 )
+from fw_diag_tool.i2c.timing import analyze_timing_statistics
 from fw_diag_tool.pcie.diagnostics import diagnose_pcie_device
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
@@ -294,6 +295,17 @@ def test_sensor_decoders_reject_invalid_direct_byte_inputs():
         decode_ina2xx_power(0x100, [0, 0])
 
 
+def test_i2c_direct_timing_and_waveform_inputs_reject_nonfinite_values():
+    with pytest.raises(ValueError, match="duration_s"):
+        I2CDiagnosticEngine().analyze(
+            [RawI2CEvent(0.0, RawEventType.DATA, duration_s=float("inf"))]
+        )
+    with pytest.raises(ValueError, match="total_trace_duration_s"):
+        analyze_timing_statistics([], float("nan"))
+    with pytest.raises(ValueError, match="default_clock_khz"):
+        I2CWaveformReconstructor(default_clock_khz=float("nan"))
+
+
 def test_reused_engine_does_not_leak_mux_state_between_captures():
     engine = I2CDiagnosticEngine()
     first = engine.analyze_csv_content(
@@ -497,7 +509,7 @@ def test_waveform_diff_missing_tx_figure():
     assert fig is not None
 
 
-def test_waveform_reconstructor_zero_clock_guard():
+def test_waveform_reconstructor_rejects_zero_clock():
     tx = I2CTransaction(
         id=1,
         start_time=0.0,
@@ -509,6 +521,8 @@ def test_waveform_reconstructor_zero_clock_guard():
         address_ack=AckType.ACK,
         has_stop=True,
     )
-    rec = I2CWaveformReconstructor(default_clock_khz=0.0)
-    wave = rec.reconstruct_transaction_waveform(tx, clock_khz=-10.0)
-    assert len(wave.time_us) > 0
+    with pytest.raises(ValueError, match="default_clock_khz"):
+        I2CWaveformReconstructor(default_clock_khz=0.0)
+    rec = I2CWaveformReconstructor(default_clock_khz=100.0)
+    with pytest.raises(ValueError, match="clock_khz"):
+        rec.reconstruct_transaction_waveform(tx, clock_khz=-10.0)

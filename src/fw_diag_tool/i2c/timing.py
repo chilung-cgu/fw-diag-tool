@@ -7,6 +7,8 @@ and SMBus 25ms timeout violations, and measures inter-byte/transaction latency.
 
 from __future__ import annotations
 
+import math
+
 from fw_diag_tool.i2c.models import I2CSpeedMode, I2CTransaction, TimingStatistics
 
 
@@ -34,6 +36,16 @@ def analyze_timing_statistics(
         transactions: List of parsed I2CTransactions.
         total_trace_duration_s: Total time duration of trace from first event to last event.
     """
+    if (
+        isinstance(total_trace_duration_s, bool)
+        or not isinstance(total_trace_duration_s, (int, float))
+        or not math.isfinite(float(total_trace_duration_s))
+        or total_trace_duration_s < 0
+    ):
+        raise ValueError("total_trace_duration_s must be finite and non-negative")
+    if not isinstance(transactions, list):
+        raise TypeError("transactions must be a list")
+
     stats = TimingStatistics()
     if not transactions:
         return stats
@@ -59,17 +71,44 @@ def analyze_timing_statistics(
 
         # Inter-byte delays inside transaction
         for delay_us in tx.inter_byte_delays_us:
+            if (
+                isinstance(delay_us, bool)
+                or not isinstance(delay_us, (int, float))
+                or not math.isfinite(float(delay_us))
+                or delay_us < 0
+            ):
+                raise ValueError("inter-byte delays must be finite and non-negative")
             if delay_us > 0:
                 all_inter_byte_delays_us.append(delay_us)
 
         # Clock stretch events
         for stretch in tx.clock_stretching_events:
+            if not isinstance(stretch, dict):
+                raise TypeError("clock stretching events must be mappings")
             dur_ms = stretch.get("duration_ms", 0.0)
+            if (
+                isinstance(dur_ms, bool)
+                or not isinstance(dur_ms, (int, float))
+                or not math.isfinite(float(dur_ms))
+                or dur_ms < 0
+            ):
+                raise ValueError("clock stretch duration must be finite and non-negative")
             if dur_ms > 0:
                 all_clock_stretches_ms.append(dur_ms)
 
         # Byte-level frequencies
         for pkt in tx.byte_packets:
+            for field_name, field_value in (
+                ("bit_rate_khz", pkt.bit_rate_khz),
+                ("duration_s", pkt.duration_s),
+            ):
+                if field_value is not None and (
+                    isinstance(field_value, bool)
+                    or not isinstance(field_value, (int, float))
+                    or not math.isfinite(float(field_value))
+                    or field_value <= 0
+                ):
+                    raise ValueError(f"{field_name} must be a positive finite number")
             if pkt.bit_rate_khz and pkt.bit_rate_khz > 0:
                 all_frequencies_khz.append(pkt.bit_rate_khz)
                 total_active_time_s += (

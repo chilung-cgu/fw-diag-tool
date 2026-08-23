@@ -60,7 +60,11 @@ class I2CDiagnosticEngine:
             raise TypeError("default_vout_exponent must be an integer in the PMBus range -16..15")
         if not -16 <= default_vout_exponent <= 15:
             raise ValueError("default_vout_exponent must be in the PMBus range -16..15")
-        if default_eeprom_address_bytes not in (None, 1, 2):
+        if isinstance(default_eeprom_address_bytes, bool) or default_eeprom_address_bytes not in (
+            None,
+            1,
+            2,
+        ):
             raise ValueError("default_eeprom_address_bytes must be 1, 2, or None")
         if eeprom_profile is not None and eeprom_profile not in EEPROM_MODELS:
             known_profiles = ", ".join(sorted(EEPROM_MODELS))
@@ -767,6 +771,25 @@ class I2CDiagnosticEngine:
                 or not 0 <= event.data_byte <= 0xFF
             ):
                 raise ValueError(f"I2C event {index} data_byte must be in range 0..0xFF")
+            if event.packet_id is not None and (
+                isinstance(event.packet_id, bool)
+                or not isinstance(event.packet_id, int)
+                or event.packet_id < 0
+            ):
+                raise ValueError(f"I2C event {index} packet_id must be a non-negative integer")
+            for field_name, field_value in (
+                ("duration_s", event.duration_s),
+                ("bit_rate_khz", event.bit_rate_khz),
+            ):
+                if field_value is not None and (
+                    isinstance(field_value, bool)
+                    or not isinstance(field_value, (int, float))
+                    or not math.isfinite(float(field_value))
+                    or field_value <= 0
+                ):
+                    raise ValueError(
+                        f"I2C event {index} {field_name} must be a positive finite number"
+                    )
 
     def analyze_csv_string(self, csv_text: str) -> I2CAnalysisReport:
         """Convenience method to parse and analyze CSV text."""
