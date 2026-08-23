@@ -389,6 +389,19 @@ def test_engine_rejects_malformed_direct_event_and_reports_unknown_csv_rows():
     assert any(
         issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in invalid_address.data_quality_issues
     )
+    invalid_type = I2CDiagnosticEngine(eeprom_profile="24C02").analyze_csv_content(
+        "Time,Type,Address,Read/Write,Data,ACK\n0,BOGUS,0x50,WRITE,0x01,ACK\n"
+    )
+    assert invalid_type.total_transactions == 0
+    assert any(issue.code == "I2C_UNKNOWN_EVENT_TYPE" for issue in invalid_type.data_quality_issues)
+    with pytest.raises(ValueError, match="packet_id"):
+        I2CParser.parse_raw_records([{"type": "DATA", "packet_id": -1, "data": 0x01}])
+    with pytest.raises(TypeError, match="text trace"):
+        I2CParser.parse_text_trace(None)  # type: ignore[arg-type]
+    text_report = I2CDiagnosticEngine().analyze(
+        I2CParser.parse_text_trace("S 0x50 W xyz 0x100 A P")
+    )
+    assert any(issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in text_report.data_quality_issues)
 
 
 def test_i2c_parser_does_not_coerce_malformed_numeric_or_schema_values():

@@ -176,20 +176,40 @@ class I2CParser:
                 if time_idx is not None and time_idx < len(row) and row[time_idx].strip():
                     source_error = source_error or "timestamp token is not finite and non-negative"
 
-            packet_id = (
-                parse_hex_or_int(row[packet_id_idx])
-                if packet_id_idx is not None and packet_id_idx < len(row)
-                else None
-            )
-            if packet_id is None and packet_id_idx is not None and packet_id_idx < len(row):
-                packet_cell = row[packet_id_idx].strip()
-                if packet_cell and packet_cell.lower() not in ("none", "null", "n/a", "-"):
-                    source_error = source_error or f"packet id token {packet_cell!r} is not numeric"
             raw_type_str = (
                 row[type_idx].strip().upper()
                 if type_idx is not None and type_idx < len(row)
                 else ""
             )
+            type_token = raw_type_str.replace(" ", "_").replace("-", "_")
+            allowed_type_tokens = {
+                "START",
+                "REPEATED_START",
+                "SR",
+                "STOP",
+                "ADDRESS",
+                "DATA",
+                "BUS_HANG",
+                "UNKNOWN",
+                "READ",
+                "WRITE",
+            }
+            if type_idx is not None and raw_type_str and type_token not in allowed_type_tokens:
+                source_error = f"event type token {raw_type_str!r} is not recognized"
+                structural_source_error = True
+
+            packet_id = None
+            if packet_id_idx is not None and packet_id_idx < len(row):
+                packet_cell = row[packet_id_idx].strip()
+                if packet_cell and packet_cell.lower() not in ("none", "null", "n/a", "-"):
+                    parsed_packet_id = parse_hex_or_int(packet_cell)
+                    if parsed_packet_id is None or parsed_packet_id < 0:
+                        source_error = source_error or (
+                            f"packet id token {packet_cell!r} is not a non-negative integer"
+                        )
+                        structural_source_error = True
+                    else:
+                        packet_id = parsed_packet_id
 
             # Parse address
             raw_addr_cell = (
@@ -224,6 +244,7 @@ class I2CParser:
                     and raw_rw is None
                 ):
                     source_error = source_error or f"direction token {rw_cell!r} is not READ/WRITE"
+                    structural_source_error = True
 
             # If direction not separate column, check if raw_type_str or address embeds it
             if raw_rw is None:
@@ -321,12 +342,20 @@ class I2CParser:
                     source_error = source_error or "bitrate is not a positive finite number"
 
             # Determine event type
-            if "START" in raw_type_str and "REPEATED" not in raw_type_str:
+            if type_token == "START":
                 ev_type = RawEventType.START
-            elif "REPEATED" in raw_type_str or "SR" in raw_type_str:
+            elif type_token in ("REPEATED_START", "SR"):
                 ev_type = RawEventType.REPEATED_START
-            elif "STOP" in raw_type_str:
+            elif type_token == "STOP":
                 ev_type = RawEventType.STOP
+            elif type_token == "ADDRESS":
+                ev_type = RawEventType.ADDRESS
+            elif type_token == "DATA":
+                ev_type = RawEventType.DATA
+            elif type_token == "BUS_HANG":
+                ev_type = RawEventType.BUS_HANG
+            elif type_token == "UNKNOWN":
+                ev_type = RawEventType.UNKNOWN
             elif addr_7bit is not None and raw_data is None:
                 ev_type = RawEventType.ADDRESS
             elif raw_data is not None:
@@ -406,6 +435,8 @@ class I2CParser:
     @classmethod
     def parse_text_trace(cls, text: str) -> list[RawI2CEvent]:
         """Parse simple text trace logs (e.g. '[0.001] S 0x50 W 0x00 A Sr 0x50 R 0x12 A P')."""
+        if not isinstance(text, str):
+            raise TypeError("text trace input must be text")
         events: list[RawI2CEvent] = []
         lines = [
             line.strip()
@@ -484,7 +515,29 @@ class I2CParser:
                 else:
                     # Numeric byte token (address or data)
                     val = parse_hex_or_int(tok)
-                    if val is not None:
+                    if val is None:
+                        events.append(
+                            RawI2CEvent(
+                                timestamp=timestamp,
+                                event_type=RawEventType.UNKNOWN,
+                                packet_id=packet_id,
+                                timestamp_available=timestamp_available,
+                                raw_text=tok,
+                                extra={"source_error": f"unknown text token {tok!r}"},
+                            )
+                        )
+                    elif not 0 <= val <= 0xFF:
+                        events.append(
+                            RawI2CEvent(
+                                timestamp=timestamp,
+                                event_type=RawEventType.UNKNOWN,
+                                packet_id=packet_id,
+                                timestamp_available=timestamp_available,
+                                raw_text=tok,
+                                extra={"source_error": f"text byte {val} is outside 0..0xFF"},
+                            )
+                        )
+                    else:
                         # Look ahead for R/W or ACK token
                         next_rw = None
                         if idx + 1 < len(tokens):
@@ -574,6 +627,15 @@ class I2CParser:
                 )
             ack_val = parse_ack(rec.get("ack", rec.get("ack_nak")))
 
+            raw_packet_id = rec.get("packet_id")
+            packet_id = None
+            if raw_packet_id is not None:
+                packet_id = parse_hex_or_int(raw_packet_id)
+                if packet_id is None or packet_id < 0:
+                    raise ValueError(
+                        f"raw I2C record {index} packet_id must be a non-negative integer"
+                    )
+
             duration_s = _positive_finite_float(rec.get("duration_s"))
             bit_rate_khz = _positive_finite_float(rec.get("bit_rate_khz"))
 
@@ -582,7 +644,7 @@ class I2CParser:
                     timestamp=ts,
                     event_type=ev_type,
                     timestamp_available=timestamp_available,
-                    packet_id=rec.get("packet_id"),
+                    packet_id=packet_id,
                     address_7bit=addr_7bit,
                     direction=rw,
                     data_byte=data_val,
