@@ -232,7 +232,7 @@ def decode_i2c_capture(capture: RawDigitalCapture) -> RawI2CDecodeResult:
     transactions: list[RawI2CTransaction] = []
     active: _TransactionBuilder | None = None
 
-    for previous, current in pairwise(capture.transitions):
+    for transition_index, (previous, current) in enumerate(pairwise(capture.transitions)):
         scl_changed = previous.scl != current.scl
         sda_changed = previous.sda != current.sda
 
@@ -268,7 +268,20 @@ def decode_i2c_capture(capture: RawDigitalCapture) -> RawI2CDecodeResult:
             continue
 
         if active and previous.scl == 0 and current.scl == 1:
-            active.samples.append((current.timestamp_s, current.sda))
+            next_transition = (
+                capture.transitions[transition_index + 2]
+                if transition_index + 2 < len(capture.transitions)
+                else None
+            )
+            is_stop_setup = bool(
+                next_transition
+                and current.scl == 1
+                and current.sda == 0
+                and next_transition.scl == 1
+                and next_transition.sda == 1
+            )
+            if not is_stop_setup:
+                active.samples.append((current.timestamp_s, current.sda))
 
     if active:
         raise RawI2CDecodeError(

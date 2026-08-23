@@ -224,6 +224,17 @@ def test_rejects_sda_change_on_sampling_edge() -> None:
         decode_i2c_capture(capture)
 
 
+def test_stop_setup_edge_is_not_mistaken_for_a_missing_ack_clock() -> None:
+    builder = _CaptureBuilder()
+    builder.start()
+    for shift in range(7, -1, -1):
+        builder.clock((0xA0 >> shift) & 1)
+    builder.stop()
+
+    with pytest.raises(RawI2CDecodeError, match="incomplete byte"):
+        analyze_raw_i2c_csv(builder.csv())
+
+
 def test_raw_capture_public_boundary_rejects_wrong_types_and_delimiters() -> None:
     with pytest.raises(RawCaptureValidationError, match="text or bytes"):
         parse_transition_csv(None)  # type: ignore[arg-type]
