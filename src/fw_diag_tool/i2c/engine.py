@@ -84,9 +84,6 @@ class I2CDiagnosticEngine:
                         finish_at_event(current_tx, ev)
                         if ev.event_type == RawEventType.REPEATED_START:
                             current_tx.has_stop = False
-                            current_tx.is_repeated_start = getattr(
-                                current_tx, "is_repeated_start", False
-                            )
                         transactions.append(current_tx)
                     current_tx = None
 
@@ -372,7 +369,7 @@ class I2CDiagnosticEngine:
                     else:
                         tx.semantic_summary = "PMBus Quick Command / Address Probe"
                 else:
-                    cmd_code = ctx.get("last_cmd") if ctx.get("last_cmd") is not None else 0x88
+                    cmd_code = int(ctx["last_cmd"]) if ctx.get("last_cmd") is not None else 0x88
                     tx.command_code = cmd_code
                     if cmd_code == 0x20 and tx.data_bytes:
                         from fw_diag_tool.i2c.pmbus import parse_vout_mode_exponent
@@ -432,7 +429,7 @@ class I2CDiagnosticEngine:
                     else:
                         tx.semantic_summary = "Temperature Sensor Address Probe"
                 else:
-                    ptr = ctx.get("last_cmd") if ctx.get("last_cmd") is not None else 0x00
+                    ptr = int(ctx["last_cmd"]) if ctx.get("last_cmd") is not None else 0x00
                     if ptr == 0x00:
                         decoded = decode_lm75_temperature(tx.data_bytes)
                         tx.semantic_summary = decoded.get("summary")
@@ -455,7 +452,7 @@ class I2CDiagnosticEngine:
                     else:
                         tx.semantic_summary = "INA2xx Address Probe"
                 else:
-                    ptr = ctx.get("last_cmd") if ctx.get("last_cmd") is not None else 0x02
+                    ptr = int(ctx["last_cmd"]) if ctx.get("last_cmd") is not None else 0x02
                     decoded = decode_ina2xx_power(ptr, tx.data_bytes)
                     tx.semantic_summary = decoded.get("summary")
                     tx.decoded_values = decoded
@@ -473,7 +470,7 @@ class I2CDiagnosticEngine:
                     else:
                         tx.semantic_summary = "GPIO Expander Address Probe"
                 else:
-                    ptr = ctx.get("last_cmd") if ctx.get("last_cmd") is not None else 0x00
+                    ptr = int(ctx["last_cmd"]) if ctx.get("last_cmd") is not None else 0x00
                     decoded = decode_pca9555_gpio(ptr, tx.data_bytes)
                     tx.semantic_summary = decoded.get("summary")
                     tx.decoded_values = decoded
@@ -624,5 +621,6 @@ class I2CDiagnosticEngine:
         events = I2CParser.parse_raw_records(records)
         return self.analyze(events)
 
-
-I2CDiagnosticEngine.analyze_csv_content = I2CDiagnosticEngine.analyze_csv_string
+    def analyze_csv_content(self, csv_text: str) -> I2CAnalysisReport:
+        """Backward-compatible alias for :meth:`analyze_csv_string`."""
+        return self.analyze_csv_string(csv_text)

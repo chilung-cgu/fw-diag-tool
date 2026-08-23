@@ -88,6 +88,15 @@ def _positive_finite_float(value: Any) -> float | None:
     return parsed if math.isfinite(parsed) and parsed > 0 else None
 
 
+def _nonnegative_finite_float(value: Any) -> float | None:
+    """Return a finite nonnegative float, treating malformed values as unavailable."""
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) and parsed >= 0 else None
+
+
 class I2CParser:
     """Universal I2C trace parser."""
 
@@ -430,12 +439,9 @@ class I2CParser:
         events: list[RawI2CEvent] = []
         for rec in records:
             raw_timestamp = rec.get("timestamp", rec.get("time"))
-            timestamp_available = raw_timestamp is not None
-            try:
-                ts = float(raw_timestamp) if timestamp_available else 0.0
-            except (TypeError, ValueError):
-                ts = 0.0
-                timestamp_available = False
+            parsed_timestamp = _nonnegative_finite_float(raw_timestamp)
+            timestamp_available = parsed_timestamp is not None
+            ts = parsed_timestamp if parsed_timestamp is not None else 0.0
             ev_type_str = str(rec.get("event_type", rec.get("type", "DATA"))).upper()
             ev_type = (
                 RawEventType(ev_type_str)

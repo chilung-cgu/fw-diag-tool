@@ -153,8 +153,10 @@ class SPIParser:
     ) -> SPITransaction:
         dur_us = max(0.0, (end_time - start_time) * 1_000_000.0)
         opcode = mosi[0] if mosi else None
-        opcode_name = OPCODE_NAMES.get(
-            opcode, f"Unknown Opcode (0x{opcode:02X})" if opcode is not None else "No Data"
+        opcode_name = (
+            OPCODE_NAMES.get(opcode, f"Unknown Opcode (0x{opcode:02X})")
+            if opcode is not None
+            else "No Data"
         )
 
         address = None

@@ -453,8 +453,8 @@ elif menu == "⚡ SPI Flash 協定診斷":
         except ValueError as exc:
             st.error(f"無法讀取 SPI trace：{exc}")
     if csv_text:
-        engine = SPIDiagnosticEngine()
-        rep = engine.analyze_csv_content(csv_text)
+        spi_engine = SPIDiagnosticEngine()
+        rep = spi_engine.analyze_csv_content(csv_text)
         SPIReporter.render_terminal(rep)
         s1, s2, s3, s4 = st.columns(4)
         s1.metric("總傳輸次數", rep.summary.total_transactions)

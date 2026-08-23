@@ -126,11 +126,11 @@ class PCIeReporter:
             active_corr = [e for e in aer.corr_errors if e.is_active]
             if active_corr:
                 lines.append("### Active Correctable Errors")
-                for err in active_corr:
-                    masked_tag = " (MASKED)" if err.is_masked else ""
-                    lines.append(f"#### {err.name} (Bit {err.bit_pos}){masked_tag}")
-                    if err.root_cause_guide:
-                        lines.append(f"\n```text\n{err.root_cause_guide}\n```\n")
+                for corr_err in active_corr:
+                    masked_tag = " (MASKED)" if corr_err.is_masked else ""
+                    lines.append(f"#### {corr_err.name} (Bit {corr_err.bit_pos}){masked_tag}")
+                    if corr_err.root_cause_guide:
+                        lines.append(f"\n```text\n{corr_err.root_cause_guide}\n```\n")
                 lines.append("")
 
             if aer.decoded_tlp:

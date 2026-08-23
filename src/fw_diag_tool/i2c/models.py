@@ -128,6 +128,9 @@ class I2CTransaction:
     timestamp_available: bool = True
     identity_confidence: str = "unknown"
     device_candidates: list[str] = field(default_factory=list)
+    _is_placeholder: bool = field(default=False, repr=False)
+    _has_address: bool = field(default=False, repr=False)
+    _packet_id: int | None = field(default=None, repr=False)
 
     @property
     def hex_dump(self) -> str:

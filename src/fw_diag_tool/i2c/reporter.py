@@ -334,8 +334,10 @@ class I2CReporter:
         if report.data_quality_issues:
             lines.append("## Data Quality Limitations")
             lines.append("")
-            for issue in report.data_quality_issues:
-                lines.append(f"- **{issue.code}** ({issue.count}): {issue.message}")
+            for quality_issue in report.data_quality_issues:
+                lines.append(
+                    f"- **{quality_issue.code}** ({quality_issue.count}): {quality_issue.message}"
+                )
             lines.append("")
 
         # Diagnostic Issues & Advice
@@ -350,25 +352,31 @@ class I2CReporter:
                 "✔ **All transactions completed cleanly with no protocol or timing violations.**"
             )
         else:
-            for idx, issue in enumerate(report.issues, 1):
-                lines.append(f"### 4.{idx} [{issue.severity.value}] {issue.code}: {issue.title}")
+            for idx, diagnostic_issue in enumerate(report.issues, 1):
+                lines.append(
+                    f"### 4.{idx} [{diagnostic_issue.severity.value}] {diagnostic_issue.code}: {diagnostic_issue.title}"
+                )
                 lines.append("")
-                lines.append(f"- **Category**: `{issue.category}`")
-                if issue.address_7bit is not None:
-                    lines.append(f"- **Device Address**: `0x{issue.address_7bit:02X}`")
-                lines.append(f"- **Description**: {issue.description}")
+                lines.append(f"- **Category**: `{diagnostic_issue.category}`")
+                if diagnostic_issue.address_7bit is not None:
+                    lines.append(
+                        f"- **Device Address**: `0x{diagnostic_issue.address_7bit:02X}`"
+                    )
+                lines.append(f"- **Description**: {diagnostic_issue.description}")
                 lines.append("")
                 lines.append("**可能原因假設（Hypotheses；不是已證明的根因）**:")
-                for rc_line in issue.root_cause_analysis.split("\n"):
+                for rc_line in diagnostic_issue.root_cause_analysis.split("\n"):
                     if rc_line.strip():
                         lines.append(f"- {rc_line.strip()}")
                 lines.append("")
                 lines.append("**新手排查行動建議 (Actionable Debug Checklist)**:")
-                for advice in issue.actionable_advice:
+                for advice in diagnostic_issue.actionable_advice:
                     lines.append(f"- [ ] {advice}")
                 lines.append("")
 
         return "\n".join(lines)
 
-
-I2CReporter.to_markdown = I2CReporter.generate_markdown
+    @classmethod
+    def to_markdown(cls, report: I2CAnalysisReport) -> str:
+        """Backward-compatible report export alias."""
+        return cls.generate_markdown(report)

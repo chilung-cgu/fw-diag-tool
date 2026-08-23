@@ -41,6 +41,9 @@ jobs:
       - name: Lint with ruff
         run: uv run --locked --extra dev ruff check src/ tests/
 
+      - name: Type-check with mypy
+        run: uv run --locked --extra dev mypy src/fw_diag_tool
+
       - name: Run tests with pytest and coverage
         run: |
           uv run --locked --extra dev pytest --cov=src/fw_diag_tool --cov-report=xml --junitxml=junit.xml -v

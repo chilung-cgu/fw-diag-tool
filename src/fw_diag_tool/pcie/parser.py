@@ -1,5 +1,6 @@
 import re
 import struct
+from typing import Any
 
 from .constants import (
     AER_CORR_BITS,
@@ -31,8 +32,8 @@ from .models import (
 class PCIeAnalyzer:
     @classmethod
     def parse_multi_lspci_text(cls, text: str) -> list[PCIeConfigSpace]:
-        chunks = []
-        current_lines = []
+        chunks: list[str] = []
+        current_lines: list[str] = []
         bdf_pattern = re.compile(r"^[0-9a-fA-F]{2,4}:[0-9a-fA-F]{2}:[0-9a-fA-F]{2}\.[0-7]")
         for line in text.splitlines():
             if bdf_pattern.match(line.strip()) and current_lines:
@@ -41,7 +42,7 @@ class PCIeAnalyzer:
             current_lines.append(line)
         if current_lines:
             chunks.append("\n".join(current_lines))
-        results = []
+        results: list[PCIeConfigSpace] = []
         for chunk in chunks:
             if not chunk.strip():
                 continue
@@ -59,7 +60,7 @@ class PCIeAnalyzer:
             return hex_input
         text = hex_input.strip()
         lines = text.splitlines()
-        byte_values = []
+        byte_values: list[int] = []
 
         # Check if lines have offset patterns like "00: ..." or "0000:01:00.0 ..."
         for line in lines:
@@ -239,7 +240,7 @@ class PCIeAnalyzer:
                 cap_id = raw_data[ptr]
                 next_ptr = raw_data[ptr + 1] & ~0x03
                 cap_name = PCI_CAP_NAMES.get(cap_id, f"Unknown Cap (0x{cap_id:02X})")
-                decoded_details = {}
+                decoded_details: dict[str, Any] = {}
 
                 if cap_id == PCI_CAP_ID_EXP:
                     pcie_cap_reg = struct.unpack_from("<H", raw_data, ptr + 2)[0]

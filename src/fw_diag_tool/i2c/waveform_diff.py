@@ -190,7 +190,11 @@ class WaveformDiffEngine:
                     col=1,
                 )
             if diff_report.failing_first_tx or diff_report.golden_first_tx:
-                target_tx = diff_report.failing_first_tx or diff_report.golden_first_tx
+                target_tx = diff_report.failing_first_tx
+                if target_tx is None:
+                    target_tx = diff_report.golden_first_tx
+                if target_tx is None:
+                    raise RuntimeError("identical diff report has no source transaction")
                 f_wave = reconstructor.reconstruct_transaction_waveform(target_tx)
                 fig.add_trace(
                     go.Scatter(
