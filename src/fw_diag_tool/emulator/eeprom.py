@@ -6,6 +6,8 @@ from typing import Any
 class VirtualEEPROM24C64:
     """Simulates a 24C64 (8KB / 64Kbit) I2C Serial EEPROM with Page Write behavior."""
 
+    MAX_CAPACITY = 64 * 1024 * 1024
+
     def __init__(self, addr_7bit: int = 0x50, page_size: int = 32, capacity: int = 8192):
         if (
             isinstance(addr_7bit, bool)
@@ -17,6 +19,8 @@ class VirtualEEPROM24C64:
             raise ValueError("page_size must be a positive integer")
         if isinstance(capacity, bool) or not isinstance(capacity, int) or capacity <= 0:
             raise ValueError("capacity must be a positive integer")
+        if capacity > self.MAX_CAPACITY:
+            raise ValueError(f"capacity must not exceed {self.MAX_CAPACITY} bytes")
         if capacity % page_size:
             raise ValueError("capacity must be an exact multiple of page_size")
         self.addr = addr_7bit
@@ -28,6 +32,8 @@ class VirtualEEPROM24C64:
         self.last_write_offset: int | None = None
 
     def read(self, offset: int, length: int = 1) -> bytes:
+        if self.is_busy:
+            raise RuntimeError("EEPROM is busy with its write cycle; perform ACK polling first")
         if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
             raise ValueError("offset must be a non-negative integer")
         if isinstance(length, bool) or not isinstance(length, int) or length < 0:
@@ -37,6 +43,8 @@ class VirtualEEPROM24C64:
         return bytes(self.memory[offset : offset + length])
 
     def write(self, data_bytes: list[int], preferred_address_bytes: int = 2) -> dict[str, Any]:
+        if self.is_busy:
+            raise RuntimeError("EEPROM is busy with its write cycle; perform ACK polling first")
         if not isinstance(data_bytes, list):
             raise TypeError("data_bytes must be a list of integers")
         for index, value in enumerate(data_bytes):
@@ -104,7 +112,15 @@ class VirtualEEPROM24C64:
         }
 
     def ack_polling(self) -> bool:
-        """Simulates ACK polling - returns True when internal write cycle is done."""
+        """Complete one simulated tWR cycle and report whether it was busy.
+
+        A real EEPROM NACKs address polling while its internal write cycle is
+        active.  Returning ``False`` while idle makes a caller distinguish an
+        actual busy-to-ready transition from a polling call with no pending
+        write.
+        """
+        if not self.is_busy:
+            return False
         self.is_busy = False
         return True
 

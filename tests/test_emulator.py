@@ -9,6 +9,7 @@ def test_eeprom_basic_write_and_read():
     eeprom = VirtualEEPROM24C64(addr_7bit=0x50, page_size=32)
     result = eeprom.write([0x00, 0x00, 0xAB, 0xCD])
     assert result["offset"] == 0x00
+    assert eeprom.ack_polling() is True
     data = eeprom.read(offset=0x00, length=2)
     assert data == bytes([0xAB, 0xCD])
 
@@ -27,6 +28,7 @@ def test_24c64_emulator_defaults_to_two_byte_word_address():
     eeprom = VirtualEEPROM24C64()
     result = eeprom.write([0x01, 0x00, 0xAA])
     assert result["offset"] == 0x0100
+    assert eeprom.ack_polling() is True
     assert eeprom.read(0x0100, 1) == b"\xaa"
 
 
@@ -127,3 +129,20 @@ def test_eeprom_rejects_boolean_or_float_address_width():
     for address_width in (True, 1.0, 2.0):
         with pytest.raises(ValueError, match="preferred_address_bytes"):
             eeprom.write([0x00, 0x01], preferred_address_bytes=address_width)
+
+
+def test_eeprom_busy_cycle_requires_ack_polling_and_idle_poll_is_false():
+    eeprom = VirtualEEPROM24C64()
+    assert eeprom.ack_polling() is False
+    eeprom.write([0x00, 0x00, 0xAA])
+    with pytest.raises(RuntimeError, match="busy"):
+        eeprom.read(0, 1)
+    with pytest.raises(RuntimeError, match="busy"):
+        eeprom.write([0x00, 0x01, 0xBB])
+    assert eeprom.ack_polling() is True
+    assert eeprom.read(0, 1) == b"\xaa"
+
+
+def test_eeprom_rejects_unreasonably_large_allocations():
+    with pytest.raises(ValueError, match="capacity"):
+        VirtualEEPROM24C64(capacity=VirtualEEPROM24C64.MAX_CAPACITY + 1)
