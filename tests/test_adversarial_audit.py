@@ -717,6 +717,16 @@ def test_mctp_som_zero_no_pldm_decode():
     assert pkt.msg_type_name == "Continuation Segment (SOM=0)"
 
 
+def test_mctp_legacy_three_byte_header_is_not_misclassified_as_ipmb():
+    # Legacy/transport-only dump: Dest EID, Src EID, Flags, MsgType, payload.
+    # Both EIDs are even, so the old IPMB fallback incorrectly consumed it.
+    report = ServerMgmtParser.parse_text_dump("02 04 C0 00 01 00 01 02 03")
+    assert len(report.mctp_packets) == 1
+    assert report.ipmb_frames == []
+    assert report.mctp_packets[0].dest_eid == 0x02
+    assert report.mctp_packets[0].src_eid == 0x04
+
+
 def test_dts_gen_empty_devices_list():
     # Explicitly passing devices=[] should NOT fallback to default mock devices
     dts = DeviceTreeGenerator.generate_dts_from_topology(bus_num=1, mux_addr=0x70, devices=[])

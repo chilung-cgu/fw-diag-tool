@@ -82,7 +82,11 @@ class ServerMgmtParser:
             return None
 
         # Check if raw starts with DSP0236 Header Version (0x01)
-        if len(raw_bytes) >= 5 and (raw_bytes[0] & 0x0F) == 0x01:
+        # Header Version is a four-bit field in the low nibble; the upper
+        # reserved bits must be zero for the standard four-byte form.  Using
+        # only ``& 0x0F`` would mistake an IPMB slave address such as 0x81
+        # for a versioned MCTP header.
+        if len(raw_bytes) >= 5 and raw_bytes[0] == 0x01:
             dest_eid = raw_bytes[1]
             src_eid = raw_bytes[2]
             hdr_flags = raw_bytes[3]
@@ -203,17 +207,29 @@ class ServerMgmtParser:
             raw = cls.parse_hex_tokens(line)
             if len(raw) < 4:
                 continue
-            # Check if this line is an IPMB frame
-            # IPMB frames have length >= 7 and valid checksum 1 or IPMB slave address (0x20, 0x81, etc.)
+            # Demultiplex protocol families before applying permissive IPMB
+            # recovery heuristics.  A 3-byte MCTP transport header (without
+            # the optional version byte) can begin with an even EID, which
+            # otherwise looked like an IPMB slave address and was silently
+            # decoded as the wrong protocol.
+            mctp_versioned = len(raw) >= 5 and raw[0] == 0x01
             chk1_calc = ((raw[0] + raw[1] + raw[2]) & 0xFF) == 0 if len(raw) >= 3 else False
             chk2_calc = ((sum(raw[3:-1]) + raw[-1]) & 0xFF) == 0 if len(raw) >= 7 else False
+            known_ipmb_slave_addresses = {
+                0x20,
+                0x24,
+                0x28,
+                0x2C,
+                0x2E,
+                0x30,
+                0x40,
+                0x81,
+                0x82,
+            }
             is_ipmb_candidate = len(raw) >= 7 and (
-                chk1_calc
-                or chk2_calc
-                or (raw[0] in (0x20, 0x81, 0x2C, 0x82, 0x24, 0x28, 0x2E, 0x30, 0x40))
-                or (raw[0] % 2 == 0 and raw[3] % 2 == 0 and raw[0] != 0x01)
+                chk1_calc or chk2_calc or raw[0] in known_ipmb_slave_addresses
             )
-            if is_ipmb_candidate:
+            if not mctp_versioned and is_ipmb_candidate:
                 ipmb = cls.decode_ipmb_frame(raw)
                 if ipmb:
                     ipmb_list.append(ipmb)
