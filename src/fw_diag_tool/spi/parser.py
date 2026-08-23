@@ -375,6 +375,67 @@ class SPIParser:
                     details["wel"] = sr1.wel
                     details["block_protect"] = (sr1.bp2 << 2) | (sr1.bp1 << 1) | sr1.bp0
 
+            # 6. Status Register Writes (opcode + at least one register byte)
+            elif opcode in (
+                SPIOpcode.WRITE_STATUS_REG_1,
+                SPIOpcode.WRITE_STATUS_REG_2,
+                SPIOpcode.WRITE_STATUS_REG_3,
+            ):
+                if len(mosi) < 2:
+                    details.update(
+                        {
+                            "response_truncated": True,
+                            "required_mosi_bytes": 2,
+                            "required_miso_bytes": 2,
+                            "received_mosi_bytes": len(mosi),
+                            "received_miso_bytes": len(miso),
+                        }
+                    )
+                else:
+                    details["status_write_bytes"] = len(mosi) - 1
+
+            # 7. Read Device ID (0x90): three address/dummy bytes plus two ID bytes.
+            elif opcode == SPIOpcode.DEVICE_ID:
+                required_bytes = 6
+                if len(mosi) < required_bytes:
+                    details.update(
+                        {
+                            "response_truncated": True,
+                            "required_mosi_bytes": required_bytes,
+                            "required_miso_bytes": required_bytes,
+                            "received_mosi_bytes": len(mosi),
+                            "received_miso_bytes": len(miso),
+                        }
+                    )
+
+            # 8. Read Unique ID (0x4B): four dummy bytes plus an ID stream.
+            elif opcode == SPIOpcode.UNIQUE_ID:
+                required_bytes = 13
+                if len(mosi) < required_bytes:
+                    details.update(
+                        {
+                            "response_truncated": True,
+                            "required_mosi_bytes": required_bytes,
+                            "required_miso_bytes": required_bytes,
+                            "received_mosi_bytes": len(mosi),
+                            "received_miso_bytes": len(miso),
+                        }
+                    )
+
+            # 9. Read SFDP (0x5A): 24-bit address, dummy byte, and response data.
+            elif opcode == SPIOpcode.SFDP:
+                required_bytes = 6
+                if len(mosi) < required_bytes:
+                    details.update(
+                        {
+                            "response_truncated": True,
+                            "required_mosi_bytes": required_bytes,
+                            "required_miso_bytes": required_bytes,
+                            "received_mosi_bytes": len(mosi),
+                            "received_miso_bytes": len(miso),
+                        }
+                    )
+
         return SPITransaction(
             index=index,
             start_time=start_time,

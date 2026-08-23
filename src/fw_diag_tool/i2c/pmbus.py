@@ -502,12 +502,7 @@ def decode_pmbus_payload(
         return result
 
     dtype = cmd_def.data_type
-    if (
-        phase == "write"
-        and cmd_def.write_len == 0
-        and dtype != PMBusDataType.BLOCK_READ
-        and data_bytes
-    ):
+    if phase == "write" and cmd_def.write_len == 0 and data_bytes:
         result.update(
             {
                 "evidence": "phase-mismatch",

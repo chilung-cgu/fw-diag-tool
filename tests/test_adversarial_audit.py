@@ -357,6 +357,7 @@ def test_pmbus_block_read_count_mismatch_is_explicit():
         (0x88, [0x01, 0x02, 0x03], "read", "overlong"),
         (0x88, [0x01], "write", "phase-mismatch"),
         (0x03, [0x01], "write", "phase-mismatch"),
+        (0x99, [0x01, 0x41], "write", "phase-mismatch"),
     ],
 )
 def test_pmbus_rejects_overlong_or_phase_invalid_payloads(cmd_code, payload, phase, evidence):
