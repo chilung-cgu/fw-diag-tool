@@ -56,6 +56,16 @@ class WaveformDiffEngine:
         f_txs = failing.transactions
         max_len = max(len(g_txs), len(f_txs))
 
+        if not max_len:
+            return WaveformDiffReport(
+                is_identical=False,
+                total_compared=0,
+                summary=(
+                    "Insufficient evidence: both golden and failing traces contain no transactions; "
+                    "protocol identity cannot be established."
+                ),
+            )
+
         for idx in range(max_len):
             g = g_txs[idx] if idx < len(g_txs) else None
             f = f_txs[idx] if idx < len(f_txs) else None

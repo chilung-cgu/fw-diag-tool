@@ -1,3 +1,7 @@
+from io import StringIO
+
+from rich.console import Console
+
 from fw_diag_tool.i2c.chip_db import get_all_matching_devices, lookup_device
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.models import (
@@ -65,6 +69,22 @@ def test_missing_timestamp_is_not_attached_to_diagnostic_issue():
     issue = next(issue for issue in report.issues if issue.code == "I2C_ADDR_NACK")
 
     assert issue.timestamp is None
+
+
+def test_terminal_report_shows_quality_limits_even_with_protocol_findings():
+    report = I2CDiagnosticEngine().analyze_csv_string(
+        "Time,Type,Address,Data,ACK/NACK\n0,DATA,0x50,0x01,\n"
+    )
+    output = StringIO()
+    I2CReporter.render_terminal(
+        report, console=Console(file=output, force_terminal=False, color_system=None)
+    )
+
+    rendered = output.getvalue()
+    assert report.issues
+    assert report.data_quality_issues
+    assert "Data Quality Limitations" in rendered
+    assert "I2C_ACK_UNAVAILABLE" in rendered
 
 
 def test_multibyte_summary_row_does_not_invent_per_byte_timestamps():

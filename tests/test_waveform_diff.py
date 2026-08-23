@@ -37,3 +37,14 @@ def test_waveform_diff_does_not_call_normal_read_final_nack_a_failure():
     )
 
     assert diff.is_identical
+
+
+def test_waveform_diff_empty_inputs_are_insufficient_evidence_not_identical():
+    engine = I2CDiagnosticEngine()
+    empty = engine.analyze([])
+
+    diff = WaveformDiffEngine.compare_reports(empty, empty)
+
+    assert diff.is_identical is False
+    assert diff.total_compared == 0
+    assert "Insufficient evidence" in diff.summary

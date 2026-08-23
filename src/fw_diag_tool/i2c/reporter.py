@@ -230,7 +230,17 @@ class I2CReporter:
                 console.print(
                     Panel(body, title=header.plain, title_align="left", border_style=sev_color)
                 )
-        elif report.data_quality_issues:
+        if report.data_quality_issues:
+            quality_lines = [
+                "[bold yellow]Source evidence limitations (these are not protocol findings):[/]"
+            ]
+            quality_lines.extend(
+                f"• {issue.code} ({issue.count}): {issue.message}"
+                for issue in report.data_quality_issues
+            )
+            console.print(Panel("\n".join(quality_lines), title="Data Quality Limitations"))
+
+        if not report.issues and report.data_quality_issues:
             console.print(
                 Panel(
                     "[bold yellow]⚠ No protocol anomaly was proven, but source evidence is incomplete. "
@@ -238,7 +248,7 @@ class I2CReporter:
                     border_style="yellow",
                 )
             )
-        else:
+        elif not report.issues:
             console.print(
                 Panel(
                     "[bold green]✔ No Protocol or Timing Anomalies Detected. All Transactions Passed Cleanly.[/]",
