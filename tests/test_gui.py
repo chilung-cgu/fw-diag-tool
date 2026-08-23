@@ -10,6 +10,7 @@ def test_gui_app_syntax():
     assert "st.set_page_config" in code
     assert "I2CDiagnosticEngine" in code
     assert "PCIeAnalyzer" in code
+    assert "if csv_text is not None:" in code
 
 
 def test_builtin_register_yamls():

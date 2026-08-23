@@ -554,7 +554,7 @@ elif menu == "⚡ SPI Flash 協定診斷":
             csv_text = decode_uploaded_text(uploaded_spi, allowed_extensions={".csv", ".txt"})
         except ValueError as exc:
             st.error(f"無法讀取 SPI trace：{exc}")
-    if csv_text:
+    if csv_text is not None:
         try:
             rep = SPIDiagnosticEngine().analyze_csv_content(csv_text)
         except (TypeError, ValueError) as exc:
