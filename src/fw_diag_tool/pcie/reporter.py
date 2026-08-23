@@ -9,6 +9,10 @@ class PCIeReporter:
         lines: list[str] = []
         bdf_str = cfg.bdf or "N/A"
         lines.append(f"# PCIe Diagnostic Report (BDF: {bdf_str})\n")
+        if cfg.data_quality_issues:
+            lines.append("## Data Quality Limitations")
+            lines.extend(f"- {issue}" for issue in cfg.data_quality_issues)
+            lines.append("")
         lines.append("## 1. Device Identification & Base Configuration")
         lines.append(
             f"- **Vendor ID / Device ID**: `0x{cfg.vendor_id:04X}` / `0x{cfg.device_id:04X}`"
@@ -136,9 +140,13 @@ class PCIeReporter:
             if aer.decoded_tlp:
                 tlp = aer.decoded_tlp
                 lines.append("### TLP Header Log Decoded (Faulting Transaction)")
-                lines.append(
-                    f"- **Raw DW[0..3]**: `0x{tlp.raw_dw[0]:08X}` `0x{tlp.raw_dw[1]:08X}` `0x{tlp.raw_dw[2]:08X}` `0x{tlp.raw_dw[3]:08X}`"
+                raw_dw = list(tlp.raw_dw[:4])
+                raw_dw_text = " ".join(
+                    f"0x{word:08X}" if isinstance(word, int) else "n/a" for word in raw_dw
                 )
+                if len(raw_dw) < 4:
+                    raw_dw_text += " " + " ".join("n/a" for _ in range(4 - len(raw_dw)))
+                lines.append(f"- **Raw DW[0..3]**: `{raw_dw_text}`")
                 lines.append(
                     f"- **TLP Packet Type**: `{tlp.type_name}` (Fmt: `0x{tlp.fmt:X}`, Type: `0x{tlp.type_:02X}`)"
                 )
@@ -149,8 +157,9 @@ class PCIeReporter:
                 if tlp.requester_id is not None:
                     req_b = (tlp.requester_id >> 8) & 0xFF
                     req_df = tlp.requester_id & 0xFF
+                    tag_text = f"0x{tlp.tag:02X}" if isinstance(tlp.tag, int) else "n/a"
                     lines.append(
-                        f"- **Requester ID**: `0x{tlp.requester_id:04X}` (Bus:{req_b:02X}, Dev:{req_df >> 3:02X}, Func:{req_df & 0x7:X}), **Tag**: `0x{tlp.tag:02X}`"
+                        f"- **Requester ID**: `0x{tlp.requester_id:04X}` (Bus:{req_b:02X}, Dev:{req_df >> 3:02X}, Func:{req_df & 0x7:X}), **Tag**: `{tag_text}`"
                     )
                 if tlp.address is not None:
                     lines.append(f"- **Target Address**: `0x{tlp.address:016X}`")

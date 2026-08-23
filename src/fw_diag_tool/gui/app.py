@@ -103,7 +103,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             input_bytes = csv_content.encode("utf-8")
             st.info("已載入內建範例 CSV！")
 
-    if csv_content:
+    if csv_content is not None:
         engine = I2CDiagnosticEngine(smbus_timeout_ms=smbus_timeout)
         try:
             if input_mode == "Raw digital transition (Time, SCL, SDA)":
@@ -111,7 +111,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                 report = engine.analyze(raw_decode_to_events(raw_capture_result))
             else:
                 report = engine.analyze_csv_content(csv_content)
-        except ValueError as exc:
+        except (TypeError, ValueError) as exc:
             st.error(f"無法解析 I2C 輸入：{exc}")
             st.stop()
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
@@ -168,7 +168,10 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             st.subheader("I2C 互動式數位方波與協定疊加 (SCL / SDA / Protocol Overlay)")
             if report.transactions:
                 tx_options = [
-                    f"Tx #{t.id}: 0x{t.address_7bit:02X} ({t.direction.value}) - {t.semantic_summary or t.hex_dump}"
+                    f"Tx #{t.id}: "
+                    f"{f'0x{t.address_7bit:02X}' if t.address_available else 'address n/a'} "
+                    f"({t.direction.value if t.direction_available else 'UNKNOWN'}) - "
+                    f"{t.semantic_summary or t.hex_dump}"
                     for t in report.transactions
                 ]
                 selected_tx_str = st.selectbox("選擇要檢視波形的交易", tx_options)
@@ -205,15 +208,28 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                         st.caption(
                             "波形時鐘使用來源 timing evidence；仍屬協定層重建，非類比電壓量測。"
                         )
-                    reconstructor = I2CWaveformReconstructor(
-                        default_clock_khz=measured_clock_khz or 100.0
-                    )
-                    wave_data = reconstructor.reconstruct_transaction_waveform(selected_tx)
-                    fig = reconstructor.create_plotly_figure(
-                        wave_data,
-                        title=f"Reconstructed Tx #{selected_tx.id} Waveform: 0x{selected_tx.address_7bit:02X} {selected_tx.direction.value}",
-                    )
-                    st.plotly_chart(fig, width="stretch")
+                    try:
+                        reconstructor = I2CWaveformReconstructor(
+                            default_clock_khz=measured_clock_khz or 100.0
+                        )
+                        wave_data = reconstructor.reconstruct_transaction_waveform(selected_tx)
+                        address_text = (
+                            f"0x{selected_tx.address_7bit:02X}"
+                            if selected_tx.address_available
+                            else "address unavailable"
+                        )
+                        direction_text = (
+                            selected_tx.direction.value
+                            if selected_tx.direction_available
+                            else "UNKNOWN"
+                        )
+                        fig = reconstructor.create_plotly_figure(
+                            wave_data,
+                            title=f"Reconstructed Tx #{selected_tx.id} Waveform: {address_text} {direction_text}",
+                        )
+                        st.plotly_chart(fig, width="stretch")
+                    except (TypeError, ValueError) as exc:
+                        st.warning(f"此交易缺少可重建數位波形所需的證據：{exc}")
             else:
                 st.info("無交易資料可繪製波形。")
 
@@ -262,8 +278,8 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                 {
                     "ID": t.id,
                     "Time (s)": f"{t.start_time:.6f}" if t.timestamp_available else "n/a",
-                    "Address": f"0x{t.address_7bit:02X}",
-                    "Direction": t.direction.value,
+                    "Address": f"0x{t.address_7bit:02X}" if t.address_available else "n/a",
+                    "Direction": t.direction.value if t.direction_available else "UNKNOWN",
                     "ACK": t.address_ack.value,
                     "Topology": t.mux_topology or "-",
                     "Bytes": len(t.data_bytes),

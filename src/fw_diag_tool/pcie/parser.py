@@ -102,6 +102,9 @@ class PCIeAnalyzer:
 
     @classmethod
     def decode_config_space(cls, raw_data: bytes, bdf: str | None = None) -> PCIeConfigSpace:
+        if not isinstance(raw_data, (bytes, bytearray)):
+            raise TypeError("PCIe config space must be bytes-like")
+        source_length = len(raw_data)
         if len(raw_data) < 64:
             raise ValueError(
                 f"Config space size {len(raw_data)} bytes is smaller than minimum 64 bytes."
@@ -365,13 +368,22 @@ class PCIeAnalyzer:
 
             decoded_ext = {}
             if ext_cap_id == PCI_EXT_CAP_ID_AER:
-                aer_res = cls.decode_aer(raw_data, ext_ptr)
-                cfg.aer_analysis = aer_res
-                decoded_ext["aer_summary"] = {
-                    "active_fatal": aer_res.active_uncorr_fatal_count,
-                    "active_nonfatal": aer_res.active_uncorr_nonfatal_count,
-                    "active_correctable": aer_res.active_corr_count,
-                }
+                if ext_ptr + 0x2C > source_length:
+                    message = (
+                        f"AER capability at 0x{ext_ptr:03X} is truncated: "
+                        "the 0x2C-byte AER structure is not fully present in the source dump"
+                    )
+                    cfg.data_quality_issues.append(message)
+                    decoded_ext["evidence"] = "truncated"
+                    decoded_ext["message"] = message
+                else:
+                    aer_res = cls.decode_aer(raw_data, ext_ptr)
+                    cfg.aer_analysis = aer_res
+                    decoded_ext["aer_summary"] = {
+                        "active_fatal": aer_res.active_uncorr_fatal_count,
+                        "active_nonfatal": aer_res.active_uncorr_nonfatal_count,
+                        "active_correctable": aer_res.active_corr_count,
+                    }
 
             ext_cap = ExtendedCapability(
                 ext_cap_id=ext_cap_id,
@@ -492,6 +504,14 @@ class PCIeAnalyzer:
 
     @classmethod
     def decode_aer(cls, raw_data: bytes, aer_offset: int) -> AERAnalysisResult:
+        if not isinstance(raw_data, (bytes, bytearray)):
+            raise TypeError("PCIe config space must be bytes-like")
+        if not isinstance(aer_offset, int) or isinstance(aer_offset, bool) or aer_offset < 0:
+            raise ValueError("AER capability offset must be a non-negative integer")
+        if aer_offset + 0x2C > len(raw_data):
+            raise ValueError(
+                f"AER capability at 0x{aer_offset:03X} is truncated; expected at least 0x2C bytes"
+            )
         uncorr_status = struct.unpack_from("<I", raw_data, aer_offset + 0x04)[0]
         uncorr_mask = struct.unpack_from("<I", raw_data, aer_offset + 0x08)[0]
         uncorr_severity = struct.unpack_from("<I", raw_data, aer_offset + 0x0C)[0]

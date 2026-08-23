@@ -167,6 +167,7 @@ class PCIeConfigSpace:
     extended_capabilities: list[ExtendedCapability] = field(default_factory=list)
     aer_analysis: AERAnalysisResult | None = None
     link_info: PCIeLinkInfo | None = None
+    data_quality_issues: list[str] = field(default_factory=list)
 
 
 @dataclass

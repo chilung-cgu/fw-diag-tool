@@ -21,7 +21,9 @@ from fw_diag_tool.i2c.sensor_decoders import (
 )
 from fw_diag_tool.i2c.timing import analyze_timing_statistics
 from fw_diag_tool.pcie.diagnostics import diagnose_pcie_device
+from fw_diag_tool.pcie.models import AERAnalysisResult, PCIeConfigSpace, TLPHeaderDecoded
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
+from fw_diag_tool.pcie.reporter import PCIeReporter
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 
 
@@ -49,6 +51,51 @@ def test_pcie_config_tlp_dw2_ext_register():
     tlp = PCIeAnalyzer.decode_tlp_header(dw0, dw1, dw2, 0)
     assert tlp.type_name == "CfgRd0 (Config Read Type 0)"
     assert (tlp.address & 0xFFF) == 0x100
+
+
+def test_pcie_truncated_aer_is_reported_as_data_quality_not_struct_error():
+    raw = bytearray(4096)
+    raw[0x04:0x06] = (0x10).to_bytes(2, "little")
+    raw[0x100:0x104] = (0x0001 | (0xFFC << 20)).to_bytes(4, "little")
+    raw[0xFFC:0x1000] = (0x0001).to_bytes(4, "little")
+
+    cfg = PCIeAnalyzer.decode_config_space(bytes(raw))
+
+    assert any("truncated" in issue for issue in cfg.data_quality_issues)
+    assert "Data Quality Limitations" in PCIeReporter.to_markdown(cfg)
+
+
+def test_pcie_reporter_handles_incomplete_tlp_model():
+    tlp = TLPHeaderDecoded(
+        fmt=0,
+        type_=0,
+        length=1,
+        is_3dw=True,
+        is_4dw=False,
+        has_data=False,
+        tc=0,
+        td=False,
+        ep=False,
+        attr=0,
+        type_name="MRd",
+        requester_id=0x0100,
+        tag=None,
+        raw_dw=[],
+    )
+    aer = AERAnalysisResult(
+        offset=0x100,
+        uncorr_status_raw=0,
+        uncorr_mask_raw=0,
+        uncorr_severity_raw=0,
+        corr_status_raw=0,
+        corr_mask_raw=0,
+        cap_control_raw=0,
+        header_log_raw=[],
+        decoded_tlp=tlp,
+    )
+    markdown = PCIeReporter.to_markdown(PCIeConfigSpace(raw_data=b"", aer_analysis=aer))
+    assert "n/a n/a n/a n/a" in markdown
+    assert "Tag**: `n/a`" in markdown
 
 
 def test_pmbus_linear16_signed_trim():
