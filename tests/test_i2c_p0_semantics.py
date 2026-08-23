@@ -294,6 +294,26 @@ def test_implicit_address_change_does_not_fabricate_stop():
     )
 
 
+def test_direct_i2c_event_shape_mismatch_is_rejected():
+    with pytest.raises(ValueError, match="ADDRESS cannot carry data_byte"):
+        I2CDiagnosticEngine().analyze(
+            [
+                RawI2CEvent(
+                    0.0,
+                    RawEventType.ADDRESS,
+                    address_7bit=0x50,
+                    direction=I2CDirection.WRITE,
+                    data_byte=0x12,
+                )
+            ]
+        )
+
+    with pytest.raises(ValueError, match="STOP cannot carry"):
+        I2CDiagnosticEngine().analyze(
+            [RawI2CEvent(0.0, RawEventType.STOP, address_7bit=0x50)]
+        )
+
+
 def test_ambiguous_address_is_presented_as_candidates_not_exact_identity():
     candidates = get_all_matching_devices(0x50)
     assert len(candidates) > 1

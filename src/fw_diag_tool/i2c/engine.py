@@ -1174,6 +1174,28 @@ class I2CDiagnosticEngine:
                 raise ValueError(f"I2C event {index} timestamp must be finite and non-negative")
             if not isinstance(event.event_type, RawEventType):
                 raise TypeError(f"I2C event {index} event_type must be a RawEventType")
+            if event.event_type == RawEventType.ADDRESS and event.data_byte is not None:
+                raise ValueError(
+                    f"I2C event {index} ADDRESS cannot carry data_byte; use a DATA event"
+                )
+            if event.event_type in {
+                RawEventType.START,
+                RawEventType.REPEATED_START,
+                RawEventType.STOP,
+                RawEventType.BUS_HANG,
+            } and any(
+                value is not None
+                for value in (
+                    event.address_7bit,
+                    event.direction,
+                    event.data_byte,
+                    event.ack if event.ack not in (None, AckType.NONE) else None,
+                )
+            ):
+                raise ValueError(
+                    f"I2C event {index} {event.event_type.value} cannot carry address, "
+                    "direction, data, or ACK fields"
+                )
             if not isinstance(event.timestamp_available, bool):
                 raise TypeError(f"I2C event {index} timestamp_available must be boolean")
             if event.extra is not None and not isinstance(event.extra, dict):
