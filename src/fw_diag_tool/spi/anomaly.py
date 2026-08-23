@@ -78,6 +78,13 @@ class SPIAnomalyDetector:
             elif op == SPIOpcode.WRITE_DISABLE:
                 wel_latched = False
                 volatile_wel_latched = False
+            elif op == SPIOpcode.RESET_DEVICE:
+                # A completed device reset clears volatile write-enable state.
+                # Treat this as observed WEL=0 rather than carrying a WREN
+                # from before reset into a later program/erase conclusion.
+                wel_latched = False
+                volatile_wel_latched = False
+                tx.decoded_details["wel_reset_evidence"] = "device-reset"
 
             if op == SPIOpcode.READ_STATUS_REG_1:
                 observed_wel = tx.decoded_details.get("wel")

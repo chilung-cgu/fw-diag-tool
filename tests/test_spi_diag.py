@@ -175,6 +175,26 @@ def test_spi_parser_rejects_ambiguous_headers_extra_columns_and_channel_mismatch
         SPIParser.decode_single_transaction(1, 0.0, 0.1, [0x06, 0x00], [0x00])
 
 
+def test_spi_parser_requires_explicit_wire_aliases_and_rejects_si_collision():
+    with pytest.raises(ValueError, match="MOSI"):
+        SPIParser.parse_csv_content(
+            "Time,Signal,MISO,CS\n0.0,0x9F,0xEF,0\n0.1,0x00,0x40,1\n"
+        )
+    with pytest.raises(ValueError, match="ambiguous MOSI"):
+        SPIParser.parse_csv_content(
+            "Time,SI,MOSI,MISO,CS\n0.0,0x9F,0x9F,0xEF,0\n0.1,0x00,0x00,0x40,1\n"
+        )
+    with pytest.raises(ValueError, match="ambiguous MISO"):
+        SPIParser.parse_csv_content(
+            "Time,MOSI,SO,MISO,CS\n0.0,0x9F,0xEF,0xEF,0\n0.1,0x00,0x40,0x40,1\n"
+        )
+
+
+def test_spi_hex_byte_helper_rejects_boolean_values():
+    assert SPIParser.parse_hex_byte(True) is None
+    assert SPIParser.parse_hex_byte(False) is None
+
+
 def test_spi_direct_decoder_rejects_malformed_time_and_bytes():
     with pytest.raises(ValueError, match="finite"):
         SPIParser.decode_single_transaction(1, float("nan"), 1.0, [0x06], [0x00])
@@ -215,6 +235,42 @@ def test_spi_command_specific_short_responses_are_data_quality(mosi, miso):
     rows.append("0.010,0x00,0x00,1")
     report = SPIDiagnosticEngine().analyze_csv_content("\n".join(rows) + "\n")
     assert any(issue.code == "SPI_RESPONSE_TRUNCATED" for issue in report.data_quality_issues)
+
+
+def test_spi_status_write_overlong_payload_is_data_quality():
+    tx = SPIParser.decode_single_transaction(
+        1, 0.0, 0.001, [0x01, 0xAA, 0xBB], [0x00, 0x00, 0x00]
+    )
+    assert tx.decoded_details["response_overlong"] is True
+    report = SPIDiagnosticEngine().analyze_csv_content(
+        "Time,MOSI,MISO,Enable\n"
+        "0.0,0x01,0x00,0\n"
+        "0.1,0xAA,0x00,0\n"
+        "0.2,0xBB,0x00,0\n"
+        "0.3,0x00,0x00,1\n"
+    )
+    assert any(issue.code == "SPI_RESPONSE_OVERLONG" for issue in report.data_quality_issues)
+
+
+def test_spi_device_reset_clears_observed_wel_before_program():
+    rows = [
+        "0.001,0x06,0x00,0",
+        "0.002,0x00,0x00,1",
+        "0.003,0x66,0x00,0",
+        "0.004,0x00,0x00,1",
+        "0.005,0x99,0x00,0",
+        "0.006,0x00,0x00,1",
+        "0.010,0x02,0x00,0",
+        "0.011,0x00,0x00,0",
+        "0.012,0x00,0x00,0",
+        "0.013,0x00,0x00,0",
+        "0.014,0x55,0x00,0",
+        "0.015,0x00,0x00,1",
+    ]
+    report = SPIDiagnosticEngine().analyze_csv_content(
+        "Time,MOSI,MISO,Enable\n" + "\n".join(rows) + "\n"
+    )
+    assert any(issue.code == "SPI_WEL_NOT_LATCHED" for issue in report.anomalies)
 
 
 @pytest.mark.parametrize(

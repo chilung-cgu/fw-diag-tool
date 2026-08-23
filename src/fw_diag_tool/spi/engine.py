@@ -82,6 +82,21 @@ class SPIDiagnosticEngine:
                     count=response_truncated_count,
                 )
             )
+        response_overlong_count = sum(
+            bool(tx.decoded_details.get("response_overlong")) for tx in transactions
+        )
+        if response_overlong_count:
+            data_quality_issues.append(
+                SPIDataQualityIssue(
+                    code="SPI_RESPONSE_OVERLONG",
+                    message=(
+                        "One or more fixed-width SPI commands carried more bytes than the "
+                        "decoder contract permits; the extra status payload was not treated "
+                        "as a trustworthy register write."
+                    ),
+                    count=response_overlong_count,
+                )
+            )
 
         read_count = 0
         write_count = 0

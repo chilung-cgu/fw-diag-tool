@@ -40,6 +40,8 @@ class SPIParser:
     def parse_hex_byte(val: Any) -> int | None:
         if val is None:
             return None
+        if isinstance(val, bool):
+            return None
         if isinstance(val, int):
             return val if 0 <= val <= 0xFF else None
         s = str(val).strip()
@@ -83,47 +85,42 @@ class SPIParser:
         header = [h.strip().lower() for h in rows[0]]
         if len(header) != len(set(header)):
             raise ValueError("SPI CSV header contains duplicate column names")
-        # Find column indices
-        t_idx = -1
-        mosi_idx = -1
-        miso_idx = -1
-        cs_idx = -1
+        # Only accept explicit aliases.  Substring matching (for example
+        # treating a generic ``Signal`` column as ``SI``/MOSI) can silently
+        # decode the wrong wire as an opcode.
+        normalized = [re.sub(r"[^a-z0-9]+", " ", col).strip() for col in header]
+        aliases = {
+            "time": {"time", "time s", "timestamp", "start", "start time"},
+            "mosi": {"mosi", "tx", "din", "si"},
+            "miso": {"miso", "rx", "dout", "so"},
+            "cs": {
+                "cs",
+                "cs enable",
+                "chip select",
+                "chipselect",
+                "enable",
+                "enable line",
+                "select",
+                "slave select",
+                "ss",
+            },
+        }
 
-        for i, col in enumerate(header):
-            if "time" in col or "start" in col:
-                t_idx = i
-            elif "mosi" in col or "tx" in col or "din" in col or "si" in col:
-                mosi_idx = i
-            elif "miso" in col or "rx" in col or "dout" in col or "so" in col:
-                miso_idx = i
-            elif "enable" in col or "cs" in col or "ss" in col or "select" in col:
-                cs_idx = i
+        def find_columns(kind: str) -> list[int]:
+            return [index for index, col in enumerate(normalized) if col in aliases[kind]]
 
-        if t_idx >= 0 and sum("time" in col or "start" in col for col in header) > 1:
-            raise ValueError("SPI CSV contains ambiguous timestamp columns")
-        if sum("mosi" in col or "tx" in col or "din" in col for col in header) > 1:
-            raise ValueError("SPI CSV contains ambiguous MOSI columns")
-        if sum("miso" in col or "rx" in col or "dout" in col for col in header) > 1:
-            raise ValueError("SPI CSV contains ambiguous MISO columns")
-        if (
-            sum("enable" in col or "cs" in col or "ss" in col or "select" in col for col in header)
-            > 1
-        ):
-            raise ValueError("SPI CSV contains ambiguous CS/Enable columns")
+        def require_one(kind: str, label: str) -> int:
+            matches = find_columns(kind)
+            if len(matches) > 1:
+                raise ValueError(f"SPI CSV contains ambiguous {label} columns")
+            if not matches:
+                raise ValueError(f"SPI CSV must provide an explicit {label} column")
+            return matches[0]
 
-        # Fallback if standard Saleae format
-        if t_idx == -1:
-            t_idx = 0
-        if mosi_idx == -1 and len(header) > 1:
-            mosi_idx = 1
-        if miso_idx == -1 and len(header) > 2:
-            miso_idx = 2
-        if mosi_idx < 0 or miso_idx < 0:
-            raise ValueError("SPI CSV must provide MOSI and MISO columns")
-        if cs_idx < 0:
-            raise ValueError(
-                "SPI CSV must provide a CS/Enable column so transactions can be framed safely"
-            )
+        t_idx = require_one("time", "timestamp")
+        mosi_idx = require_one("mosi", "MOSI")
+        miso_idx = require_one("miso", "MISO")
+        cs_idx = require_one("cs", "CS/Enable")
 
         transactions: list[SPITransaction] = []
         cur_mosi: list[int] = []
@@ -393,6 +390,14 @@ class SPIParser:
                     )
                 else:
                     details["status_write_bytes"] = len(mosi) - 1
+                    if len(mosi) > 2:
+                        details.update(
+                            {
+                                "response_overlong": True,
+                                "max_mosi_bytes": 2,
+                                "received_mosi_bytes": len(mosi),
+                            }
+                        )
 
             # 7. Read Device ID (0x90): three address/dummy bytes plus two ID bytes.
             elif opcode == SPIOpcode.DEVICE_ID:
