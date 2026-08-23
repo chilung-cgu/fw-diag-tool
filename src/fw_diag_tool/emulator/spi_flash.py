@@ -5,10 +5,13 @@ class VirtualSPIFlashW25Q128:
     # Simulates a Winbond W25Q128 SPI NOR Flash (128 Mbit / 16 MB)
 
     JEDEC_ID = [0xEF, 0x40, 0x18]
+    MAX_CAPACITY = 64 * 1024 * 1024
 
     def __init__(self, total_size: int = 16777216):
         if isinstance(total_size, bool) or not isinstance(total_size, int) or total_size <= 0:
             raise ValueError("total_size must be a positive integer")
+        if total_size > self.MAX_CAPACITY:
+            raise ValueError(f"total_size must not exceed {self.MAX_CAPACITY} bytes")
         self.total_size = total_size
         self.memory: bytearray = bytearray([0xFF]) * total_size
         self.wel_latched = False

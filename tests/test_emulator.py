@@ -146,3 +146,8 @@ def test_eeprom_busy_cycle_requires_ack_polling_and_idle_poll_is_false():
 def test_eeprom_rejects_unreasonably_large_allocations():
     with pytest.raises(ValueError, match="capacity"):
         VirtualEEPROM24C64(capacity=VirtualEEPROM24C64.MAX_CAPACITY + 1)
+
+
+def test_spi_flash_rejects_unreasonably_large_allocations():
+    with pytest.raises(ValueError, match="total_size"):
+        VirtualSPIFlashW25Q128(total_size=VirtualSPIFlashW25Q128.MAX_CAPACITY + 1)
