@@ -3,7 +3,7 @@
 專為 **Junior 韌體 / 嵌入式 / 硬體工程師** 設計的本機診斷與學習工具，目標平台為 macOS 與 Linux。
 目前提供 I2C/PMBus、PCIe AER、SPI Flash、UART Crash Dump、MCTP/IPMB 的檔案分析，以及協定示意圖、差分比較、程式碼產生器與 20 個 synthetic 練習情境。各模組的輸入能力與限制請先閱讀 [能力與限制](docs/LIMITATIONS.md)。
 
-👉 **完整新人圖文教學指南**：請參閱 [docs/JUNIOR_FW_GUIDE.md](docs/JUNIOR_FW_GUIDE.md)。
+👉 **完整新人圖文教學指南**：請參閱 [docs/JUNIOR_FW_GUIDE.md](docs/JUNIOR_FW_GUIDE.md)；若不知道某個 GUI 頁面或圖表怎麼讀，先看 [12 個 GUI 頁面的閱讀地圖](docs/chapters/appendix_gui_reading_guide.md)。
 > 📂 **各章節詳細文件**：[ch01 I2C波形](docs/chapters/ch01_i2c_pmbus.md) | [ch02 封包/驅動產生](docs/chapters/ch02_packet_builder.md) | [ch03 Waveform Diff](docs/chapters/ch03_waveform_diff.md) | [ch04 UART Crash](docs/chapters/ch04_uart_crash.md) | [ch05 MCTP/IPMB](docs/chapters/ch05_mctp_ipmb.md) | [ch06 Device Tree](docs/chapters/ch06_dts_generator.md) | [ch07 PCIe AER](docs/chapters/ch07_pcie_aer.md) | [ch08 SPI Flash](docs/chapters/ch08_spi_flash.md) | [ch09 Register/Codegen](docs/chapters/ch09_register_codegen.md) | [ch10 Fault Arena](docs/chapters/ch10_fault_arena.md) | [ch12 SOP](docs/chapters/ch12_sop.md) | [附錄A 圖表判讀](docs/chapters/appendix_chart_guide.md)
 
 ---
@@ -33,7 +33,7 @@ uv run fw-diag gui
 | **5. MCTP / IPMB 伺服器協定解析** | MCTP, PLDM, SPDM, IPMB | 解析基本 MCTP/IPMB header 與 checksum，並辨識目前已支援的 PLDM/SPDM message type；尚非完整 conformance decoder。 |
 | **6. Device Tree (.dts) 產生器** | Linux / OpenBMC BSP | 依明確輸入的 I2C MUX 拓撲產生 `.dtsi` 模板；套用至產品前仍須以對應 binding、`dtc` 與 dt-schema 驗證。 |
 | **7. PCIe Config & AER 診斷** | PCIe Config, AER | 解析目前支援的 Config Space、Capability、AER 與 Link 資訊；不分析 PCIe 高速電氣波形或 LTSSM。 |
-| **8. SPI Flash 協定診斷** | SPI NOR Flash | 解析已解碼的 SPI CSV、JEDEC opcode 與基本 WREN/erase/program 序列，並列出可能異常原因。 |
+| **8. SPI Flash 協定診斷** | SPI NOR Flash | 解析已解碼的 SPI CSV、JEDEC opcode 與基本 WREN/erase/program 序列，並列出可能異常原因；輸入格式與 CS/response 證據不足會明示限制。 |
 | **9. 晶片暫存器 Bitfield 解碼器** | Hardware Registers | 支援 PMBus / PCIe 定義，輸入 Raw Hex 即時展開 Bit 欄位與異常警報。 |
 | **10. C 語言 Register 巨集產生器** | MISRA-oriented CodeGen | 從 YAML 產出 Position、Mask 與 `REG_..._GET` / `REG_..._SET` 巨集；仍須依專案 compiler、coding standard 與靜態分析器驗證。 |
 | **11. 20 大實戰故障實驗室 (Fault Arena)** | Junior FW 演練 | 內建 20 個 synthetic 故障情境，用來練習從症狀建立假設與排查順序；不是實際公司 capture。 |

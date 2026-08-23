@@ -82,3 +82,15 @@ fw-diag i2c analyze capture_raw.csv --raw-digital \
 若公司 Logic Analyzer 能匯出 raw digital transition，請另存一份只含 `Time [s]`、`SCL`、`SDA` 的 CSV，再選 Raw digital 模式；這才是本專案目前能直接呈現的「實測數位波形」。示波器的類比電壓、rise/fall、overshoot 與 ringing 不在此模式的量測範圍內。
 
 看到 `0x70`、`0x50`、`0x48` 或 `0x20` 時，先把它當成 address。相同 address 可能對應多種 IC；必須再結合 schematic、board profile、command sequence 或 datasheet 才能確認裝置身份。
+
+## 常見「證據限制」不是協定異常
+
+| 品質代碼／現象 | 先怎麼理解 |
+|---|---|
+| `I2C_SOURCE_EMPTY` | 空檔、只有 header 或只有註解；這不是「全部交易正常」，而是沒有足夠資料分析。 |
+| `I2C_ACK_UNAVAILABLE` / `I2C_TIMING_UNAVAILABLE` | 來源沒有 ACK 或 per-byte timing；工具不能把未知補成 ACK、0 kHz 或 0% jitter。 |
+| `I2C_ACK_AGGREGATE_UNATTRIBUTABLE` | 一列包含多個 byte 卻只有一個 ACK/NACK；每個 byte 的 ACK 歸屬不明，語意會保守處理。 |
+| `I2C_ADDRESS_NACK_SEMANTIC_UNAVAILABLE` / `I2C_DATA_NACK_SEMANTIC_UNAVAILABLE` | target 未接受 address/data，後面的 EEPROM/PMBus 語意不能當成已成功執行。 |
+| `I2C_EEPROM_ACK_POLL` | 只有在前一筆已 ACK 的 EEPROM write、短時間內的 NACK probe、以及後續成功 ACK 都被觀察到時，才會標成合理 polling；孤立或過晚的 NACK 仍是一般 address NACK。 |
+
+看到這些代碼時，先讀品質面板，再決定要補 raw capture、擴大時間窗，或回到 datasheet／driver log；不要把它們和 root-cause finding 混為一談。

@@ -12,6 +12,13 @@ SPI NOR Flash 是伺服器與嵌入式系統中儲存 BIOS/UEFI 韌體的核心�
 2. 上傳 Saleae Logic 2 匯出的 SPI CSV 檔案（包含 MOSI, MISO, Enable 欄位）。
 3. 工具自動解析所有交易並顯示診斷報告。
 
+### CSV byte 格式先確認清楚
+
+- `0x20`、`0X9F` 是明確的十六進位。
+- 全部由數字組成的裸 token（例如 `20`）按十進位解析，避免把十進位 20 靜默當成 `0x20`；需要十六進位時請加 `0x`。
+- 含 `A`～`F` 的裸 token（例如 `AA`）可作為常見 analyzer 匯出的十六進位 byte。
+- CSV 必須提供明確且唯一的 `Time`、`MOSI`、`MISO`、`CS/Enable` 欄位；每一列都要有兩邊 byte，CS active-low 的 frame 邊界也要完整。
+
 若時間欄位不是有限的非負數、時間倒退、MOSI/MISO 不是 `0..255`（或 `0x00..0xFF`），
 或 CS/Enable 不是 active-low 的 `0/low/false/asserted` 或 inactive 的
 `1/high/true/deasserted`，工具會拒絕該檔案；這比把錯誤 byte 靜默截斷後繼續分析更安全。
@@ -46,6 +53,10 @@ SPI NOR Flash 是伺服器與嵌入式系統中儲存 BIOS/UEFI 韌體的核心�
 | **SPI_PAGE_PROGRAM_WRAP** | 寫入範圍可能跨越裝置 page boundary | 依該 flash datasheet 的 page size 與 wrap 行為分段 |
 | **SPI_TRUNCATED_TX** | 已解碼交易缺少預期欄位 | 確認 analyzer 設定、CS#、capture window、DMA/transfer length |
 | **SPI_JEDEC_LINE_FAULT** | JEDEC 回應為全 0xFF 或全 0x00 | 可能是 mode/CS#/供電/MISO/裝置狀態或 analyzer mapping；需要其他量測區分 |
+| **SPI_RESPONSE_TRUNCATED** | command 尚未取得最低必要 bytes | 擴大 capture window，確認 CS、DMA transfer length 與 command phase |
+| **SPI_RESPONSE_OVERLONG** | 固定寬度 command 收到額外 bytes | 檢查 CS/frame segmentation、analyzer protocol decoder 與 command 定義 |
+
+`SPI_RESPONSE_TRUNCATED` 或 `SPI_RESPONSE_OVERLONG` 出現時，相關 command 的語意應視為證據不足；不要只因報告仍列出 opcode 就當成完整硬體操作。
 
 > [!IMPORTANT]
 > 目前輸入是 analyzer 已解碼的 SPI CSV；沒有 raw SCLK/MOSI/MISO/CS edge 時，工具不能驗證實際 CPOL/CPHA timing 或 signal integrity。

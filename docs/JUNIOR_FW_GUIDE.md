@@ -6,6 +6,8 @@
 
 > 💡 **建議閱讀順序**：先讀第一章（I2C 波形分析），這是所有韌體工程師的入門起點。之後根據你目前遇到的問題類型，跳轉到對應章節即可。
 
+> 🧭 **不知道頁面或圖表在說什麼？** 先看[12 個 GUI 頁面的閱讀地圖](chapters/appendix_gui_reading_guide.md)，它用「輸入 → 先看什麼 → 不能證明什麼 → 下一步」帶你逐頁定位；再進入該頁的詳細章節。
+
 ---
 
 ## 快速啟動 Web 視覺化工作站
@@ -39,7 +41,7 @@ uv run fw-diag gui
 | 9 | 🎛 晶片暫存器 Bitfield 解碼器 | [ch09_register_codegen.md](chapters/ch09_register_codegen.md) | 內建 YAML |
 | 10 | 🛠 C 語言 Register 巨集產生器 | [ch09_register_codegen.md](chapters/ch09_register_codegen.md)（同第9章） | 內建 YAML |
 | 11 | 🏆 Junior FW 實戰除錯實驗室 (Fault Arena) | [ch10_fault_arena.md](chapters/ch10_fault_arena.md) | 內建案例 |
-| 12 | 📚 韌體除錯指南 & SOP | [ch12_sop.md](chapters/ch12_sop.md) + GUI L1~L7 分層模型 | 無需檔案 |
+| 12 | 📚 韌體除錯指南 & SOP | [ch12_sop.md](chapters/ch12_sop.md) + [GUI 閱讀地圖](chapters/appendix_gui_reading_guide.md) + GUI L1~L7 分層模型 | 無需檔案 |
 
 > 📂 **測試資料路徑**：`examples/data/` 目錄下有所有演練用的 CSV / Log / Hex 檔案。
 
@@ -62,6 +64,7 @@ docs/
 │   ├── ch09_register_codegen.md ← Bitfield 解碼 + C Header RMW 巨集
 │   ├── ch10_fault_arena.md      ← 20 大故障案例分類總覽
 │   ├── ch12_sop.md               ← L1~L7 分層除錯 SOP 與證據詞彙
-│   └── appendix_chart_guide.md  ← 所有圖表的詳細判讀教學
+│   ├── appendix_chart_guide.md  ← I2C 圖表與 evidence level 判讀
+│   └── appendix_gui_reading_guide.md ← 12 個 GUI 頁面的第一輪閱讀地圖
 └── ...
 ```

@@ -32,6 +32,16 @@ def test_junior_guide_indexes_all_gui_pages() -> None:
     assert "[ch12_sop.md](chapters/ch12_sop.md)" in guide
 
 
+def test_gui_reading_map_covers_all_pages_and_evidence_levels() -> None:
+    reading_map = (ROOT / "docs" / "chapters" / "appendix_gui_reading_guide.md").read_text(
+        encoding="utf-8"
+    )
+    for page_id in range(1, 13):
+        assert f"### {page_id}." in reading_map
+    for term in ("Measured", "Inferred", "Reconstructed", "Unavailable", "不能證明什麼"):
+        assert term in reading_map
+
+
 def test_sop_teaches_evidence_boundaries() -> None:
     sop = (ROOT / "docs" / "chapters" / "ch12_sop.md").read_text(encoding="utf-8")
     for term in ("Measured", "Inferred", "Reconstructed", "Hypothesis", "Unavailable"):
