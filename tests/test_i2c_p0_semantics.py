@@ -117,10 +117,26 @@ def test_multibyte_summary_row_does_not_invent_per_byte_timestamps():
     events = I2CParser.parse_csv_string(csv_data)
 
     assert [event.timestamp for event in events] == [0.001, 0.001, 0.001]
-    # A combined analyzer row does not identify whether its ACK/NACK belongs
-    # to the address or final data byte; address evidence remains unknown.
-    assert [event.ack for event in events] == [AckType.NONE, AckType.ACK, AckType.NACK]
+    # A combined multi-byte row does not identify which byte owns the single
+    # ACK/NACK.  Keep every per-byte ACK unknown instead of inventing a
+    # successful middle-byte acknowledgement.
+    assert [event.ack for event in events] == [AckType.NONE, AckType.NONE, AckType.NONE]
+    assert all(event.extra.get("aggregate_ack") for event in events)
     assert all(event.duration_s is None for event in events)
+
+
+def test_multibyte_aggregate_ack_withholds_eeprom_semantics():
+    report = I2CDiagnosticEngine(eeprom_profile="24C02").analyze_csv_content(
+        "Time,Address,Read/Write,Data,ACK/NACK\n"
+        '0.001,0x50,Write,"0x00 0x01",ACK\n'
+    )
+    tx = report.transactions[0]
+    assert tx.decoded_values["evidence"] == "source-error"
+    assert "withheld" in (tx.semantic_summary or "")
+    assert any(
+        issue.code == "I2C_ACK_AGGREGATE_UNATTRIBUTABLE"
+        for issue in report.data_quality_issues
+    )
 
 
 def test_source_provided_byte_duration_produces_frequency_measurement():

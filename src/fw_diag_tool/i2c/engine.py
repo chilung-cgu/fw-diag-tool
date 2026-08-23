@@ -1016,6 +1016,20 @@ class I2CDiagnosticEngine:
                     count=source_error_count,
                 )
             )
+        aggregate_ack_count = sum(
+            bool(event.extra and event.extra.get("aggregate_ack")) for event in events
+        )
+        if aggregate_ack_count:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_ACK_AGGREGATE_UNATTRIBUTABLE",
+                    message=(
+                        "A multi-byte analyzer summary supplied one aggregate ACK/NACK; "
+                        "per-byte ACK attribution and semantic payload acceptance were withheld."
+                    ),
+                    count=aggregate_ack_count,
+                )
+            )
 
         address_unavailable_count = sum(not tx.address_available for tx in transactions)
         if address_unavailable_count:

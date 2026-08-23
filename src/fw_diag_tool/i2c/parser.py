@@ -365,6 +365,14 @@ class I2CParser:
 
             if raw_data_tokens and addr_7bit is not None:
                 # Analyzer summary rows can combine address and one or more data bytes.
+                aggregate_ack = len(raw_data_tokens) > 1 and ack_val != AckType.NONE
+                if aggregate_ack:
+                    source_error = source_error or (
+                        "aggregate ACK/NACK cannot be attributed to individual data bytes"
+                    )
+                aggregate_extra = {"aggregate_ack": True} if aggregate_ack else {}
+                if source_error:
+                    aggregate_extra["source_error"] = source_error
                 events.append(
                     RawI2CEvent(
                         timestamp=timestamp,
@@ -380,7 +388,7 @@ class I2CParser:
                         ack=AckType.NONE,
                         duration_s=None,
                         bit_rate_khz=bitrate,
-                        extra={"source_error": source_error} if source_error else {},
+                        extra=aggregate_extra,
                         raw_text=",".join(row),
                     )
                 )
@@ -394,12 +402,17 @@ class I2CParser:
                             address_7bit=addr_7bit,
                             direction=raw_rw,
                             data_byte=b_val,
-                            ack=ack_val
-                            if b_idx == len(raw_data_tokens) - 1
-                            else (AckType.ACK if ack_val != AckType.NONE else AckType.NONE),
+                            # A multi-byte summary row provides at most one
+                            # aggregate ACK/NACK.  Preserve it as unknown for
+                            # every byte rather than inventing ACKs for the
+                            # middle bytes (or guessing which byte was NACKed).
+                            ack=AckType.NONE if aggregate_ack else (
+                                ack_val if b_idx == len(raw_data_tokens) - 1
+                                else (AckType.ACK if ack_val != AckType.NONE else AckType.NONE)
+                            ),
                             duration_s=None,
                             bit_rate_khz=bitrate,
-                            extra={"source_error": source_error} if source_error else {},
+                            extra=aggregate_extra.copy(),
                             raw_text=",".join(row),
                         )
                     )
