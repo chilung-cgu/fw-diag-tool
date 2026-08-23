@@ -173,6 +173,10 @@ def parse_transition_csv(
     sda_column: str | None = None,
     delimiter: str = ",",
 ) -> RawDigitalCapture:
+    if not isinstance(content, (str, bytes)):
+        raise RawCaptureValidationError("raw capture must be provided as UTF-8 text or bytes")
+    if not isinstance(delimiter, str) or len(delimiter) != 1:
+        raise RawCaptureValidationError("CSV delimiter must be exactly one character")
     if isinstance(content, bytes):
         try:
             text = content.decode("utf-8-sig")

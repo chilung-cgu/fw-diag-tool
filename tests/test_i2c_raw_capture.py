@@ -224,6 +224,15 @@ def test_rejects_sda_change_on_sampling_edge() -> None:
         decode_i2c_capture(capture)
 
 
+def test_raw_capture_public_boundary_rejects_wrong_types_and_delimiters() -> None:
+    with pytest.raises(RawCaptureValidationError, match="text or bytes"):
+        parse_transition_csv(None)  # type: ignore[arg-type]
+    with pytest.raises(RawCaptureValidationError, match="text or bytes"):
+        parse_transition_csv(bytearray(b"Time,SCL,SDA\n0,1,1\n"))  # type: ignore[arg-type]
+    with pytest.raises(RawCaptureValidationError, match="exactly one"):
+        parse_transition_csv("Time,SCL,SDA\n0,1,1\n", delimiter="")
+
+
 def test_raw_adapter_feeds_main_engine_without_losing_measured_evidence() -> None:
     builder = _CaptureBuilder()
     builder.start()
