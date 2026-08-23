@@ -14,6 +14,11 @@
 3. 在 Raw Hex 欄位輸入 `0x8400`。
 4. 表格自動展開：
 
+Raw value 必須是非負、且不超過該 register 宣告的寬度；例如 8-bit register 不能輸入
+`0x100`。這是為了避免把另一個 register 或整個 32-bit snapshot 誤當成目前欄位的值。
+若 YAML root、`registers`、`fields`、enum map 或 warning list 的型態不正確，工具會在載入邊界拒絕，
+不會靜默覆蓋同名 register。
+
 | Bit Range | Field | Value | Meaning |
 |---|---|---|---|
 | 15 | VOUT_FAULT | 0x1 | ⚠ Vout Overvoltage Fault |

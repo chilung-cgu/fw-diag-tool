@@ -1,5 +1,6 @@
 import pytest
 
+from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.codegen.driver_gen import I2CDriverCodeGenerator
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
@@ -359,3 +360,37 @@ registers:
     fields: []
 """
         )
+
+
+def test_register_catalog_rejects_duplicate_names_and_malformed_containers():
+    with pytest.raises(ValueError, match="duplicate register name"):
+        CHeaderGenerator.from_yaml_str(
+            """
+registers:
+  - name: STATUS
+    offset: 0x00
+  - name: status
+    offset: 0x04
+"""
+        )
+
+    with pytest.raises(TypeError, match="registers must be a list"):
+        CHeaderGenerator.from_yaml_str("registers: STATUS\n")
+
+
+def test_register_decoder_rejects_values_outside_declared_width():
+    catalog = RegisterMapCatalog()
+    catalog.load_from_yaml(
+        """
+registers:
+  - name: STATUS
+    offset: 0x00
+    size: 8
+    fields: []
+"""
+    )
+
+    with pytest.raises(ValueError, match="exceeds 8-bit"):
+        catalog.decode_register("STATUS", 0x100)
+    with pytest.raises(ValueError, match="between 0 and 0xFFFFFFFF"):
+        catalog.decode_register("STATUS", -1)

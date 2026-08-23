@@ -84,17 +84,36 @@ class RegisterMapCatalog:
         data = yaml.safe_load(yaml_content)
         if not data:
             return
+        if not isinstance(data, dict):
+            raise TypeError("register map root must be a mapping")
         regs = data.get("registers", [])
+        if not isinstance(regs, list):
+            raise TypeError("registers must be a list")
         for r in regs:
+            if not isinstance(r, dict):
+                raise TypeError("each register must be a mapping")
             offset = r.get("offset")
             if isinstance(offset, str):
                 offset = int(offset, 0)
             fields = []
-            for f in r.get("fields", []):
+            raw_fields = r.get("fields", [])
+            if not isinstance(raw_fields, list):
+                raise TypeError(f"register {r.get('name', '<unnamed>')} fields must be a list")
+            for f in raw_fields:
+                if not isinstance(f, dict):
+                    raise TypeError("each register field must be a mapping")
                 val_map = {}
-                for k, v in f.get("values", {}).items():
+                raw_values = f.get("values", {})
+                if not isinstance(raw_values, dict):
+                    raise TypeError(f"field {f.get('name', '<unnamed>')} values must be a mapping")
+                for k, v in raw_values.items():
                     val_map[int(str(k), 0)] = str(v)
-                warns = [int(str(w), 0) for w in f.get("warning_values", [])]
+                raw_warnings = f.get("warning_values", [])
+                if not isinstance(raw_warnings, list):
+                    raise TypeError(
+                        f"field {f.get('name', '<unnamed>')} warning_values must be a list"
+                    )
+                warns = [int(str(w), 0) for w in raw_warnings]
                 fields.append(
                     BitField(
                         name=f["name"],
@@ -117,10 +136,17 @@ class RegisterMapCatalog:
             )
             if offset in self.registers:
                 raise ValueError(f"duplicate register offset: 0x{offset:X}")
+            name_key = reg_def.name.lower()
+            if name_key in self.name_map:
+                raise ValueError(f"duplicate register name: {reg_def.name}")
             self.registers[offset] = reg_def
-            self.name_map[reg_def.name.lower()] = reg_def
+            self.name_map[name_key] = reg_def
 
     def decode_register(self, offset_or_name: Any, value: int) -> DecodedRegisterResult:
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError("register value must be an integer")
+        if value < 0 or value > 0xFFFFFFFF:
+            raise ValueError("register value must be between 0 and 0xFFFFFFFF")
         reg_def = None
         if isinstance(offset_or_name, int):
             reg_def = self.registers.get(offset_or_name)
@@ -144,6 +170,10 @@ class RegisterMapCatalog:
                 description="Unknown / Custom Register",
                 fields=[],
                 unmapped_bits=value,
+            )
+        if value >= (1 << reg_def.size):
+            raise ValueError(
+                f"value 0x{value:X} exceeds {reg_def.size}-bit register {reg_def.name}"
             )
         decoded_fields = []
         covered_mask = 0

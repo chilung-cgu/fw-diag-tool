@@ -289,7 +289,11 @@ def decode_register(
             f"[bold red]Error: Invalid raw value '{raw_value}' (must be integer or hex format like 0x10)![/]"
         )
         raise typer.Exit(code=1)
-    result = catalog.decode_register(reg_name_or_offset, val)
+    try:
+        result = catalog.decode_register(reg_name_or_offset, val)
+    except (TypeError, ValueError) as exc:
+        console.print(f"[bold red]Error: Cannot decode register value: {exc}[/]")
+        raise typer.Exit(code=2) from exc
     table = Table(title=f"Register Decode: {result.reg_name} ({result.hex_val})", show_header=True)
     table.add_column("Bits", style="cyan", width=10)
     table.add_column("Field Name", style="bold green", width=20)

@@ -539,21 +539,25 @@ elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
         except ValueError:
             st.error("暫存器值格式錯誤；請輸入整數或 0x 開頭的十六進位值。")
         else:
-            res = catalog.decode_register(sel_reg, cur_val)
-            st.subheader(f"{res.reg_name} (0x{cur_val:08X})")
-            st.table(
-                pd.DataFrame(
-                    [
-                        {
-                            "Bit Range": f.bit_range,
-                            "Field": f.name,
-                            "Value": f.hex_val,
-                            "Meaning": f"⚠ {f.meaning}" if f.is_warning else f.meaning,
-                        }
-                        for f in res.fields
-                    ]
+            try:
+                res = catalog.decode_register(sel_reg, cur_val)
+            except (TypeError, ValueError) as exc:
+                st.error(f"暫存器值無法解碼：{exc}")
+            else:
+                st.subheader(f"{res.reg_name} (0x{cur_val:08X})")
+                st.table(
+                    pd.DataFrame(
+                        [
+                            {
+                                "Bit Range": f.bit_range,
+                                "Field": f.name,
+                                "Value": f.hex_val,
+                                "Meaning": f"⚠ {f.meaning}" if f.is_warning else f.meaning,
+                            }
+                            for f in res.fields
+                        ]
+                    )
                 )
-            )
 
 # 10. C Codegen
 elif menu == "🛠 C 語言 Register 巨集產生器":
