@@ -355,6 +355,7 @@ class I2CDiagnosticEngine:
         """Perform chip identification and protocol semantic decoding across transactions."""
         device_context: dict[int, dict[str, Any]] = {}
         ambiguous_eeprom_writes = 0
+        eeprom_truncated = 0
         pmbus_truncated = 0
         pmbus_block_mismatch = 0
 
@@ -490,9 +491,15 @@ class I2CDiagnosticEngine:
                             preferred_address_bytes=eep_addr_len,
                             page_size=eep_page_size,
                         )
-                        decoded["evidence"] = "explicit-profile" if profile else "user-configured"
+                        decoder_evidence = decoded.get("evidence")
+                        if decoder_evidence != "truncated":
+                            decoded["evidence"] = (
+                                "explicit-profile" if profile else "user-configured"
+                            )
                         tx.semantic_summary = decoded.get("summary")
                         tx.decoded_values = decoded
+                        if decoder_evidence == "truncated":
+                            eeprom_truncated += 1
                         if decoded.get("offset") is not None:
                             ctx["last_offset"] = decoded["offset"]
                 else:
@@ -580,6 +587,17 @@ class I2CDiagnosticEngine:
                         "until an explicit EEPROM profile or address-width configuration is supplied."
                     ),
                     count=ambiguous_eeprom_writes,
+                )
+            )
+        if eeprom_truncated:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_EEPROM_ADDRESS_TRUNCATED",
+                    message=(
+                        "An EEPROM write selected a profile requiring a 2-byte offset, but the "
+                        "capture contained only one address byte; offset and payload decoding was withheld."
+                    ),
+                    count=eeprom_truncated,
                 )
             )
         if pmbus_truncated:

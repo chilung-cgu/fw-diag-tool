@@ -120,6 +120,21 @@ def test_eeprom_decoder_rejects_invalid_geometry_and_bytes():
         decode_eeprom_read([0x100])
 
 
+def test_eeprom_two_byte_profile_does_not_downgrade_one_byte_offset():
+    result = decode_eeprom_write([0x10], preferred_address_bytes=2)
+    assert result["evidence"] == "truncated"
+    assert result["address_bytes"] == 2
+    assert result["offset"] is None
+    assert result["payload"] == []
+
+
+def test_engine_surfaces_eeprom_truncated_address_as_data_quality():
+    report = I2CDiagnosticEngine(eeprom_profile="24C64").analyze_csv_content(
+        "Time,Address,Read/Write,Data,ACK/NACK\n0.001,0x50,Write,,ACK\n0.002,,Write,0x10,ACK\n"
+    )
+    assert any(issue.code == "I2C_EEPROM_ADDRESS_TRUNCATED" for issue in report.data_quality_issues)
+
+
 def test_linear11_nan_inf_guard():
     with pytest.raises(ValueError):
         encode_linear11(float("nan"))

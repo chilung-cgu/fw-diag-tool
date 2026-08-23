@@ -75,6 +75,24 @@ def decode_eeprom_write(
             "summary": "Write Polling probe (0 payload bytes)",
         }
 
+    # A configured 2-byte EEPROM cannot safely reinterpret one byte as a
+    # complete offset; keep the evidence explicitly incomplete.
+    if preferred_address_bytes == 2 and len(data_bytes) == 1:
+        return {
+            "type": "EEPROM Write (truncated address)",
+            "summary": "EEPROM write has 1 address byte; 2-byte offset is unavailable",
+            "evidence": "truncated",
+            "address_bytes": 2,
+            "received_address_bytes": 1,
+            "offset": None,
+            "offset_hex": "Unknown",
+            "payload_len": 0,
+            "payload": [],
+            "page_size": page_size,
+            "rollover_hazard": False,
+            "rollover_details": "",
+        }
+
     # Determine offset length: if user specified or data implies 2-byte
     addr_bytes_len = preferred_address_bytes
     if len(data_bytes) == 1:
