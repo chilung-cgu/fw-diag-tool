@@ -39,6 +39,11 @@ def parse_hex_or_int(val: Any) -> int | None:
             return int(s, 16)
         except ValueError:
             pass
+    if s.startswith("#") and len(s) > 1:
+        try:
+            return int(s[1:], 16)
+        except ValueError:
+            pass
     if s.endswith(("h", "H")) and len(s) > 1:
         try:
             return int(s[:-1], 16)
@@ -143,6 +148,8 @@ class I2CParser:
             if not row or not any(cell.strip() for cell in row):
                 continue
 
+            source_error: str | None = None
+
             timestamp = 0.0
             timestamp_available = False
             try:
@@ -169,11 +176,23 @@ class I2CParser:
             )
 
             # Parse address
+            raw_addr_cell = (
+                row[addr_idx].strip().strip("'").strip('"')
+                if addr_idx is not None and addr_idx < len(row)
+                else ""
+            )
             raw_addr = (
                 parse_hex_or_int(row[addr_idx])
                 if addr_idx is not None and addr_idx < len(row)
                 else None
             )
+            if raw_addr is None and raw_addr_cell.lower() not in ("", "-", "none", "null", "n/a"):
+                source_error = f"address token {raw_addr_cell!r} is not a numeric byte"
+            if raw_addr is not None and not 0 <= raw_addr <= 0xFF:
+                source_error = (
+                    f"address {raw_addr} is outside the supported 7-bit/8-bit range 0..0xFF"
+                )
+                raw_addr = None
 
             # Parse direction
             raw_rw = (
@@ -202,14 +221,33 @@ class I2CParser:
             raw_data_cell = (
                 str(row[data_idx]).strip() if data_idx is not None and data_idx < len(row) else ""
             )
-            raw_data_tokens = []
+            raw_data_tokens: list[int] = []
             if raw_data_cell and raw_data_cell.lower() not in ("-", "none", "null", ""):
-                raw_data_tokens = [
+                parsed_data_tokens = [
                     parse_hex_or_int(tok)
                     for tok in re.split(r"[ ,;]+", raw_data_cell)
                     if tok.strip()
                 ]
-                raw_data_tokens = [tok for tok in raw_data_tokens if tok is not None]
+                if any(token is None for token in parsed_data_tokens):
+                    source_error = source_error or "one or more data tokens are not numeric bytes"
+                if any(
+                    token is not None and not 0 <= token <= 0xFF for token in parsed_data_tokens
+                ):
+                    invalid = next(
+                        token
+                        for token in parsed_data_tokens
+                        if token is not None and not 0 <= token <= 0xFF
+                    )
+                    source_error = source_error or f"data byte {invalid} is outside 0..0xFF"
+                raw_data_tokens = [
+                    token
+                    for token in parsed_data_tokens
+                    if token is not None and 0 <= token <= 0xFF
+                ]
+                if source_error:
+                    # Do not allow a malformed combined row to become a plausible
+                    # partial transaction. Preserve the row as quality evidence.
+                    raw_data_tokens = []
             raw_data = raw_data_tokens[0] if len(raw_data_tokens) == 1 else None
 
             # Parse ACK
@@ -256,9 +294,13 @@ class I2CParser:
                         address_7bit=addr_7bit,
                         direction=raw_rw,
                         data_byte=None,
-                        ack=AckType.ACK if ack_val != AckType.NONE else AckType.NONE,
+                        # A combined analyzer row does not identify whether its
+                        # ACK/NACK belongs to the address or the final data byte.
+                        # Keep address evidence unknown instead of inventing ACK.
+                        ack=AckType.NONE,
                         duration_s=None,
                         bit_rate_khz=bitrate,
+                        extra={"source_error": source_error} if source_error else {},
                         raw_text=",".join(row),
                     )
                 )
@@ -277,10 +319,13 @@ class I2CParser:
                             else (AckType.ACK if ack_val != AckType.NONE else AckType.NONE),
                             duration_s=None,
                             bit_rate_khz=bitrate,
+                            extra={"source_error": source_error} if source_error else {},
                             raw_text=",".join(row),
                         )
                     )
             else:
+                if source_error:
+                    ev_type = RawEventType.UNKNOWN
                 events.append(
                     RawI2CEvent(
                         timestamp=timestamp,
@@ -293,6 +338,7 @@ class I2CParser:
                         ack=ack_val,
                         duration_s=dur,
                         bit_rate_khz=bitrate,
+                        extra={"source_error": source_error} if source_error else {},
                         raw_text=",".join(row),
                     )
                 )
@@ -436,24 +482,43 @@ class I2CParser:
     @classmethod
     def parse_raw_records(cls, records: list[dict[str, Any]]) -> list[RawI2CEvent]:
         """Convert raw Python dictionary list into normalized RawI2CEvents."""
+        if not isinstance(records, list):
+            raise TypeError("raw I2C records must be provided as a list")
+
         events: list[RawI2CEvent] = []
-        for rec in records:
+        for index, rec in enumerate(records):
+            if not isinstance(rec, dict):
+                raise TypeError(f"raw I2C record {index} must be a mapping")
+
             raw_timestamp = rec.get("timestamp", rec.get("time"))
             parsed_timestamp = _nonnegative_finite_float(raw_timestamp)
             timestamp_available = parsed_timestamp is not None
             ts = parsed_timestamp if parsed_timestamp is not None else 0.0
-            ev_type_str = str(rec.get("event_type", rec.get("type", "DATA"))).upper()
-            ev_type = (
-                RawEventType(ev_type_str)
-                if ev_type_str in RawEventType._value2member_map_
-                else RawEventType.DATA
-            )
+            raw_event_type = rec.get("event_type", rec.get("type", "DATA"))
+            if isinstance(raw_event_type, RawEventType):
+                ev_type = raw_event_type
+            else:
+                ev_type_str = str(raw_event_type).strip().strip("'").strip('"').upper()
+                try:
+                    ev_type = RawEventType(ev_type_str)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"raw I2C record {index} has unknown event_type {raw_event_type!r}"
+                    ) from exc
 
             addr = parse_hex_or_int(rec.get("address", rec.get("address_7bit", rec.get("addr"))))
+            if addr is not None and not 0 <= addr <= 0xFF:
+                raise ValueError(
+                    f"raw I2C record {index} address must be a 7-bit or 8-bit value (0..0xFF), got {addr}"
+                )
             addr_7bit = ((addr >> 1) & 0x7F) if (addr is not None and addr > 0x7F) else addr
 
             rw = parse_direction(rec.get("direction", rec.get("rw", rec.get("read_write"))))
             data_val = parse_hex_or_int(rec.get("data", rec.get("data_byte", rec.get("byte"))))
+            if data_val is not None and not 0 <= data_val <= 0xFF:
+                raise ValueError(
+                    f"raw I2C record {index} data byte must be in range 0..0xFF, got {data_val}"
+                )
             ack_val = parse_ack(rec.get("ack", rec.get("ack_nak")))
 
             duration_s = _positive_finite_float(rec.get("duration_s"))

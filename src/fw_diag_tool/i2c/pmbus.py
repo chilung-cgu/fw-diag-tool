@@ -329,7 +329,7 @@ def encode_linear11(val: float) -> int:
 
     for exp in range(-16, 16):
         mant = round(val / (2.0**exp))
-        if -1024 <= mant <= 1023:
+        if -1024 <= mant <= 1023 and mant != 0:
             err = abs(val - mant * (2.0**exp))
             if err < min_err:
                 min_err = err
@@ -338,6 +338,9 @@ def encode_linear11(val: float) -> int:
                 if err == 0:
                     break
 
+    if min_err == float("inf"):
+        raise ValueError(f"value {val!r} is outside the representable PMBus Linear11 range")
+
     exp_5bit = (best_exp + 32) & 0x1F if best_exp < 0 else (best_exp & 0x1F)
     mant_11bit = (best_mant + 2048) & 0x07FF if best_mant < 0 else (best_mant & 0x07FF)
     return (exp_5bit << 11) | mant_11bit
@@ -345,6 +348,10 @@ def encode_linear11(val: float) -> int:
 
 def decode_linear16(raw_word: int, vout_mode_exponent: int = -9, signed: bool = False) -> float:
     """Decode a 16-bit PMBus Linear16 output voltage value."""
+    if not isinstance(vout_mode_exponent, int) or isinstance(vout_mode_exponent, bool):
+        raise TypeError("vout_mode_exponent must be an integer in the PMBus range -16..15")
+    if not -16 <= vout_mode_exponent <= 15:
+        raise ValueError("vout_mode_exponent must be in the PMBus range -16..15")
     raw_word &= 0xFFFF
     if signed and (raw_word & 0x8000):
         val = raw_word - 65536

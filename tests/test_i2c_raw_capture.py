@@ -232,7 +232,7 @@ def test_raw_adapter_feeds_main_engine_without_losing_measured_evidence() -> Non
     builder.stop()
     decoded = analyze_raw_i2c_csv(builder.csv())
 
-    report = I2CDiagnosticEngine().analyze(raw_decode_to_events(decoded))
+    report = I2CDiagnosticEngine(eeprom_profile="24C02").analyze(raw_decode_to_events(decoded))
 
     assert report.total_transactions == 1
     assert report.transactions[0].address_7bit == 0x50

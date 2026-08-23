@@ -3,6 +3,8 @@ import pytest
 from fw_diag_tool.analyzers.register_mapper import BitField
 from fw_diag_tool.i2c.eeprom import decode_eeprom_write
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
+from fw_diag_tool.i2c.models import RawEventType, RawI2CEvent
+from fw_diag_tool.i2c.parser import I2CParser, parse_hex_or_int
 from fw_diag_tool.i2c.pmbus import decode_linear16, decode_pmbus_payload, encode_linear11
 from fw_diag_tool.pcie.diagnostics import diagnose_pcie_device
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
@@ -111,6 +113,98 @@ def test_bitfield_bracket_and_reverse_range():
     bf2 = BitField(name="TEST2", bit_range="0:7")
     assert bf2.high_bit == 7 and bf2.low_bit == 0
     assert bf2.bit_mask == 0xFF
+
+
+def test_i2c_raw_record_boundaries_are_rejected_not_reinterpreted():
+    assert parse_hex_or_int("#50") == 0x50
+    with pytest.raises(TypeError, match="mapping"):
+        I2CParser.parse_raw_records([None])  # type: ignore[list-item]
+    with pytest.raises(ValueError, match="unknown event_type"):
+        I2CParser.parse_raw_records([{"type": "GARBAGE"}])
+    with pytest.raises(ValueError, match="address"):
+        I2CParser.parse_raw_records([{"type": "ADDRESS", "address": -1}])
+    with pytest.raises(ValueError, match="data byte"):
+        I2CParser.parse_raw_records([{"type": "DATA", "data": 256}])
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"smbus_timeout_ms": None},
+        {"smbus_timeout_ms": "25"},
+        {"smbus_timeout_ms": 0},
+        {"smbus_timeout_ms": float("nan")},
+        {"high_jitter_threshold_pct": 0},
+        {"default_eeprom_page_size": 0},
+        {"default_vout_exponent": 1024},
+    ],
+)
+def test_i2c_engine_rejects_invalid_configuration(kwargs):
+    with pytest.raises((TypeError, ValueError)):
+        I2CDiagnosticEngine(**kwargs)
+
+
+def test_ambiguous_eeprom_requires_explicit_profile_before_offset_decode():
+    csv_data = """Time,Address,Read/Write,Data,ACK/NACK
+0.001,0x50,Write,0x01 0x23 0xAA,ACK
+"""
+    ambiguous = I2CDiagnosticEngine().analyze_csv_content(csv_data)
+    tx = ambiguous.transactions[0]
+    assert tx.decoded_values["evidence"] == "ambiguous-address-profile"
+    assert tx.decoded_values["address_bytes"] is None
+    assert any(
+        issue.code == "I2C_EEPROM_PROFILE_UNAVAILABLE" for issue in ambiguous.data_quality_issues
+    )
+
+    identified = I2CDiagnosticEngine(eeprom_profile="24C64").analyze_csv_content(csv_data)
+    decoded = identified.transactions[0].decoded_values
+    assert decoded["address_bytes"] == 2
+    assert decoded["offset"] == 0x0123
+    assert decoded["payload"] == ["0xAA"]
+
+
+def test_pmbus_linear_formats_reject_unrepresentable_values_and_exponents():
+    with pytest.raises(ValueError, match="representable"):
+        encode_linear11(1e300)
+    with pytest.raises(ValueError, match="representable"):
+        encode_linear11(1e-300)
+    with pytest.raises(ValueError, match="-16..15"):
+        decode_linear16(1, 1024)
+
+
+def test_engine_rejects_malformed_direct_event_and_reports_unknown_csv_rows():
+    with pytest.raises(ValueError, match="timestamp"):
+        I2CDiagnosticEngine().analyze(
+            [RawI2CEvent(timestamp=None, event_type=RawEventType.DATA)]  # type: ignore[arg-type]
+        )
+
+    report = I2CDiagnosticEngine().analyze_csv_content(
+        "Time,Type,Address,Data\n0,GARBAGE,not-an-address,not-a-byte\n"
+    )
+    assert report.total_transactions == 0
+    assert {issue.code for issue in report.data_quality_issues} >= {
+        "I2C_UNKNOWN_EVENT_TYPE",
+        "I2C_SOURCE_PARSE_ERROR",
+    }
+    invalid_address = I2CDiagnosticEngine().analyze_csv_content(
+        "Time,Address,Data\n0,invalid,0x12\n"
+    )
+    assert any(
+        issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in invalid_address.data_quality_issues
+    )
+
+
+def test_reused_engine_does_not_leak_mux_state_between_captures():
+    engine = I2CDiagnosticEngine()
+    first = engine.analyze_csv_content(
+        "Time,Address,Read/Write,Data,ACK/NACK\n0.001,0x70,Write,0x01,ACK\n"
+    )
+    assert "MUX 0x70" in first.transactions[0].semantic_summary
+
+    second = engine.analyze_csv_content(
+        "Time,Address,Read/Write,Data,ACK/NACK\n0.001,0x50,Write,0x10,ACK\n"
+    )
+    assert second.transactions[0].mux_topology is None
 
 
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator

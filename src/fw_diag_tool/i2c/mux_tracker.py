@@ -25,14 +25,28 @@ class I2CMuxTracker:
                 if (
                     tx.direction == I2CDirection.WRITE
                     and tx.data_bytes
-                    and tx.address_ack == AckType.ACK
+                    # Analyzer summary rows may report one ACK/NACK for the
+                    # whole row.  In that format the address ACK is unknown,
+                    # but an ACK on every transmitted data byte is still useful
+                    # evidence that the MUX write reached the device.  Never
+                    # accept an explicit address NACK.
+                    and tx.address_ack != AckType.NACK
                     and data_acked
                 ):
                     ctrl_byte = tx.data_bytes[0]
                     self.mux_states[addr] = ctrl_byte
                     self.last_active_mux = addr
                     active_channels = [ch for ch in range(8) if (ctrl_byte & (1 << ch))]
-                    tx.semantic_summary = f"I2C MUX 0x{addr:02X} Channel Switch -> {active_channels if active_channels else ['All Disabled']}"
+                    evidence_note = (
+                        " (address ACK unavailable; inferred from data ACK)"
+                        if tx.address_ack == AckType.NONE
+                        else ""
+                    )
+                    tx.semantic_summary = (
+                        f"I2C MUX 0x{addr:02X} Channel Switch -> "
+                        f"{active_channels if active_channels else ['All Disabled']}"
+                        + evidence_note
+                    )
                     tx.device_category = "I2C Multiplexer (PCA9548A/PCA9546)"
 
                     if len(active_channels) > 1:

@@ -75,7 +75,9 @@ def test_multibyte_summary_row_does_not_invent_per_byte_timestamps():
     events = I2CParser.parse_csv_string(csv_data)
 
     assert [event.timestamp for event in events] == [0.001, 0.001, 0.001]
-    assert [event.ack for event in events] == [AckType.ACK, AckType.ACK, AckType.NACK]
+    # A combined analyzer row does not identify whether its ACK/NACK belongs
+    # to the address or final data byte; address evidence remains unknown.
+    assert [event.ack for event in events] == [AckType.NONE, AckType.ACK, AckType.NACK]
     assert all(event.duration_s is None for event in events)
 
 

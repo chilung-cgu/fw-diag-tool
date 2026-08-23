@@ -261,7 +261,9 @@ def test_anomaly_clock_stretching():
 
 def test_anomaly_eeprom_rollover_and_data_nack():
     csv_path = Path(__file__).parent / "data" / "saleae_anomaly_eeprom_rollover_and_data_nack.csv"
-    engine = I2CDiagnosticEngine(default_eeprom_page_size=8)
+    # 0x50 is shared by multiple EEPROM families; provide the address width
+    # explicitly so page-wrap analysis is evidence-backed rather than guessed.
+    engine = I2CDiagnosticEngine(default_eeprom_page_size=8, default_eeprom_address_bytes=1)
     report = engine.analyze_csv_file(str(csv_path))
 
     # Page rollover check

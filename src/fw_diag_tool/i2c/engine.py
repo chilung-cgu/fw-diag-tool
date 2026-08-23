@@ -7,11 +7,12 @@ and actionable diagnostic advice generation.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from fw_diag_tool.i2c.anomaly import I2CAnomalyDetector
 from fw_diag_tool.i2c.chip_db import get_all_matching_devices, lookup_device
-from fw_diag_tool.i2c.eeprom import decode_eeprom_read, decode_eeprom_write
+from fw_diag_tool.i2c.eeprom import EEPROM_MODELS, decode_eeprom_read, decode_eeprom_write
 from fw_diag_tool.i2c.models import (
     AckType,
     DataQualityIssue,
@@ -43,16 +44,56 @@ class I2CDiagnosticEngine:
         high_jitter_threshold_pct: float = 35.0,
         default_eeprom_page_size: int = 16,
         default_vout_exponent: int = -9,
+        default_eeprom_address_bytes: int | None = None,
+        eeprom_profile: str | None = None,
     ):
-        self.smbus_timeout_ms = smbus_timeout_ms
-        self.high_jitter_threshold_pct = high_jitter_threshold_pct
-        self.default_eeprom_page_size = default_eeprom_page_size
+        self.smbus_timeout_ms = self._positive_finite_config(
+            "smbus_timeout_ms", smbus_timeout_ms, maximum=60_000.0
+        )
+        self.high_jitter_threshold_pct = self._positive_finite_config(
+            "high_jitter_threshold_pct", high_jitter_threshold_pct, maximum=10_000.0
+        )
+        self.default_eeprom_page_size = self._positive_int_config(
+            "default_eeprom_page_size", default_eeprom_page_size, maximum=4096
+        )
+        if not isinstance(default_vout_exponent, int) or isinstance(default_vout_exponent, bool):
+            raise TypeError("default_vout_exponent must be an integer in the PMBus range -16..15")
+        if not -16 <= default_vout_exponent <= 15:
+            raise ValueError("default_vout_exponent must be in the PMBus range -16..15")
+        if default_eeprom_address_bytes not in (None, 1, 2):
+            raise ValueError("default_eeprom_address_bytes must be 1, 2, or None")
+        if eeprom_profile is not None and eeprom_profile not in EEPROM_MODELS:
+            known_profiles = ", ".join(sorted(EEPROM_MODELS))
+            raise ValueError(
+                f"unknown eeprom_profile {eeprom_profile!r}; choose one of: {known_profiles}"
+            )
         self.default_vout_exponent = default_vout_exponent
+        self.default_eeprom_address_bytes = default_eeprom_address_bytes
+        self.eeprom_profile = eeprom_profile
         self.mux_tracker = I2CMuxTracker()
         self.anomaly_detector = I2CAnomalyDetector(
-            smbus_timeout_ms=smbus_timeout_ms,
-            high_jitter_threshold_pct=high_jitter_threshold_pct,
+            smbus_timeout_ms=self.smbus_timeout_ms,
+            high_jitter_threshold_pct=self.high_jitter_threshold_pct,
         )
+
+    @staticmethod
+    def _positive_finite_config(name: str, value: Any, *, maximum: float) -> float:
+        """Validate a positive finite numeric engine setting with a safe upper bound."""
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise TypeError(f"{name} must be a finite numeric value")
+        parsed = float(value)
+        if not math.isfinite(parsed) or parsed <= 0 or parsed > maximum:
+            raise ValueError(f"{name} must be > 0 and <= {maximum:g}")
+        return parsed
+
+    @staticmethod
+    def _positive_int_config(name: str, value: Any, *, maximum: int) -> int:
+        """Validate a bounded positive integer engine setting."""
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise TypeError(f"{name} must be an integer in range 1..{maximum}")
+        if not 1 <= value <= maximum:
+            raise ValueError(f"{name} must be an integer in range 1..{maximum}")
+        return value
 
     def group_events_into_transactions(self, events: list[RawI2CEvent]) -> list[I2CTransaction]:
         """Group raw stream of physical I2C events into logical I2C Transactions."""
@@ -306,9 +347,10 @@ class I2CDiagnosticEngine:
 
         return transactions
 
-    def decode_semantic_layer(self, transactions: list[I2CTransaction]) -> None:
+    def decode_semantic_layer(self, transactions: list[I2CTransaction]) -> list[DataQualityIssue]:
         """Perform chip identification and protocol semantic decoding across transactions."""
         device_context: dict[int, dict[str, Any]] = {}
+        ambiguous_eeprom_writes = 0
 
         for tx in transactions:
             addr = tx.address_7bit
@@ -385,26 +427,60 @@ class I2CDiagnosticEngine:
             # 2. EEPROM Protocol Semantic Decoding
             elif tx.protocol == "EEPROM" or (chip and "EEPROM" in chip.category):
                 if tx.direction == I2CDirection.WRITE:
-                    eep_page_size = (
-                        self.default_eeprom_page_size
-                        if self.default_eeprom_page_size != 16
-                        else (
-                            (
-                                chip.extra_info.get("page_size_bytes")
-                                if chip and chip.extra_info
-                                else None
-                            )
-                            or self.default_eeprom_page_size
+                    profile = (
+                        EEPROM_MODELS.get(self.eeprom_profile) if self.eeprom_profile else None
+                    )
+                    if not tx.data_bytes:
+                        tx.semantic_summary = "EEPROM Write Polling / Address Probe"
+                        tx.decoded_values = {
+                            "type": "Write Polling / Address Probe",
+                            "summary": tx.semantic_summary,
+                            "evidence": "address-probe",
+                        }
+                    elif (
+                        chip is None
+                        and profile is None
+                        and self.default_eeprom_address_bytes is None
+                    ):
+                        ambiguous_eeprom_writes += 1
+                        tx.semantic_summary = (
+                            "EEPROM write not decoded: address width/page size unavailable; "
+                            "select an explicit EEPROM profile"
                         )
-                    )
-                    eep_addr_len = (chip.default_register_len if chip else None) or 1
-                    decoded = decode_eeprom_write(
-                        tx.data_bytes, preferred_address_bytes=eep_addr_len, page_size=eep_page_size
-                    )
-                    tx.semantic_summary = decoded.get("summary")
-                    tx.decoded_values = decoded
-                    if decoded.get("offset") is not None:
-                        ctx["last_offset"] = decoded["offset"]
+                        tx.decoded_values = {
+                            "type": "EEPROM Write (profile required)",
+                            "summary": tx.semantic_summary,
+                            "evidence": "ambiguous-address-profile",
+                            "address_bytes": None,
+                            "page_size": None,
+                            "candidate_profiles": tx.device_candidates,
+                        }
+                    else:
+                        eep_addr_len = (
+                            profile.address_bytes
+                            if profile is not None
+                            else (
+                                self.default_eeprom_address_bytes
+                                if self.default_eeprom_address_bytes is not None
+                                else chip.default_register_len
+                            )
+                        )
+                        eep_page_size = (
+                            self.default_eeprom_page_size
+                            if self.default_eeprom_page_size != 16 or profile is None
+                            else (chip.extra_info.get("page_size_bytes") if chip else None)
+                            or profile.page_size_bytes
+                        )
+                        decoded = decode_eeprom_write(
+                            tx.data_bytes,
+                            preferred_address_bytes=eep_addr_len,
+                            page_size=eep_page_size,
+                        )
+                        decoded["evidence"] = "explicit-profile" if profile else "user-configured"
+                        tx.semantic_summary = decoded.get("summary")
+                        tx.decoded_values = decoded
+                        if decoded.get("offset") is not None:
+                            ctx["last_offset"] = decoded["offset"]
                 else:
                     decoded = decode_eeprom_read(
                         tx.data_bytes, last_known_offset=ctx.get("last_offset")
@@ -480,10 +556,27 @@ class I2CDiagnosticEngine:
                 rw_str = "Write" if tx.direction == I2CDirection.WRITE else "Read"
                 tx.semantic_summary = f"{rw_str} {len(tx.data_bytes)} byte(s): {tx.hex_dump}"
 
+        if ambiguous_eeprom_writes:
+            return [
+                DataQualityIssue(
+                    code="I2C_EEPROM_PROFILE_UNAVAILABLE",
+                    message=(
+                        "EEPROM writes at ambiguous addresses were retained, but offset/page decoding was skipped "
+                        "until an explicit EEPROM profile or address-width configuration is supplied."
+                    ),
+                    count=ambiguous_eeprom_writes,
+                )
+            ]
+        return []
+
     def analyze(self, events: list[RawI2CEvent]) -> I2CAnalysisReport:
         """Execute full end-to-end diagnostic pipeline on parsed events."""
+        self._validate_events(events)
+        # A diagnostic engine may be reused for multiple independent captures.  MUX
+        # state belongs to one capture and must never leak into the next report.
+        self.mux_tracker = I2CMuxTracker()
         transactions = self.group_events_into_transactions(events)
-        self.decode_semantic_layer(transactions)
+        semantic_quality_issues = self.decode_semantic_layer(transactions)
 
         known_timestamps = [event.timestamp for event in events if event.timestamp_available]
         total_duration = (
@@ -516,7 +609,31 @@ class I2CDiagnosticEngine:
                 }
             devices_detected[addr_hex]["transaction_count"] += 1
 
-        data_quality_issues: list[DataQualityIssue] = []
+        data_quality_issues: list[DataQualityIssue] = list(semantic_quality_issues)
+        unknown_event_count = sum(event.event_type == RawEventType.UNKNOWN for event in events)
+        if unknown_event_count:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_UNKNOWN_EVENT_TYPE",
+                    message=(
+                        "Some source rows could not be classified as START/STOP/ADDRESS/DATA; they were "
+                        "retained as unknown evidence and excluded from transaction conclusions."
+                    ),
+                    count=unknown_event_count,
+                )
+            )
+        source_error_count = sum(bool(event.extra.get("source_error")) for event in events)
+        if source_error_count:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_SOURCE_PARSE_ERROR",
+                    message=(
+                        "Some CSV rows contained invalid address/data tokens; the affected evidence was retained "
+                        "as unknown and excluded from protocol conclusions."
+                    ),
+                    count=source_error_count,
+                )
+            )
         missing_timestamp_count = sum(not event.timestamp_available for event in events)
         if missing_timestamp_count:
             data_quality_issues.append(
@@ -599,6 +716,28 @@ class I2CDiagnosticEngine:
             summary_text=summary_text,
             data_quality_issues=data_quality_issues,
         )
+
+    @staticmethod
+    def _validate_events(events: list[RawI2CEvent]) -> None:
+        """Reject malformed direct model inputs before timing/grouping can fail ambiguously."""
+        if not isinstance(events, list):
+            raise TypeError("I2C events must be provided as a list")
+        for index, event in enumerate(events):
+            if not isinstance(event, RawI2CEvent):
+                raise TypeError(f"I2C event {index} must be a RawI2CEvent")
+            if (
+                isinstance(event.timestamp, bool)
+                or not isinstance(event.timestamp, (int, float))
+                or not math.isfinite(float(event.timestamp))
+                or event.timestamp < 0
+            ):
+                raise ValueError(f"I2C event {index} timestamp must be finite and non-negative")
+            if not isinstance(event.event_type, RawEventType):
+                raise TypeError(f"I2C event {index} event_type must be a RawEventType")
+            if event.address_7bit is not None and not 0 <= event.address_7bit <= 0x7F:
+                raise ValueError(f"I2C event {index} address_7bit must be in range 0..0x7F")
+            if event.data_byte is not None and not 0 <= event.data_byte <= 0xFF:
+                raise ValueError(f"I2C event {index} data_byte must be in range 0..0xFF")
 
     def analyze_csv_string(self, csv_text: str) -> I2CAnalysisReport:
         """Convenience method to parse and analyze CSV text."""
