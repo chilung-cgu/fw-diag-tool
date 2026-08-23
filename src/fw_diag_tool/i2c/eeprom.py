@@ -52,7 +52,11 @@ def _validate_positive_int(name: str, value: int, *, maximum: int) -> int:
 
 
 def decode_eeprom_write(
-    data_bytes: list[int], preferred_address_bytes: int = 1, page_size: int = 16
+    data_bytes: list[int],
+    preferred_address_bytes: int = 1,
+    page_size: int = 16,
+    *,
+    capacity_bytes: int | None = None,
 ) -> dict[str, Any]:
     """Decode an EEPROM write sequence, detecting word offset and page boundary hazard.
 
@@ -60,6 +64,8 @@ def decode_eeprom_write(
         data_bytes: Payload bytes transmitted following slave address byte.
         preferred_address_bytes: 1 for 24C01-24C16, 2 for 24C32-24C512.
         page_size: Page size in bytes for boundary check.
+        capacity_bytes: Optional device capacity. When provided, an offset or
+            payload that exceeds the profile is reported as incomplete evidence.
 
     Raises:
         TypeError/ValueError: If the input sequence or EEPROM geometry is invalid.
@@ -69,6 +75,8 @@ def decode_eeprom_write(
     if preferred_address_bytes not in (1, 2):
         raise ValueError("preferred_address_bytes must be 1 or 2")
     _validate_positive_int("page_size", page_size, maximum=4096)
+    if capacity_bytes is not None:
+        _validate_positive_int("capacity_bytes", capacity_bytes, maximum=128 * 1024)
     if not data_bytes:
         return {
             "type": "Write Polling / Address Probe",
@@ -89,6 +97,7 @@ def decode_eeprom_write(
             "payload_len": 0,
             "payload": [],
             "page_size": page_size,
+            "capacity_bytes": capacity_bytes,
             "rollover_hazard": False,
             "rollover_details": "",
         }
@@ -107,6 +116,29 @@ def decode_eeprom_write(
         payload = data_bytes[1:]
 
     payload_len = len(payload)
+
+    if capacity_bytes is not None and (
+        offset >= capacity_bytes or offset + payload_len > capacity_bytes
+    ):
+        out_of_range_bytes = max(0, offset + payload_len - capacity_bytes)
+        return {
+            "type": "EEPROM Write (address out of range)",
+            "summary": (
+                f"EEPROM write exceeds the configured {capacity_bytes}-byte capacity "
+                f"at offset 0x{offset:04X}; offset/payload interpretation is incomplete"
+            ),
+            "evidence": "address-out-of-range",
+            "address_bytes": addr_bytes_len,
+            "offset": offset,
+            "offset_hex": f"0x{offset:04X}",
+            "payload_len": payload_len,
+            "payload": [f"0x{b:02X}" for b in payload],
+            "page_size": page_size,
+            "capacity_bytes": capacity_bytes,
+            "out_of_range_bytes": out_of_range_bytes,
+            "rollover_hazard": False,
+            "rollover_details": "",
+        }
 
     # Check Page Boundary Rollover
     # If start offset + payload length crosses the page boundary, the EEPROM hardware counter wraps!
@@ -147,6 +179,7 @@ def decode_eeprom_write(
         "payload": [f"0x{b:02X}" for b in payload],
         "summary": summary,
         "page_size": safe_page_size,
+        "capacity_bytes": capacity_bytes,
         "rollover_hazard": rollover_hazard,
         "rollover_details": rollover_details,
     }

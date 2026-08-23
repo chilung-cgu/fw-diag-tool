@@ -417,6 +417,7 @@ class I2CDiagnosticEngine:
         device_context: dict[int, dict[str, Any]] = {}
         ambiguous_eeprom_writes = 0
         eeprom_truncated = 0
+        eeprom_out_of_range = 0
         pmbus_truncated = 0
         pmbus_block_mismatch = 0
 
@@ -571,9 +572,10 @@ class I2CDiagnosticEngine:
                             tx.data_bytes,
                             preferred_address_bytes=eep_addr_len,
                             page_size=eep_page_size,
+                            capacity_bytes=(profile.capacity_kbits * 128 if profile else None),
                         )
                         decoder_evidence = decoded.get("evidence")
-                        if decoder_evidence != "truncated":
+                        if decoder_evidence not in {"truncated", "address-out-of-range"}:
                             decoded["evidence"] = (
                                 "explicit-profile" if profile else "user-configured"
                             )
@@ -581,7 +583,12 @@ class I2CDiagnosticEngine:
                         tx.decoded_values = decoded
                         if decoder_evidence == "truncated":
                             eeprom_truncated += 1
-                        if decoded.get("offset") is not None:
+                        elif decoder_evidence == "address-out-of-range":
+                            eeprom_out_of_range += 1
+                        if (
+                            decoder_evidence not in {"truncated", "address-out-of-range"}
+                            and decoded.get("offset") is not None
+                        ):
                             ctx["last_offset"] = decoded["offset"]
                 else:
                     decoded = decode_eeprom_read(
@@ -679,6 +686,17 @@ class I2CDiagnosticEngine:
                         "capture contained only one address byte; offset and payload decoding was withheld."
                     ),
                     count=eeprom_truncated,
+                )
+            )
+        if eeprom_out_of_range:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_EEPROM_ADDRESS_OUT_OF_RANGE",
+                    message=(
+                        "An EEPROM write selected a profile whose captured offset or payload exceeds the "
+                        "configured memory capacity; address/payload interpretation was withheld."
+                    ),
+                    count=eeprom_out_of_range,
                 )
             )
         if pmbus_truncated:

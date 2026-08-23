@@ -97,14 +97,20 @@ class RegisterMapCatalog:
             raise ValueError(f"{label} is not a valid integer") from None
 
     def load_from_yaml(self, yaml_content: str) -> None:
+        if not isinstance(yaml_content, str):
+            raise TypeError("register map YAML must be text")
         data = yaml.safe_load(yaml_content)
-        if not data:
-            return
+        if data is None:
+            raise ValueError("register map must contain at least one register")
         if not isinstance(data, dict):
             raise TypeError("register map root must be a mapping")
-        regs = data.get("registers", [])
+        if "registers" not in data:
+            raise ValueError("register map must contain at least one register")
+        regs = data["registers"]
         if not isinstance(regs, list):
             raise TypeError("registers must be a list")
+        if not regs:
+            raise ValueError("register map must contain at least one register")
 
         # Stage all changes so a malformed later register cannot leave a
         # partially loaded catalog behind.
@@ -196,6 +202,8 @@ class RegisterMapCatalog:
         if isinstance(offset_or_name, bool):
             raise TypeError("register offset/name must not be boolean")
         if isinstance(offset_or_name, int):
+            if not 0 <= offset_or_name <= 0xFFFFFFFF:
+                raise ValueError("register offset must be between 0 and 0xFFFFFFFF")
             reg_def = self.registers.get(offset_or_name)
         elif isinstance(offset_or_name, str):
             token = offset_or_name.strip()
@@ -207,6 +215,8 @@ class RegisterMapCatalog:
                 reg_def = self.registers.get(offset)
             else:
                 reg_def = self.name_map.get(token.lower())
+        else:
+            raise TypeError("register offset/name must be an integer offset or string name")
         if not reg_def:
             offset = (
                 offset_or_name
@@ -227,6 +237,10 @@ class RegisterMapCatalog:
                 fields=[],
                 unmapped_bits=value,
             )
+        if isinstance(reg_def.size, bool) or reg_def.size not in (8, 16, 32):
+            raise ValueError(
+                f"register {reg_def.name!r} size must be 8, 16, or 32 bits before decoding"
+            )
         if value >= (1 << reg_def.size):
             raise ValueError(
                 f"value 0x{value:X} exceeds {reg_def.size}-bit register {reg_def.name}"
@@ -234,6 +248,11 @@ class RegisterMapCatalog:
         decoded_fields = []
         covered_mask = 0
         for f in reg_def.fields:
+            high, low = f.high_bit, f.low_bit
+            if low < 0 or high >= reg_def.size:
+                raise ValueError(
+                    f"field {reg_def.name}.{f.name} bits exceed {reg_def.size}-bit register width"
+                )
             f_val = f.extract_value(value)
             covered_mask |= f.bit_mask
             meaning = f.values.get(f_val, f"Raw value: {f_val}")

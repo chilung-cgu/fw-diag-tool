@@ -1,6 +1,6 @@
 import pytest
 
-from fw_diag_tool.analyzers.register_mapper import BitField
+from fw_diag_tool.analyzers.register_mapper import BitField, RegisterMapCatalog
 from fw_diag_tool.i2c.anomaly import I2CAnomalyDetector
 from fw_diag_tool.i2c.eeprom import decode_eeprom_read, decode_eeprom_write
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
@@ -128,6 +128,32 @@ def test_eeprom_two_byte_profile_does_not_downgrade_one_byte_offset():
     assert result["payload"] == []
 
 
+def test_eeprom_profile_capacity_rejects_out_of_range_offset():
+    result = decode_eeprom_write(
+        [0xFF, 0xFF, 0xAA],
+        preferred_address_bytes=2,
+        page_size=32,
+        capacity_bytes=8 * 1024,
+    )
+    assert result["evidence"] == "address-out-of-range"
+    assert result["offset"] == 0xFFFF
+    assert result["capacity_bytes"] == 8 * 1024
+
+
+def test_engine_surfaces_eeprom_profile_capacity_limit():
+    report = I2CDiagnosticEngine(eeprom_profile="24C64").analyze_csv_content(
+        "Time,Packet ID,Address,Read/Write,Data,ACK/NACK\n"
+        "0.001,0,0x50,Write,0xFF 0xFF 0xAA,ACK\n"
+        "0.002,1,0x50,Read,0x12,ACK\n"
+    )
+    tx = report.transactions[0]
+    assert tx.decoded_values["evidence"] == "address-out-of-range"
+    assert "0xFFFF" not in report.transactions[1].semantic_summary
+    assert any(
+        issue.code == "I2C_EEPROM_ADDRESS_OUT_OF_RANGE" for issue in report.data_quality_issues
+    )
+
+
 def test_engine_surfaces_eeprom_truncated_address_as_data_quality():
     report = I2CDiagnosticEngine(eeprom_profile="24C64").analyze_csv_content(
         "Time,Address,Read/Write,Data,ACK/NACK\n0.001,0x50,Write,,ACK\n0.002,,Write,0x10,ACK\n"
@@ -149,6 +175,21 @@ def test_bitfield_bracket_and_reverse_range():
     bf2 = BitField(name="TEST2", bit_range="0:7")
     assert bf2.high_bit == 7 and bf2.low_bit == 0
     assert bf2.bit_mask == 0xFF
+
+
+def test_register_catalog_rejects_empty_sources_and_invalid_direct_offsets():
+    catalog = RegisterMapCatalog()
+    for source in ("", "{}", "registers: []", "null"):
+        with pytest.raises(ValueError, match="at least one register"):
+            catalog.load_from_yaml(source)
+    with pytest.raises(TypeError, match="must be text"):
+        catalog.load_from_yaml(None)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="between 0 and 0xFFFFFFFF"):
+        catalog.decode_register(-1, 0)
+    with pytest.raises(ValueError, match="between 0 and 0xFFFFFFFF"):
+        catalog.decode_register(0x1_0000_0000, 0)
+    with pytest.raises(TypeError, match="integer offset or string name"):
+        catalog.decode_register(1.0, 0)  # type: ignore[arg-type]
 
 
 def test_i2c_raw_record_boundaries_are_rejected_not_reinterpreted():
