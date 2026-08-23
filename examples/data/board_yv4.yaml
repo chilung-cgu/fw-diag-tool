@@ -1,0 +1,96 @@
+board_name: OpenBMC-Server-YV4
+version: "1.0"
+i2c_buses:
+  - bus_num: 1
+    speed_mode: fast-mode-plus
+    devices:
+      - address_7bit: 0x20
+        name: board-gpio-expander
+        category: GPIO Expander
+        protocol: I2C
+        compatible: nxp,pca9555
+        register_width: 8
+        registers:
+          - name: input_port_0
+            offset: 0x00
+            access: RO
+          - name: output_port_0
+            offset: 0x02
+            access: RW
+          - name: config_port_0
+            offset: 0x06
+            access: RW
+      - address_7bit: 0x50
+        name: baseboard-fru-eeprom
+        category: EEPROM
+        protocol: EEPROM
+        compatible: atmel,24c64
+        register_width: 16
+        registers:
+          - name: fru_header
+            offset: 0x0000
+            access: RO
+    muxes:
+      - address_7bit: 0x70
+        name: main-i2c-mux
+        category: I2C Multiplexer
+        protocol: I2C
+        compatible: nxp,pca9548
+        register_width: 8
+        channels:
+          - channel: 0
+            devices:
+              - address_7bit: 0x48
+                name: inlet-temp-sensor
+                category: Temperature Sensor
+                protocol: I2C
+                compatible: ti,tmp75
+                register_width: 8
+                registers:
+                  - name: temperature
+                    offset: 0x00
+                    access: RO
+          - channel: 1
+            devices:
+              - address_7bit: 0x48
+                name: outlet-temp-sensor
+                category: Temperature Sensor
+                protocol: I2C
+                compatible: ti,tmp75
+                register_width: 8
+                registers:
+                  - name: temperature
+                    offset: 0x00
+                    access: RO
+          - channel: 2
+            devices:
+              - address_7bit: 0x58
+                name: core-voltage-regulator
+                category: PMBus Power Controller
+                protocol: PMBus
+                compatible: infineon,xdpe12284
+                register_width: 8
+                commands:
+                  - name: READ_VIN
+                    code: 0x88
+                  - name: READ_VOUT
+                    code: 0x8B
+                  - name: READ_IOUT
+                    code: 0x8C
+                  - name: READ_TEMPERATURE_1
+                    code: 0x8D
+          - channel: 3
+            devices:
+              - address_7bit: 0x40
+                name: main-power-monitor
+                category: Power Monitor
+                protocol: I2C
+                compatible: ti,ina226
+                register_width: 8
+                registers:
+                  - name: bus_voltage
+                    offset: 0x02
+                    access: RO
+                  - name: shunt_voltage
+                    offset: 0x01
+                    access: RO

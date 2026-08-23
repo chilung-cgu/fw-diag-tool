@@ -738,7 +738,7 @@ def test_uart_arm64_kernel_panic_parsing():
     arm64_log = """Internal error: Oops: 96000005 [#1] SMP
 Modules linked in: nvme nvme_core pci_hyperv
 CPU: 2 PID: 1234 Comm: kworker/u8:2 Not tainted 5.15.0-arm64
-Hardware name: Wiwynn Yosemite V4 (DT)
+Hardware name: OpenBMC Server V4 Reference Board (DT)
 pstate: 60400005 (nZCv daif +PAN -UAO -TCO -DIT -SSBS BTYPE=--)
 pc : [<ffff800008123456>] nvme_pci_complete_rq+0x38/0x120 [nvme]
 lr : [<ffff800008123418>] nvme_irq_handler+0x8c/0x100 [nvme]
