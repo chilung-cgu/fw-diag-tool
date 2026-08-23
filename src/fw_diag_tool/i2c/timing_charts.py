@@ -26,8 +26,22 @@ class I2CTimingCharts:
                         bitrates.append(freq_khz)
 
         if not bitrates:
-            avg_f = report.timing_stats.avg_frequency_khz
-            bitrates = [avg_f] if avg_f > 0 else [100.0]
+            fig = go.Figure()
+            fig.update_layout(
+                title="<b>SCL Clock Frequency Distribution</b> (unavailable)",
+                template="plotly_dark",
+                height=320,
+                margin=dict(l=40, r=20, t=50, b=30),
+            )
+            fig.add_annotation(
+                text="No source-provided bitrate or byte-duration evidence",
+                x=0.5,
+                y=0.5,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+            )
+            return fig
 
         df = pd.DataFrame({"SCL Clock Frequency (kHz)": bitrates})
         fig = px.histogram(
@@ -45,15 +59,24 @@ class I2CTimingCharts:
     def create_bus_activity_timeline(report: I2CAnalysisReport) -> go.Figure:
         data: list[dict[str, Any]] = []
         for tx in report.transactions:
-            status = "ACK" if tx.address_ack == AckType.ACK else "ADDR NAK"
-            if any(p.ack == AckType.NACK for p in tx.byte_packets if not p.is_address):
+            if tx.address_ack == AckType.NACK:
+                status = "ADDR NAK"
+            elif tx.address_ack == AckType.NONE:
+                status = "ACK UNKNOWN"
+            elif tx.has_unexpected_data_nack:
                 status = "DATA NAK"
+            elif tx.has_normal_read_termination_nack:
+                status = "READ END NAK"
+            elif any(p.ack == AckType.NONE for p in tx.byte_packets if not p.is_address):
+                status = "ACK UNKNOWN"
+            else:
+                status = "ACK"
             data.append(
                 {
                     "Transaction ID": f"#{tx.id}",
                     "Device": tx.device_name or f"0x{tx.address_7bit:02X}",
-                    "Start Time (s)": tx.start_time,
-                    "Duration (ms)": max(0.01, tx.duration_us / 1000.0),
+                    "Start Time (s)": tx.start_time if tx.timestamp_available else None,
+                    "Duration (ms)": tx.duration_us / 1000.0 if tx.timestamp_available else None,
                     "Direction": tx.direction.value,
                     "Status": status,
                     "Bytes": len(tx.data_bytes),
@@ -66,17 +89,25 @@ class I2CTimingCharts:
             fig.update_layout(title="No transactions to display", template="plotly_dark")
             return fig
 
-        fig = px.scatter(
-            df,
-            x="Start Time (s)",
-            y="Device",
-            size="Duration (ms)",
-            color="Status",
-            color_discrete_map={"ACK": "#00CC96", "ADDR NAK": "#EF553B", "DATA NAK": "#FFA15A"},
-            hover_data=["Transaction ID", "Direction", "Bytes", "Duration (ms)"],
-            title="<b>Bus Transaction Timeline & Active Device Map</b>",
-            template="plotly_dark",
-        )
+        scatter_args: dict[str, Any] = {
+            "data_frame": df,
+            "x": "Start Time (s)",
+            "y": "Device",
+            "color": "Status",
+            "color_discrete_map": {
+                "ACK": "#00CC96",
+                "ADDR NAK": "#EF553B",
+                "DATA NAK": "#FFA15A",
+                "READ END NAK": "#636EFA",
+                "ACK UNKNOWN": "#7F7F7F",
+            },
+            "hover_data": ["Transaction ID", "Direction", "Bytes", "Duration (ms)"],
+            "title": "<b>Bus Transaction Timeline & Active Device Map</b>",
+            "template": "plotly_dark",
+        }
+        if any(tx.timestamp_available and tx.duration_us > 0 for tx in report.transactions):
+            scatter_args["size"] = "Duration (ms)"
+        fig = px.scatter(**scatter_args)
         fig.update_layout(height=320, margin=dict(l=40, r=20, t=50, b=30))
         return fig
 
@@ -87,21 +118,29 @@ class I2CTimingCharts:
             addr_int = int(addr_str, 16)
             dev_txs = [t for t in report.transactions if t.address_7bit == addr_int]
             nack_count = sum(
+                1 for t in dev_txs if t.address_ack == AckType.NACK or t.has_unexpected_data_nack
+            )
+            unknown_ack_count = sum(
                 1
                 for t in dev_txs
-                if t.address_ack == AckType.NACK
-                or any(p.ack == AckType.NACK for p in t.byte_packets if not p.is_address)
+                if t.address_ack != AckType.NACK
+                and not t.has_unexpected_data_nack
+                and (
+                    t.address_ack == AckType.NONE
+                    or any(p.ack == AckType.NONE for p in t.byte_packets if not p.is_address)
+                )
             )
             stretch_count = sum(len(t.clock_stretching_events) for t in dev_txs)
             total_tx = len(dev_txs)
-            success_rate = (total_tx - nack_count) / total_tx * 100.0 if total_tx > 0 else 0.0
+            known_tx = total_tx - unknown_ack_count
+            success_rate = (known_tx - nack_count) / known_tx * 100.0 if known_tx > 0 else None
 
-            grade = "A (Excellent)"
-            if success_rate < 50.0 or stretch_count >= 5:
+            grade = "N/A (ACK unavailable)" if success_rate is None else "A (Excellent)"
+            if success_rate is not None and (success_rate < 50.0 or stretch_count >= 5):
                 grade = "F (Critical Fault)"
-            elif success_rate < 80.0:
+            elif success_rate is not None and success_rate < 80.0:
                 grade = "D (High NACK Rate)"
-            elif success_rate < 95.0 or stretch_count > 0:
+            elif success_rate is not None and (success_rate < 95.0 or stretch_count > 0):
                 grade = "B (Minor Jitter / Retries)"
 
             summary_rows.append(
@@ -111,7 +150,8 @@ class I2CTimingCharts:
                     "Category": dev.get("category", "General I2C"),
                     "Total Transactions": total_tx,
                     "NACK Count": nack_count,
-                    "Success Rate": f"{success_rate:.1f} %",
+                    "Unknown ACK Count": unknown_ack_count,
+                    "Success Rate": f"{success_rate:.1f} %" if success_rate is not None else "N/A",
                     "Clock Stretches": stretch_count,
                     "Health Grade": grade,
                 }

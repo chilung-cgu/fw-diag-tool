@@ -211,9 +211,10 @@ def test_normal_saleae_csv_analysis():
     assert "0x48" in report.devices_detected
     assert "0x20" in report.devices_detected
 
-    # Ensure timing statistics are calculated
-    assert report.timing_stats.avg_frequency_khz > 0
-    assert report.timing_stats.speed_mode in (I2CSpeedMode.STANDARD_100K, I2CSpeedMode.FAST_400K)
+    # Analyzer-table timestamps do not provide per-byte SCL timing evidence.
+    assert report.timing_stats.avg_frequency_khz == 0
+    assert report.timing_stats.frequency_sample_count == 0
+    assert report.timing_stats.speed_mode == I2CSpeedMode.UNKNOWN
 
     # Verify PMBus decoded summaries exist
     pmbus_txs = [tx for tx in report.transactions if tx.address_7bit == 0x58]

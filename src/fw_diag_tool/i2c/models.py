@@ -73,6 +73,7 @@ class RawI2CEvent:
     bit_rate_khz: float | None = None
     raw_text: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+    timestamp_available: bool = True
 
 
 @dataclass
@@ -84,10 +85,11 @@ class I2CBytePacket:
     is_address: bool
     direction: I2CDirection | None
     ack: AckType
-    duration_s: float = 0.0
+    duration_s: float | None = None
     bit_rate_khz: float | None = None
     inter_byte_delay_us: float = 0.0
     clock_stretch_us: float = 0.0
+    timestamp_available: bool = True
 
 
 @dataclass
@@ -123,6 +125,9 @@ class I2CTransaction:
     anomalies: list[str] = field(default_factory=list)
     inter_byte_delays_us: list[float] = field(default_factory=list)
     clock_stretching_events: list[dict[str, Any]] = field(default_factory=list)
+    timestamp_available: bool = True
+    identity_confidence: str = "unknown"
+    device_candidates: list[str] = field(default_factory=list)
 
     @property
     def hex_dump(self) -> str:
@@ -130,6 +135,26 @@ class I2CTransaction:
         if not self.data_bytes:
             return "[]"
         return "[" + ", ".join(f"0x{b:02X}" for b in self.data_bytes) + "]"
+
+    @property
+    def has_normal_read_termination_nack(self) -> bool:
+        data_packets = [packet for packet in self.byte_packets if not packet.is_address]
+        return bool(
+            self.direction == I2CDirection.READ
+            and data_packets
+            and data_packets[-1].ack == AckType.NACK
+        )
+
+    @property
+    def has_unexpected_data_nack(self) -> bool:
+        data_packets = [packet for packet in self.byte_packets if not packet.is_address]
+        for index, packet in enumerate(data_packets):
+            if packet.ack != AckType.NACK:
+                continue
+            if self.direction == I2CDirection.READ and index == len(data_packets) - 1:
+                continue
+            return True
+        return False
 
 
 @dataclass
@@ -183,6 +208,8 @@ class TimingStatistics:
     avg_inter_transaction_delay_ms: float = 0.0
     max_inter_transaction_delay_ms: float = 0.0
     bus_utilization_pct: float = 0.0
+    frequency_sample_count: int = 0
+    frequency_evidence: str = "unavailable"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -199,7 +226,21 @@ class TimingStatistics:
             "avg_inter_transaction_delay_ms": round(self.avg_inter_transaction_delay_ms, 3),
             "max_inter_transaction_delay_ms": round(self.max_inter_transaction_delay_ms, 3),
             "bus_utilization_pct": round(self.bus_utilization_pct, 2),
+            "frequency_sample_count": self.frequency_sample_count,
+            "frequency_evidence": self.frequency_evidence,
         }
+
+
+@dataclass
+class DataQualityIssue:
+    """Missing or ambiguous source evidence that limits analysis confidence."""
+
+    code: str
+    message: str
+    count: int = 1
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"code": self.code, "message": self.message, "count": self.count}
 
 
 @dataclass
@@ -214,6 +255,7 @@ class I2CAnalysisReport:
     timing_stats: TimingStatistics
     issues: list[I2CDiagnosticIssue]
     summary_text: str = ""
+    data_quality_issues: list[DataQualityIssue] = field(default_factory=list)
 
     @property
     def anomalies(self) -> list[I2CDiagnosticIssue]:
@@ -230,13 +272,14 @@ class I2CAnalysisReport:
                 "summary_text": self.summary_text,
             },
             "timing_stats": self.timing_stats.to_dict(),
+            "data_quality_issues": [issue.to_dict() for issue in self.data_quality_issues],
             "devices_detected": self.devices_detected,
             "issues": [issue.to_dict() for issue in self.issues],
             "transactions": [
                 {
                     "id": tx.id,
-                    "start_time": round(tx.start_time, 6),
-                    "end_time": round(tx.end_time, 6),
+                    "start_time": round(tx.start_time, 6) if tx.timestamp_available else None,
+                    "end_time": round(tx.end_time, 6) if tx.timestamp_available else None,
                     "duration_us": round(tx.duration_us, 2),
                     "address_7bit": f"0x{tx.address_7bit:02X}",
                     "address_8bit": f"0x{tx.address_8bit:02X}",
@@ -250,6 +293,8 @@ class I2CAnalysisReport:
                     "protocol": tx.protocol,
                     "semantic_summary": tx.semantic_summary,
                     "decoded_values": tx.decoded_values,
+                    "identity_confidence": tx.identity_confidence,
+                    "device_candidates": tx.device_candidates,
                     "anomalies": tx.anomalies,
                 }
                 for tx in self.transactions

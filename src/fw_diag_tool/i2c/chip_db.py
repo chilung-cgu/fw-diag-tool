@@ -212,7 +212,11 @@ CHIP_DATABASE: list[ChipProfile] = [
 
 
 def lookup_device(address_7bit: int) -> ChipProfile | None:
-    """Look up the most likely peripheral device profile for a given 7-bit I2C address."""
+    """Return the first legacy candidate for callers that require one profile.
+
+    An I2C address alone is not a unique device identity. New presentation code
+    should use ``get_all_matching_devices`` and expose ambiguity to the user.
+    """
     for profile in CHIP_DATABASE:
         if address_7bit in profile.addr_7bit_range:
             return profile

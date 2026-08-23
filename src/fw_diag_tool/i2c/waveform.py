@@ -34,6 +34,7 @@ class I2CWaveformReconstructor:
         "ADDRESS": "#636EFA",  # Electric Blue
         "ACK": "#00FA9A",  # Medium Spring Green
         "NACK": "#EF553B",  # Coral Red
+        "UNKNOWN": "#7F7F7F",  # Evidence not present in source trace
         "DATA": "#AB63FA",  # Royal Purple
         "STRETCH": "#FFA15A",  # Amber Warning
         "STOP": "#FF6692",  # Vibrant Pink
@@ -155,7 +156,15 @@ class I2CWaveformReconstructor:
             cur_t += t_half_period_us
             add_point(cur_t, 0, ack_bit)
 
-            ack_type = "ACK" if ack == AckType.ACK else "NACK"
+            if ack == AckType.ACK:
+                ack_type = "ACK"
+                ack_details = "Acknowledge bit: 0 (ACK)"
+            elif ack == AckType.NACK:
+                ack_type = "NACK"
+                ack_details = "Not-Acknowledge bit: 1 (NACK)"
+            else:
+                ack_type = "UNKNOWN"
+                ack_details = "ACK/NACK was not present in the source trace; SDA level is reconstructed as high."
             annotations.append(
                 ProtocolAnnotation(
                     start_time=ack_begin_t,
@@ -163,9 +172,7 @@ class I2CWaveformReconstructor:
                     label=ack_type,
                     annotation_type=ack_type,
                     color=self.ANNOTATION_COLORS[ack_type],
-                    details="Acknowledge bit: 0 (ACK)"
-                    if ack == AckType.ACK
-                    else "Not-Acknowledge bit: 1 (NACK)",
+                    details=ack_details,
                 )
             )
 

@@ -58,22 +58,36 @@ class I2CReporter:
 
         t = report.timing_stats
         timing_tbl.add_row("Nominal Speed Mode", t.speed_mode.value, "Spec Class")
-        timing_tbl.add_row(
-            "Avg SCL Clock Frequency",
-            f"{t.avg_frequency_khz:.2f} kHz",
-            f"Min: {t.min_frequency_khz:.1f}k, Max: {t.max_frequency_khz:.1f}k",
-        )
+        if t.frequency_sample_count:
+            timing_tbl.add_row(
+                "Avg SCL Clock Frequency",
+                f"{t.avg_frequency_khz:.2f} kHz",
+                f"Min: {t.min_frequency_khz:.1f}k, Max: {t.max_frequency_khz:.1f}k",
+            )
+        else:
+            timing_tbl.add_row(
+                "Avg SCL Clock Frequency",
+                "Unavailable",
+                "No source-provided bitrate or byte duration",
+            )
 
-        jitter_style = (
-            "red"
-            if t.frequency_jitter_pct > 35
-            else ("yellow" if t.frequency_jitter_pct > 15 else "green")
-        )
-        timing_tbl.add_row(
-            "Clock Frequency Jitter",
-            f"[{jitter_style}]{t.frequency_jitter_pct:.1f} %[/]",
-            "< 15% is stable; > 35% indicates high capacitance/ISR",
-        )
+        if t.frequency_sample_count:
+            jitter_style = (
+                "red"
+                if t.frequency_jitter_pct > 35
+                else ("yellow" if t.frequency_jitter_pct > 15 else "green")
+            )
+            timing_tbl.add_row(
+                "Clock Frequency Jitter",
+                f"[{jitter_style}]{t.frequency_jitter_pct:.1f} %[/]",
+                "< 15% is stable; > 35% indicates high capacitance/ISR",
+            )
+        else:
+            timing_tbl.add_row(
+                "Clock Frequency Jitter",
+                "Unavailable",
+                "No frequency samples",
+            )
 
         stretch_style = (
             "red"
@@ -115,10 +129,13 @@ class I2CReporter:
         dev_tbl.add_column("Transactions", justify="right")
 
         for dev in report.devices_detected.values():
+            device_name = dev["name"]
+            if dev.get("identity_confidence") == "ambiguous":
+                device_name = "; ".join(dev.get("candidates", []))
             dev_tbl.add_row(
                 dev["address_7bit"],
                 dev["address_8bit"],
-                dev["name"],
+                device_name,
                 dev["category"],
                 dev["protocol"],
                 str(dev["transaction_count"]),
@@ -147,11 +164,14 @@ class I2CReporter:
             status_text = "[green]ACK[/]"
             if tx.address_ack == AckType.NACK:
                 status_text = "[red]ADDR NAK[/]"
-            elif any(p.ack == AckType.NACK for p in tx.byte_packets if not p.is_address):
-                if tx.direction == I2CDirection.READ:
-                    status_text = "[blue]READ NAK[/]"
-                else:
-                    status_text = "[red]DATA NAK[/]"
+            elif tx.address_ack == AckType.NONE:
+                status_text = "[yellow]ACK UNKNOWN[/]"
+            elif tx.has_unexpected_data_nack:
+                status_text = "[red]DATA NAK[/]"
+            elif tx.has_normal_read_termination_nack:
+                status_text = "[blue]READ END NAK[/]"
+            elif any(p.ack == AckType.NONE for p in tx.byte_packets if not p.is_address):
+                status_text = "[yellow]ACK UNKNOWN[/]"
             elif not tx.has_stop and not tx.is_repeated_start:
                 status_text = "[bold red]HANG/NO STOP[/]"
 
@@ -161,7 +181,7 @@ class I2CReporter:
 
             tx_tbl.add_row(
                 str(tx.id),
-                f"{tx.start_time:.6f}",
+                f"{tx.start_time:.6f}" if tx.timestamp_available else "n/a",
                 f"0x{tx.address_7bit:02X}",
                 rw_text,
                 tx.hex_dump,
@@ -196,7 +216,9 @@ class I2CReporter:
 
                 body = Text()
                 body.append(f"\n● 異常現象描述:\n  {issue.description}\n", style="white")
-                body.append("\n● 根本原因分析 (Root Cause):\n", style="bold yellow")
+                body.append(
+                    "\n● 可能原因假設 (Hypotheses; not proven root cause):\n", style="bold yellow"
+                )
                 for rc_line in issue.root_cause_analysis.split("\n"):
                     if rc_line.strip():
                         body.append(f"  {rc_line.strip()}\n", style="yellow")
@@ -208,6 +230,14 @@ class I2CReporter:
                 console.print(
                     Panel(body, title=header.plain, title_align="left", border_style=sev_color)
                 )
+        elif report.data_quality_issues:
+            console.print(
+                Panel(
+                    "[bold yellow]⚠ No protocol anomaly was proven, but source evidence is incomplete. "
+                    "Review the Data Quality Limitations before calling the trace clean.[/]",
+                    border_style="yellow",
+                )
+            )
         else:
             console.print(
                 Panel(
@@ -230,10 +260,16 @@ class I2CReporter:
         lines.append("")
         t = report.timing_stats
         lines.append(f"- **Nominal Speed Mode**: `{t.speed_mode.value}`")
-        lines.append(
-            f"- **Average Clock Frequency**: `{t.avg_frequency_khz:.2f} kHz` (Min: `{t.min_frequency_khz:.1f} kHz`, Max: `{t.max_frequency_khz:.1f} kHz`)"
-        )
-        lines.append(f"- **Clock Frequency Jitter**: `{t.frequency_jitter_pct:.1f} %`")
+        if t.frequency_sample_count:
+            lines.append(
+                f"- **Average Clock Frequency**: `{t.avg_frequency_khz:.2f} kHz` (Min: `{t.min_frequency_khz:.1f} kHz`, Max: `{t.max_frequency_khz:.1f} kHz`)"
+            )
+            lines.append(f"- **Clock Frequency Jitter**: `{t.frequency_jitter_pct:.1f} %`")
+        else:
+            lines.append(
+                "- **Average Clock Frequency**: `Unavailable` (no bitrate or byte-duration evidence)"
+            )
+            lines.append("- **Clock Frequency Jitter**: `Unavailable`")
         lines.append(
             f"- **Clock Stretching Events**: `{t.clock_stretch_count}` (Max duration: `{t.max_clock_stretch_ms:.3f} ms`)"
         )
@@ -254,8 +290,11 @@ class I2CReporter:
         )
         lines.append("|---|---|---|---|---|---|")
         for dev in report.devices_detected.values():
+            device_name = dev["name"]
+            if dev.get("identity_confidence") == "ambiguous":
+                device_name = "Possible: " + "; ".join(dev.get("candidates", []))
             lines.append(
-                f"| `{dev['address_7bit']}` | `{dev['address_8bit']}` | **{dev['name']}** | {dev['category']} | {dev['protocol']} | {dev['transaction_count']} |"
+                f"| `{dev['address_7bit']}` | `{dev['address_8bit']}` | **{device_name}** | {dev['category']} | {dev['protocol']} | {dev['transaction_count']} |"
             )
         lines.append("")
 
@@ -270,8 +309,14 @@ class I2CReporter:
             status = "ACK"
             if tx.address_ack == AckType.NACK:
                 status = "**ADDR NAK**"
-            elif any(p.ack == AckType.NACK for p in tx.byte_packets if not p.is_address):
-                status = "READ NAK" if tx.direction == I2CDirection.READ else "**DATA NAK**"
+            elif tx.address_ack == AckType.NONE:
+                status = "ACK UNKNOWN"
+            elif tx.has_unexpected_data_nack:
+                status = "**DATA NAK**"
+            elif tx.has_normal_read_termination_nack:
+                status = "READ END NAK"
+            elif any(p.ack == AckType.NONE for p in tx.byte_packets if not p.is_address):
+                status = "ACK UNKNOWN"
             elif not tx.has_stop and not tx.is_repeated_start:
                 status = "**NO STOP**"
 
@@ -281,13 +326,26 @@ class I2CReporter:
 
             lines.append(
                 f"| {tx.id} | {tx.start_time:.6f} | `0x{tx.address_7bit:02X}` | `{tx.direction.value}` | `{tx.hex_dump}` | {summary} | {status} |"
+                if tx.timestamp_available
+                else f"| {tx.id} | n/a | `0x{tx.address_7bit:02X}` | `{tx.direction.value}` | `{tx.hex_dump}` | {summary} | {status} |"
             )
         lines.append("")
+
+        if report.data_quality_issues:
+            lines.append("## Data Quality Limitations")
+            lines.append("")
+            for issue in report.data_quality_issues:
+                lines.append(f"- **{issue.code}** ({issue.count}): {issue.message}")
+            lines.append("")
 
         # Diagnostic Issues & Advice
         lines.append("## 4. Diagnostic Issues & Junior Debugging Advice")
         lines.append("")
-        if not report.issues:
+        if not report.issues and report.data_quality_issues:
+            lines.append(
+                "⚠ **No protocol anomaly was proven, but source evidence is incomplete; review the data-quality section before calling this trace clean.**"
+            )
+        elif not report.issues:
             lines.append(
                 "✔ **All transactions completed cleanly with no protocol or timing violations.**"
             )
@@ -300,7 +358,7 @@ class I2CReporter:
                     lines.append(f"- **Device Address**: `0x{issue.address_7bit:02X}`")
                 lines.append(f"- **Description**: {issue.description}")
                 lines.append("")
-                lines.append("**根本原因分析 (Root Cause Analysis)**:")
+                lines.append("**可能原因假設（Hypotheses；不是已證明的根因）**:")
                 for rc_line in issue.root_cause_analysis.split("\n"):
                     if rc_line.strip():
                         lines.append(f"- {rc_line.strip()}")

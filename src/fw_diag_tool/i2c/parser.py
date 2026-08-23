@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import re
 from typing import Any, TextIO
 
@@ -69,13 +70,22 @@ def parse_direction(val: Any) -> I2CDirection | None:
 def parse_ack(val: Any) -> AckType:
     """Parse ACK/NACK status."""
     if val is None:
-        return AckType.ACK
+        return AckType.NONE
     s = str(val).strip().strip("'").strip('"').upper()
     if s in ("NAK", "NACK", "1", "FALSE", "NO", "N"):
         return AckType.NACK
     elif s in ("ACK", "0", "TRUE", "YES", "A", "Y"):
         return AckType.ACK
     return AckType.NONE
+
+
+def _positive_finite_float(value: Any) -> float | None:
+    """Return a positive finite float, treating malformed values as unavailable."""
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) and parsed > 0 else None
 
 
 class I2CParser:
@@ -106,40 +116,37 @@ class I2CParser:
             c = col.strip().lower().replace(" ", "_").replace("[s]", "").replace('"', "").strip("_")
             col_map[c] = idx
 
-        # Map common column aliases
-        time_idx = col_map.get("time") or col_map.get("timestamp") or col_map.get("start_time") or 0
-        packet_id_idx = (
-            col_map.get("packet_id") or col_map.get("packet") or col_map.get("transaction_id")
-        )
-        type_idx = col_map.get("type") or col_map.get("event") or col_map.get("event_type")
-        addr_idx = col_map.get("address") or col_map.get("addr") or col_map.get("slave_address")
-        data_idx = col_map.get("data") or col_map.get("byte") or col_map.get("value")
-        rw_idx = (
-            col_map.get("read/write")
-            or col_map.get("rw")
-            or col_map.get("read_write")
-            or col_map.get("r/w")
-            or col_map.get("direction")
-        )
-        ack_idx = (
-            col_map.get("ack/nak")
-            or col_map.get("ack")
-            or col_map.get("ack_nak")
-            or col_map.get("ack/nack")
-        )
-        duration_idx = col_map.get("duration") or col_map.get("duration_s")
-        bitrate_idx = col_map.get("bit_rate") or col_map.get("bitrate") or col_map.get("frequency")
+        def first_column(*names: str) -> int | None:
+            return next((col_map[name] for name in names if name in col_map), None)
 
-        for row_idx, row in enumerate(reader):
+        # Map common column aliases
+        time_idx = first_column("time", "timestamp", "start_time")
+        packet_id_idx = first_column("packet_id", "packet", "transaction_id")
+        type_idx = first_column("type", "event", "event_type")
+        addr_idx = first_column("address", "addr", "slave_address")
+        data_idx = first_column("data", "byte", "value")
+        rw_idx = first_column("read/write", "rw", "read_write", "r/w", "direction")
+        ack_idx = first_column("ack/nak", "ack", "ack_nak", "ack/nack")
+        duration_idx = first_column("duration", "duration_s")
+        bitrate_idx = first_column("bit_rate", "bitrate", "frequency")
+
+        for row in reader:
             if not row or not any(cell.strip() for cell in row):
                 continue
 
-            # Parse timestamp
+            timestamp = 0.0
+            timestamp_available = False
             try:
+                if time_idx is None:
+                    raise IndexError
                 t_str = row[time_idx].strip().strip("'").strip('"')
                 timestamp = float(t_str)
-            except (IndexError, ValueError):
-                timestamp = float(row_idx) * 0.0001
+                timestamp_available = True
+                timestamp_available = math.isfinite(timestamp) and timestamp >= 0
+                if not timestamp_available:
+                    timestamp = 0.0
+            except (IndexError, TypeError, ValueError):
+                pass
 
             packet_id = (
                 parse_hex_or_int(row[packet_id_idx])
@@ -200,25 +207,20 @@ class I2CParser:
             ack_val = (
                 parse_ack(row[ack_idx])
                 if ack_idx is not None and ack_idx < len(row)
-                else AckType.ACK
+                else AckType.NONE
             )
 
             # Duration & Bitrate
-            dur = None
-            if duration_idx is not None and duration_idx < len(row):
-                try:
-                    dur = float(row[duration_idx].strip())
-                except ValueError:
-                    pass
+            dur = (
+                _positive_finite_float(row[duration_idx].strip())
+                if duration_idx is not None and duration_idx < len(row)
+                else None
+            )
             bitrate = None
             if bitrate_idx is not None and bitrate_idx < len(row):
-                try:
-                    b_val = float(row[bitrate_idx].strip())
-                    bitrate = (
-                        b_val / 1000.0 if b_val > 10000 else b_val
-                    )  # convert Hz to kHz if necessary
-                except ValueError:
-                    pass
+                b_val = _positive_finite_float(row[bitrate_idx].strip())
+                if b_val is not None:
+                    bitrate = b_val / 1000.0 if b_val > 10000 else b_val
 
             # Determine event type
             if "START" in raw_type_str and "REPEATED" not in raw_type_str:
@@ -234,34 +236,37 @@ class I2CParser:
             else:
                 ev_type = RawEventType.UNKNOWN
 
-            if len(raw_data_tokens) > 1:
-                # Multi-byte packet row: emit ADDRESS first then DATA for each byte
-                if addr_7bit is not None:
-                    events.append(
-                        RawI2CEvent(
-                            timestamp=timestamp,
-                            event_type=RawEventType.ADDRESS,
-                            packet_id=packet_id,
-                            address_7bit=addr_7bit,
-                            direction=raw_rw,
-                            data_byte=None,
-                            ack=AckType.ACK,
-                            duration_s=dur,
-                            bit_rate_khz=bitrate,
-                            raw_text=",".join(row),
-                        )
+            if raw_data_tokens and addr_7bit is not None:
+                # Analyzer summary rows can combine address and one or more data bytes.
+                events.append(
+                    RawI2CEvent(
+                        timestamp=timestamp,
+                        event_type=RawEventType.ADDRESS,
+                        timestamp_available=timestamp_available,
+                        packet_id=packet_id,
+                        address_7bit=addr_7bit,
+                        direction=raw_rw,
+                        data_byte=None,
+                        ack=AckType.ACK if ack_val != AckType.NONE else AckType.NONE,
+                        duration_s=None,
+                        bit_rate_khz=bitrate,
+                        raw_text=",".join(row),
                     )
+                )
                 for b_idx, b_val in enumerate(raw_data_tokens):
                     events.append(
                         RawI2CEvent(
-                            timestamp=timestamp + (b_idx + 1) * 0.00001,
+                            timestamp=timestamp,
                             event_type=RawEventType.DATA,
+                            timestamp_available=timestamp_available,
                             packet_id=packet_id,
                             address_7bit=addr_7bit,
                             direction=raw_rw,
                             data_byte=b_val,
-                            ack=ack_val,
-                            duration_s=dur,
+                            ack=ack_val
+                            if b_idx == len(raw_data_tokens) - 1
+                            else (AckType.ACK if ack_val != AckType.NONE else AckType.NONE),
+                            duration_s=None,
                             bit_rate_khz=bitrate,
                             raw_text=",".join(row),
                         )
@@ -271,6 +276,7 @@ class I2CParser:
                     RawI2CEvent(
                         timestamp=timestamp,
                         event_type=ev_type,
+                        timestamp_available=timestamp_available,
                         packet_id=packet_id,
                         address_7bit=addr_7bit,
                         direction=raw_rw,
@@ -299,15 +305,17 @@ class I2CParser:
             if line.strip() and not line.strip().startswith("#")
         ]
 
-        time_counter = 0.001000
         packet_id = 0
 
         for line in lines:
             # Extract optional timestamp prefix like [0.001234] or 0.001234:
             m_time = re.match(r"^\[?([0-9]+\.?[0-9]*)\]?[:\s]+(.*)$", line)
+            timestamp = 0.0
+            timestamp_available = False
             if m_time:
                 try:
-                    time_counter = float(m_time.group(1))
+                    timestamp = float(m_time.group(1))
+                    timestamp_available = True
                     line_body = m_time.group(2).strip()
                 except ValueError:
                     line_body = line
@@ -330,30 +338,30 @@ class I2CParser:
                 if tok_upper in ("S", "START"):
                     events.append(
                         RawI2CEvent(
-                            timestamp=time_counter,
+                            timestamp=timestamp,
                             event_type=RawEventType.START,
+                            timestamp_available=timestamp_available,
                             packet_id=packet_id,
                         )
                     )
-                    time_counter += 0.000005
                 elif tok_upper in ("SR", "REPEATED_START", "REP_START"):
                     events.append(
                         RawI2CEvent(
-                            timestamp=time_counter,
+                            timestamp=timestamp,
                             event_type=RawEventType.REPEATED_START,
+                            timestamp_available=timestamp_available,
                             packet_id=packet_id,
                         )
                     )
-                    time_counter += 0.000005
                 elif tok_upper in ("P", "STOP"):
                     events.append(
                         RawI2CEvent(
-                            timestamp=time_counter,
+                            timestamp=timestamp,
                             event_type=RawEventType.STOP,
+                            timestamp_available=timestamp_available,
                             packet_id=packet_id,
                         )
                     )
-                    time_counter += 0.000010
                     packet_id += 1
                 elif tok_upper in ("W", "WRITE", "WR"):
                     current_rw = I2CDirection.WRITE
@@ -389,28 +397,29 @@ class I2CParser:
 
                             events.append(
                                 RawI2CEvent(
-                                    timestamp=time_counter,
+                                    timestamp=timestamp,
                                     event_type=RawEventType.ADDRESS,
+                                    timestamp_available=timestamp_available,
                                     packet_id=packet_id,
                                     address_7bit=current_addr,
                                     direction=current_rw,
-                                    ack=AckType.ACK,
+                                    ack=AckType.NONE,
                                 )
                             )
                         else:
                             # This is a Data byte
                             events.append(
                                 RawI2CEvent(
-                                    timestamp=time_counter,
+                                    timestamp=timestamp,
                                     event_type=RawEventType.DATA,
+                                    timestamp_available=timestamp_available,
                                     packet_id=packet_id,
                                     address_7bit=current_addr,
                                     direction=current_rw,
                                     data_byte=val,
-                                    ack=AckType.ACK,
+                                    ack=AckType.NONE,
                                 )
                             )
-                        time_counter += 0.000025  # ~40kHz nominal increment
                 idx += 1
 
         return events
@@ -419,8 +428,14 @@ class I2CParser:
     def parse_raw_records(cls, records: list[dict[str, Any]]) -> list[RawI2CEvent]:
         """Convert raw Python dictionary list into normalized RawI2CEvents."""
         events: list[RawI2CEvent] = []
-        for idx, rec in enumerate(records):
-            ts = float(rec.get("timestamp", rec.get("time", idx * 0.0001)))
+        for rec in records:
+            raw_timestamp = rec.get("timestamp", rec.get("time"))
+            timestamp_available = raw_timestamp is not None
+            try:
+                ts = float(raw_timestamp) if timestamp_available else 0.0
+            except (TypeError, ValueError):
+                ts = 0.0
+                timestamp_available = False
             ev_type_str = str(rec.get("event_type", rec.get("type", "DATA"))).upper()
             ev_type = (
                 RawEventType(ev_type_str)
@@ -435,17 +450,21 @@ class I2CParser:
             data_val = parse_hex_or_int(rec.get("data", rec.get("data_byte", rec.get("byte"))))
             ack_val = parse_ack(rec.get("ack", rec.get("ack_nak")))
 
+            duration_s = _positive_finite_float(rec.get("duration_s"))
+            bit_rate_khz = _positive_finite_float(rec.get("bit_rate_khz"))
+
             events.append(
                 RawI2CEvent(
                     timestamp=ts,
                     event_type=ev_type,
+                    timestamp_available=timestamp_available,
                     packet_id=rec.get("packet_id"),
                     address_7bit=addr_7bit,
                     direction=rw,
                     data_byte=data_val,
                     ack=ack_val,
-                    duration_s=rec.get("duration_s"),
-                    bit_rate_khz=rec.get("bit_rate_khz"),
+                    duration_s=duration_s,
+                    bit_rate_khz=bit_rate_khz,
                     extra=rec,
                 )
             )

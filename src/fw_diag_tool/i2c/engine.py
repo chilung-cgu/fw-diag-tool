@@ -10,10 +10,11 @@ from __future__ import annotations
 from typing import Any
 
 from fw_diag_tool.i2c.anomaly import I2CAnomalyDetector
-from fw_diag_tool.i2c.chip_db import lookup_device
+from fw_diag_tool.i2c.chip_db import get_all_matching_devices, lookup_device
 from fw_diag_tool.i2c.eeprom import decode_eeprom_read, decode_eeprom_write
 from fw_diag_tool.i2c.models import (
     AckType,
+    DataQualityIssue,
     I2CAnalysisReport,
     I2CBytePacket,
     I2CDirection,
@@ -61,7 +62,15 @@ class I2CDiagnosticEngine:
 
         current_tx: I2CTransaction | None = None
         tx_counter = 1
-        last_byte_end_time = 0.0
+        last_byte_end_time: float | None = None
+
+        def finish_at_event(tx: I2CTransaction, event: RawI2CEvent) -> None:
+            tx.timestamp_available = tx.timestamp_available and event.timestamp_available
+            if tx.timestamp_available:
+                tx.end_time = event.timestamp
+                tx.duration_us = max(0.0, (tx.end_time - tx.start_time) * 1_000_000.0)
+            else:
+                tx.duration_us = 0.0
 
         for ev in events:
             # Explicit START or REPEATED_START
@@ -72,10 +81,7 @@ class I2CDiagnosticEngine:
                         or current_tx.data_bytes
                         or getattr(current_tx, "_has_address", False)
                     ):
-                        current_tx.end_time = ev.timestamp
-                        current_tx.duration_us = max(
-                            0.0, (current_tx.end_time - current_tx.start_time) * 1_000_000.0
-                        )
+                        finish_at_event(current_tx, ev)
                         if ev.event_type == RawEventType.REPEATED_START:
                             current_tx.has_stop = False
                             current_tx.is_repeated_start = getattr(
@@ -93,13 +99,15 @@ class I2CDiagnosticEngine:
                     address_8bit=((ev.address_7bit or 0x00) << 1)
                     | (1 if ev.direction == I2CDirection.READ else 0),
                     direction=ev.direction or I2CDirection.WRITE,
+                    address_ack=AckType.NONE,
                     is_repeated_start=(ev.event_type == RawEventType.REPEATED_START),
                     has_stop=False,
+                    timestamp_available=ev.timestamp_available,
                 )
                 current_tx._is_placeholder = True
                 current_tx._has_address = ev.address_7bit is not None
                 tx_counter += 1
-                last_byte_end_time = ev.timestamp
+                last_byte_end_time = ev.timestamp if ev.timestamp_available else None
                 continue
 
             # Explicit STOP
@@ -111,10 +119,7 @@ class I2CDiagnosticEngine:
                         or getattr(current_tx, "_has_address", False)
                     ):
                         current_tx.has_stop = True
-                        current_tx.end_time = ev.timestamp
-                        current_tx.duration_us = max(
-                            0.0, (current_tx.end_time - current_tx.start_time) * 1_000_000.0
-                        )
+                        finish_at_event(current_tx, ev)
                         transactions.append(current_tx)
                     current_tx = None
                 continue
@@ -140,10 +145,7 @@ class I2CDiagnosticEngine:
                     if current_tx is not None and (
                         current_tx.byte_packets or getattr(current_tx, "_has_address", False)
                     ):
-                        current_tx.end_time = ev.timestamp
-                        current_tx.duration_us = max(
-                            0.0, (current_tx.end_time - current_tx.start_time) * 1_000_000.0
-                        )
+                        finish_at_event(current_tx, ev)
                         current_tx.has_stop = (
                             True  # packet_id boundary in Saleae represents clean packet framing
                         )
@@ -156,8 +158,9 @@ class I2CDiagnosticEngine:
                         address_7bit=addr_7b,
                         address_8bit=addr_8b,
                         direction=rw,
-                        address_ack=ev.ack or AckType.ACK,
+                        address_ack=ev.ack or AckType.NONE,
                         has_stop=(ev.packet_id is not None),
+                        timestamp_available=ev.timestamp_available,
                     )
                     current_tx._packet_id = ev.packet_id
                     current_tx._has_address = True
@@ -168,7 +171,10 @@ class I2CDiagnosticEngine:
                     current_tx.address_7bit = addr_7b
                     current_tx.address_8bit = addr_8b
                     current_tx.direction = rw
-                    current_tx.address_ack = ev.ack or AckType.ACK
+                    current_tx.address_ack = ev.ack or AckType.NONE
+                    current_tx.timestamp_available = (
+                        current_tx.timestamp_available and ev.timestamp_available
+                    )
                     if ev.packet_id is not None:
                         current_tx.has_stop = True
                     current_tx._packet_id = ev.packet_id
@@ -176,19 +182,24 @@ class I2CDiagnosticEngine:
                     current_tx._is_placeholder = False
 
                 # Record address byte packet
-                dur_s = ev.duration_s or 0.000025
+                dur_s = ev.duration_s
                 pkt = I2CBytePacket(
                     timestamp=ev.timestamp,
                     byte_val=addr_8b,
                     is_address=True,
                     direction=rw,
-                    ack=ev.ack or AckType.ACK,
+                    ack=ev.ack or AckType.NONE,
+                    timestamp_available=ev.timestamp_available,
                     duration_s=dur_s,
                     bit_rate_khz=ev.bit_rate_khz,
                 )
                 current_tx.byte_packets.append(pkt)
-                current_tx.end_time = ev.timestamp + dur_s
-                last_byte_end_time = ev.timestamp + dur_s
+                if ev.timestamp_available:
+                    current_tx.end_time = ev.timestamp + (dur_s or 0.0)
+                    last_byte_end_time = current_tx.end_time
+                else:
+                    current_tx.timestamp_available = False
+                    last_byte_end_time = None
                 continue
 
             # DATA Event
@@ -215,10 +226,7 @@ class I2CDiagnosticEngine:
                     if current_tx is not None and (
                         current_tx.byte_packets or getattr(current_tx, "_has_address", False)
                     ):
-                        current_tx.end_time = ev.timestamp
-                        current_tx.duration_us = max(
-                            0.0, (current_tx.end_time - current_tx.start_time) * 1_000_000.0
-                        )
+                        finish_at_event(current_tx, ev)
                         current_tx.has_stop = True
                         transactions.append(current_tx)
                     # Implicit transaction start without explicit START/ADDRESS event
@@ -231,26 +239,33 @@ class I2CDiagnosticEngine:
                         address_7bit=addr_7b,
                         address_8bit=(addr_7b << 1) | (1 if rw == I2CDirection.READ else 0),
                         direction=rw,
+                        address_ack=AckType.NONE,
                         has_stop=(ev.packet_id is not None),
+                        timestamp_available=ev.timestamp_available,
                     )
                     current_tx._packet_id = ev.packet_id
                     current_tx._has_address = ev.address_7bit is not None
                     current_tx._is_placeholder = False
                     tx_counter += 1
-                    last_byte_end_time = ev.timestamp
+                    last_byte_end_time = ev.timestamp if ev.timestamp_available else None
                 else:
                     current_tx._is_placeholder = False
+                    current_tx.timestamp_available = (
+                        current_tx.timestamp_available and ev.timestamp_available
+                    )
                     if ev.packet_id is not None:
                         current_tx.has_stop = True
 
                 # Compute inter-byte delay and clock stretch
-                dur_s = ev.duration_s or 0.000025
-                inter_byte_us = max(0.0, (ev.timestamp - last_byte_end_time) * 1_000_000.0)
-                current_tx.inter_byte_delays_us.append(inter_byte_us)
+                dur_s = ev.duration_s
+                inter_byte_us = 0.0
+                if ev.timestamp_available and last_byte_end_time is not None:
+                    inter_byte_us = max(0.0, (ev.timestamp - last_byte_end_time) * 1_000_000.0)
+                    current_tx.inter_byte_delays_us.append(inter_byte_us)
 
                 # Clock stretch check on single byte transfer
                 clock_stretch_us = 0.0
-                if dur_s > 0.000100:  # > 100us for 1 byte
+                if dur_s is not None and dur_s > 0.000100:  # > 100us for 1 byte
                     clock_stretch_us = dur_s * 1_000_000.0
                     current_tx.clock_stretching_events.append(
                         {
@@ -265,7 +280,8 @@ class I2CDiagnosticEngine:
                     byte_val=data_val,
                     is_address=False,
                     direction=current_tx.direction,
-                    ack=ev.ack or AckType.ACK,
+                    ack=ev.ack or AckType.NONE,
+                    timestamp_available=ev.timestamp_available,
                     duration_s=dur_s,
                     bit_rate_khz=ev.bit_rate_khz,
                     inter_byte_delay_us=inter_byte_us,
@@ -273,16 +289,22 @@ class I2CDiagnosticEngine:
                 )
                 current_tx.byte_packets.append(pkt)
                 current_tx.data_bytes.append(data_val)
-                current_tx.end_time = ev.timestamp + dur_s
-                last_byte_end_time = ev.timestamp + dur_s
+                if ev.timestamp_available:
+                    current_tx.end_time = ev.timestamp + (dur_s or 0.0)
+                    last_byte_end_time = current_tx.end_time
+                else:
+                    last_byte_end_time = None
 
         # Flush trailing transaction
         if current_tx is not None and (
             current_tx.byte_packets or getattr(current_tx, "_has_address", False)
         ):
-            current_tx.duration_us = max(
-                0.0, (current_tx.end_time - current_tx.start_time) * 1_000_000.0
-            )
+            if current_tx.timestamp_available:
+                current_tx.duration_us = max(
+                    0.0, (current_tx.end_time - current_tx.start_time) * 1_000_000.0
+                )
+            else:
+                current_tx.duration_us = 0.0
             transactions.append(current_tx)
 
         return transactions
@@ -293,15 +315,34 @@ class I2CDiagnosticEngine:
 
         for tx in transactions:
             addr = tx.address_7bit
-            chip = lookup_device(addr)
-            if chip:
-                tx.device_name = chip.name
+            candidates = get_all_matching_devices(addr)
+            chip = lookup_device(addr) if len(candidates) == 1 else None
+            tx.device_candidates = [candidate.name for candidate in candidates]
+            if chip is not None:
+                tx.device_name = f"Possible: {chip.name}"
                 tx.device_category = chip.category
                 tx.protocol = chip.protocol
+                tx.identity_confidence = "single-address-candidate"
+            elif candidates:
+                categories = {candidate.category for candidate in candidates}
+                protocols = {candidate.protocol for candidate in candidates}
+                tx.device_name = f"Possible devices ({len(candidates)} candidates)"
+                tx.device_category = (
+                    next(iter(categories))
+                    if len(categories) == 1
+                    else (
+                        f"{next(iter(protocols))} (ambiguous candidates)"
+                        if len(protocols) == 1
+                        else "Ambiguous I2C Address"
+                    )
+                )
+                tx.protocol = next(iter(protocols)) if len(protocols) == 1 else "I2C"
+                tx.identity_confidence = "ambiguous"
             else:
                 tx.device_name = f"Unknown Device (0x{addr:02X})"
                 tx.device_category = "General I2C Peripheral"
                 tx.protocol = "I2C"
+                tx.identity_confidence = "unknown"
 
             ctx = device_context.setdefault(
                 addr,
@@ -375,7 +416,7 @@ class I2CDiagnosticEngine:
                     tx.decoded_values = decoded
 
             # 3. LM75 / TMP102 / Temperature Sensors
-            elif chip and "Temperature Sensor" in chip.category:
+            elif tx.device_category and "Temperature Sensor" in tx.device_category:
                 if tx.direction == I2CDirection.WRITE:
                     if tx.data_bytes:
                         ptr = tx.data_bytes[0]
@@ -402,7 +443,7 @@ class I2CDiagnosticEngine:
                         )
 
             # 4. INA219 / INA226 Power Monitors
-            elif chip and "Power Monitor" in chip.category:
+            elif tx.device_category and "Power Monitor" in tx.device_category:
                 if tx.direction == I2CDirection.WRITE:
                     if tx.data_bytes:
                         ptr = tx.data_bytes[0]
@@ -420,7 +461,7 @@ class I2CDiagnosticEngine:
                     tx.decoded_values = decoded
 
             # 5. PCA9555 GPIO Expanders
-            elif chip and "GPIO Expander" in chip.category:
+            elif tx.device_category and "GPIO Expander" in tx.device_category:
                 if tx.direction == I2CDirection.WRITE:
                     if tx.data_bytes:
                         ptr = tx.data_bytes[0]
@@ -447,13 +488,20 @@ class I2CDiagnosticEngine:
         transactions = self.group_events_into_transactions(events)
         self.decode_semantic_layer(transactions)
 
-        total_duration = 0.0
-        if events:
-            total_duration = max(0.0, events[-1].timestamp - events[0].timestamp)
+        known_timestamps = [event.timestamp for event in events if event.timestamp_available]
+        total_duration = (
+            max(known_timestamps) - min(known_timestamps) if len(known_timestamps) >= 2 else 0.0
+        )
 
         timing_stats = analyze_timing_statistics(transactions, total_duration)
         mux_issues = self.mux_tracker.process_transactions(transactions)
         issues = self.anomaly_detector.analyze_transactions(transactions, timing_stats) + mux_issues
+        timestamp_availability = {tx.id: tx.timestamp_available for tx in transactions}
+        for issue in issues:
+            if issue.transaction_id is not None and not timestamp_availability.get(
+                issue.transaction_id, True
+            ):
+                issue.timestamp = None
 
         devices_detected: dict[str, dict[str, Any]] = {}
         for tx in transactions:
@@ -465,9 +513,78 @@ class I2CDiagnosticEngine:
                     "name": tx.device_name,
                     "category": tx.device_category,
                     "protocol": tx.protocol,
+                    "identity_confidence": tx.identity_confidence,
+                    "candidates": tx.device_candidates,
                     "transaction_count": 0,
                 }
             devices_detected[addr_hex]["transaction_count"] += 1
+
+        data_quality_issues: list[DataQualityIssue] = []
+        missing_timestamp_count = sum(not event.timestamp_available for event in events)
+        if missing_timestamp_count:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_TIMESTAMP_UNAVAILABLE",
+                    message="Source rows without valid timestamps were retained without timing measurements.",
+                    count=missing_timestamp_count,
+                )
+            )
+
+        timestamp_regressions = 0
+        previous_timestamp: float | None = None
+        for event in events:
+            if not event.timestamp_available:
+                continue
+            if previous_timestamp is not None and event.timestamp < previous_timestamp:
+                timestamp_regressions += 1
+            previous_timestamp = event.timestamp
+        if timestamp_regressions:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_TIMESTAMP_OUT_OF_ORDER",
+                    message="Source timestamps move backwards; chronological timing and transaction durations may be unreliable.",
+                    count=timestamp_regressions,
+                )
+            )
+
+        protocol_events = [
+            event
+            for event in events
+            if event.event_type in (RawEventType.ADDRESS, RawEventType.DATA)
+        ]
+        missing_ack_count = sum(event.ack in (None, AckType.NONE) for event in protocol_events)
+        if missing_ack_count:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_ACK_UNAVAILABLE",
+                    message="Missing ACK/NACK values remain unknown and are excluded from failure rates.",
+                    count=missing_ack_count,
+                )
+            )
+
+        timing_evidence_count = sum(
+            bool(
+                (event.bit_rate_khz is not None and event.bit_rate_khz > 0)
+                or (event.duration_s is not None and event.duration_s > 0)
+            )
+            for event in protocol_events
+        )
+        if protocol_events and timing_evidence_count == 0:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_TIMING_UNAVAILABLE",
+                    message="No byte duration or bitrate evidence was provided; SCL frequency is unavailable.",
+                    count=len(protocol_events),
+                )
+            )
+        elif timing_evidence_count < len(protocol_events):
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_TIMING_PARTIAL",
+                    message="Only some protocol events include byte duration or bitrate evidence.",
+                    count=len(protocol_events) - timing_evidence_count,
+                )
+            )
 
         summary_text = (
             f"Analyzed {len(events)} physical events grouped into {len(transactions)} logical transactions "
@@ -483,6 +600,7 @@ class I2CDiagnosticEngine:
             timing_stats=timing_stats,
             issues=issues,
             summary_text=summary_text,
+            data_quality_issues=data_quality_issues,
         )
 
     def analyze_csv_string(self, csv_text: str) -> I2CAnalysisReport:
