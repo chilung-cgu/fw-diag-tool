@@ -706,8 +706,9 @@ class I2CDiagnosticEngine:
                 DataQualityIssue(
                     code="I2C_SOURCE_PARSE_ERROR",
                     message=(
-                        "Some CSV rows contained invalid address/data tokens; the affected evidence was retained "
-                        "as unknown and excluded from protocol conclusions."
+                        "Some CSV rows contained invalid or incomplete fields (schema, address/data, timing, "
+                        "direction, or ACK); affected evidence was retained as unknown and excluded from "
+                        "protocol conclusions."
                     ),
                     count=source_error_count,
                 )

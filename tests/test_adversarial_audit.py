@@ -317,6 +317,14 @@ def test_i2c_parser_does_not_coerce_malformed_numeric_or_schema_values():
     assert any(issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in report.data_quality_issues)
 
 
+def test_i2c_row_width_mismatch_is_not_decoded_as_a_transaction():
+    report = I2CDiagnosticEngine().analyze_csv_content(
+        "Time,Type,Address,Data,ACK\n0,DATA,0x50,0x01,ACK,unexpected\n"
+    )
+    assert report.total_transactions == 0
+    assert any(issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in report.data_quality_issues)
+
+
 def test_sensor_decoders_reject_invalid_direct_byte_inputs():
     with pytest.raises(ValueError, match="data_bytes"):
         decode_lm75_temperature([256])

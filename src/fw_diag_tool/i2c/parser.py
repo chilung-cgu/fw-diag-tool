@@ -157,7 +157,7 @@ class I2CParser:
                 continue
 
             source_error: str | None = None
-            structural_source_error = False
+            structural_source_error = len(row) != len(header)
             if len(row) != len(header):
                 source_error = f"row has {len(row)} fields but header declares {len(header)} fields"
 
@@ -277,6 +277,15 @@ class I2CParser:
                     # partial transaction. Preserve the row as quality evidence.
                     raw_data_tokens = []
             raw_data = raw_data_tokens[0] if len(raw_data_tokens) == 1 else None
+
+            if structural_source_error:
+                # Do not let a row with a malformed schema or address/data field
+                # seed a plausible transaction. Keep the row below as UNKNOWN
+                # evidence so the report can count the source failure.
+                addr_7bit = None
+                raw_rw = None
+                raw_data_tokens = []
+                raw_data = None
 
             # Parse ACK
             ack_val = (
