@@ -11,14 +11,16 @@
 ## 快速啟動 Web 視覺化工作站
 
 ```bash
+# macOS / Linux，需 Python 3.10+ 與 uv
 cd ~/fw-diag-tool
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-fw-diag gui
+uv sync --all-extras
+uv run fw-diag gui
 ```
 
 瀏覽器將自動開啟 `http://127.0.0.1:8501`，左側側邊欄可切換 12 大功能模組。
+
+> 若你的環境沒有 `uv`，可依公司規範建立 virtualenv 後安裝專案；重點是使用專案鎖定的依賴，
+> 不要把套件裝進系統 Python。首次啟動遇到問題，先看根目錄 README 的環境需求與 `uv lock --check`。
 
 ---
 

@@ -13,10 +13,27 @@
 ## 怎麼操作？
 
 1. 進入 GUI 第 6 頁 **「🌲 Device Tree (.dts) 產生器」**。
-2. 輸入 I2C Bus Number（如 `1` 代表 `&i2c1`）。
-3. 輸入 PCA9548A MUX 位址（預設 `0x70`）。
-4. 頁面即時顯示 MUX skeleton `.dtsi`；裝置節點必須來自實際 schematic、datasheet 與 board profile。
-5. 點擊 **「下載 i2c_bus1.dtsi」** 按鈕存檔。
+2. 輸入 I2C Bus Number（如 `1` 代表 `&i2c1`）、MUX address、MUX `compatible` 與 `clock-frequency`。
+3. 在 YAML 裝置清單中，為每一顆實際存在的裝置填入 `addr`、`channel`、`name`、`compatible`。
+4. 按 **「產生 Device Tree」**；輸入不完整、位址保留、同一 channel 位址重複或 compatible 不是
+   `vendor,device` 格式時，頁面會拒絕生成並顯示錯誤。
+5. 下載產生的 `i2c_busN.dtsi`。工具輸出的是拓撲模板，不是已經通過目標 kernel binding 的完整 board DTS。
+
+GUI 使用的最小 YAML 範例：
+
+```yaml
+- addr: 0x50
+  channel: 0
+  name: eeprom
+  compatible: atmel,24c64
+- addr: 0x48
+  channel: 1
+  name: temp-sensor
+  compatible: national,lm75
+```
+
+`addr` 與 `channel` 必須和 schematic、MUX datasheet 及實際 wiring 一致；
+`compatible` 必須查目標 kernel 的 binding 或 driver，而不是只填一個看起來合理的名稱。
 
 ## 怎麼看懂輸出的 .dts 代碼？
 
@@ -32,6 +49,7 @@
         #size-cells = <0>;            // 子節點不需要 size
 
         i2c@0 {                       // MUX Channel 0
+            reg = <0>;                // channel index
             eeprom@50 {               // EEPROM 在位址 0x50
                 compatible = "atmel,24c64";  // 使用 Linux at24 driver
                 reg = <0x50>;                // I2C 位址 0x50
@@ -51,6 +69,17 @@
 | `#address-cells` | 位址用幾個 32-bit cell 表示 | I2C 固定為 1，SPI 為 1，Memory Mapped 為 1~2 |
 | `#size-cells` | 大小用幾個 cell 表示 | I2C 固定為 0（不需要 size） |
 | `pagesize` | EEPROM 的 Page Write 大小 | 影響 Linux at24 driver 的寫入策略 |
+
+本工具目前只輸出通用的 `reg`、`compatible`、MUX channel 與 bus clock；它不會替裝置猜測
+`pagesize`、電源供應、GPIO reset、interrupt 或 board-specific binding property。若 datasheet 或
+binding 要求這些欄位，請在生成後依產品 DTS 慣例補上並用 `dtc`/`dt-schema` 驗證。
+
+## 生成後的驗證順序
+
+1. 先人工比對 bus、MUX address、channel 與每個 device address。
+2. 在目標 kernel source tree 以適用的 include path 執行 `dtc`；只通過語法不代表 binding 正確。
+3. 若專案使用 Devicetree schema，執行該專案規定的 `dt_binding_check` / `dtbs_check`。
+4. 將產生檔整合到 board DTS 後，再檢查 live tree、driver probe log 與 `/sys/bus/i2c/devices/`。
 
 ## 常見問題
 
