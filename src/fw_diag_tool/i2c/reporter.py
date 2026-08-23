@@ -359,9 +359,7 @@ class I2CReporter:
                 lines.append("")
                 lines.append(f"- **Category**: `{diagnostic_issue.category}`")
                 if diagnostic_issue.address_7bit is not None:
-                    lines.append(
-                        f"- **Device Address**: `0x{diagnostic_issue.address_7bit:02X}`"
-                    )
+                    lines.append(f"- **Device Address**: `0x{diagnostic_issue.address_7bit:02X}`")
                 lines.append(f"- **Description**: {diagnostic_issue.description}")
                 lines.append("")
                 lines.append("**可能原因假設（Hypotheses；不是已證明的根因）**:")
