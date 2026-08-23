@@ -217,8 +217,11 @@ def analyze_spi_trace(
     if not file_path.exists():
         console.print(f"[bold red]Error: File {file_path} not found![/]")
         raise typer.Exit(code=1)
-    engine = SPIDiagnosticEngine()
-    report = engine.analyze_csv_file(file_path)
+    try:
+        report = SPIDiagnosticEngine().analyze_csv_file(file_path)
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]Error: SPI CSV is invalid: {exc}[/]")
+        raise typer.Exit(code=2) from exc
     SPIReporter.render_terminal(report, console=console)
     if markdown_out:
         markdown_out.write_text(SPIReporter.to_markdown(report), encoding="utf-8")

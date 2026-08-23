@@ -1,5 +1,10 @@
+import pytest
+from typer.testing import CliRunner
+
+from fw_diag_tool.cli import app
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.spi.models import SPISeverity
+from fw_diag_tool.spi.parser import SPIParser
 from fw_diag_tool.spi.reporter import SPIReporter
 
 
@@ -65,3 +70,61 @@ def test_spi_page_program_wrap_around_hazard():
     engine = SPIDiagnosticEngine()
     report = engine.analyze_csv_content(csv_data)
     assert any(a.code == "SPI_PAGE_PROGRAM_WRAP" for a in report.anomalies)
+
+
+def test_spi_custom_page_size_is_used_by_parser_and_anomaly_detector():
+    rows = [
+        "0.001,0x06,0x00,0",
+        "0.002,0x00,0x00,1",
+        "0.010,0x02,0x00,0",
+        "0.011,0x00,0x00,0",
+        "0.012,0x00,0x00,0",
+        "0.013,0x0C,0x00,0",
+        "0.014,0xAA,0x00,0",
+        "0.015,0xBB,0x00,0",
+        "0.016,0xCC,0x00,0",
+        "0.017,0xDD,0x00,0",
+        "0.018,0xEE,0x00,0",
+        "0.019,0x00,0x00,1",
+    ]
+    csv_data = "Time [s],MOSI,MISO,Enable\n" + "\n".join(rows)
+
+    report = SPIDiagnosticEngine(max_page_size=16).analyze_csv_content(csv_data)
+
+    wrap = next(issue for issue in report.anomalies if issue.code == "SPI_PAGE_PROGRAM_WRAP")
+    assert wrap.details["page_size"] == 16
+    assert "16-byte page boundary" in wrap.description
+
+
+def test_spi_page_size_rejects_non_positive_or_boolean_values():
+    for value in (0, -1, True):
+        with pytest.raises(ValueError):
+            SPIDiagnosticEngine(max_page_size=value)
+
+    for value in (0, -1, True):
+        with pytest.raises(ValueError):
+            SPIParser.parse_csv_content("", page_size=value)
+
+
+@pytest.mark.parametrize(
+    "csv_text",
+    [
+        "Time [s],MOSI,MISO,Enable\n0.001,0x100,0x00,0\n",
+        "Time [s],MOSI,MISO,Enable\n0.001,0x06,0x00,invalid\n",
+        "Time [s],MOSI,MISO,Enable\n0.002,0x06,0x00,0\n0.001,0x00,0x00,1\n",
+        "Time [s],MOSI\n0.001,0x06\n",
+    ],
+)
+def test_spi_parser_rejects_invalid_cells_instead_of_silently_wrapping(csv_text):
+    with pytest.raises(ValueError):
+        SPIParser.parse_csv_content(csv_text)
+
+
+def test_spi_cli_reports_invalid_csv_without_traceback(tmp_path):
+    trace_path = tmp_path / "invalid.csv"
+    trace_path.write_text("Time [s],MOSI,MISO,Enable\n0.001,0x100,0x00,0\n", encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["spi", "analyze", str(trace_path)])
+
+    assert result.exit_code == 2
+    assert "SPI CSV is invalid" in result.output

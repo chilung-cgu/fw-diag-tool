@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import math
 import re
 from typing import Any
 
@@ -40,26 +41,40 @@ class SPIParser:
         if val is None:
             return None
         if isinstance(val, int):
-            return val & 0xFF
+            return val if 0 <= val <= 0xFF else None
         s = str(val).strip()
         if not s or s.lower() in ("-", "none", "null"):
             return None
         if s.startswith(("0x", "0X")):
             try:
-                return int(s, 16) & 0xFF
+                parsed = int(s, 16)
             except ValueError:
                 return None
+            return parsed if 0 <= parsed <= 0xFF else None
         try:
-            return (
-                int(s, 16)
-                if len(s) == 2 and re.match(r"^[0-9a-fA-F]{2}$", s)
-                else int(s, 10) & 0xFF
-            )
+            parsed = int(s, 16) if len(s) == 2 and re.match(r"^[0-9a-fA-F]{2}$", s) else int(s, 10)
         except ValueError:
             return None
+        return parsed if 0 <= parsed <= 0xFF else None
 
     @classmethod
-    def parse_csv_content(cls, csv_text: str) -> list[SPITransaction]:
+    def _parse_byte_cell(cls, value: Any, row_number: int, column_name: str) -> int | None:
+        text = "" if value is None else str(value).strip()
+        if not text or text.lower() in {"-", "none", "null"}:
+            return None
+        parsed = cls.parse_hex_byte(value)
+        if parsed is None:
+            raise ValueError(
+                f"invalid {column_name} byte at CSV row {row_number}: {text!r}; expected 0..255 or 0x00..0xFF"
+            )
+        return parsed
+
+    @classmethod
+    def parse_csv_content(cls, csv_text: str, page_size: int = 256) -> list[SPITransaction]:
+        if not isinstance(csv_text, str):
+            raise TypeError("csv_text must be a string")
+        if isinstance(page_size, bool) or not isinstance(page_size, int) or page_size <= 0:
+            raise ValueError("page_size must be a positive integer")
         reader = csv.reader(io.StringIO(csv_text.strip()))
         rows = [r for r in reader if r and not r[0].startswith("#")]
         if not rows:
@@ -89,6 +104,8 @@ class SPIParser:
             mosi_idx = 1
         if miso_idx == -1 and len(header) > 2:
             miso_idx = 2
+        if mosi_idx < 0 or miso_idx < 0:
+            raise ValueError("SPI CSV must provide MOSI and MISO columns")
 
         transactions: list[SPITransaction] = []
         cur_mosi: list[int] = []
@@ -98,24 +115,39 @@ class SPIParser:
         in_tx = False
 
         data_rows = rows[1:]
-        for row in data_rows:
+        previous_timestamp: float | None = None
+        for row_number, row in enumerate(data_rows, start=2):
             if not row or len(row) <= max(t_idx, mosi_idx, miso_idx):
-                continue
+                raise ValueError(
+                    f"CSV row {row_number} is missing a required time/MOSI/MISO column"
+                )
             try:
                 timestamp = float(row[t_idx])
             except ValueError:
-                continue
+                raise ValueError(
+                    f"invalid timestamp at CSV row {row_number}: {row[t_idx]!r}"
+                ) from None
+            if not math.isfinite(timestamp) or timestamp < 0:
+                raise ValueError(
+                    f"timestamp at CSV row {row_number} must be finite and non-negative"
+                )
+            if previous_timestamp is not None and timestamp < previous_timestamp:
+                raise ValueError(f"timestamps decrease at CSV row {row_number}")
+            previous_timestamp = timestamp
 
-            mosi_val = cls.parse_hex_byte(row[mosi_idx]) if mosi_idx < len(row) else None
-            miso_val = cls.parse_hex_byte(row[miso_idx]) if miso_idx < len(row) else None
+            mosi_val = cls._parse_byte_cell(row[mosi_idx], row_number, "MOSI")
+            miso_val = cls._parse_byte_cell(row[miso_idx], row_number, "MISO")
 
             # Check CS state if column present
             cs_state = (
                 str(row[cs_idx]).strip().lower() if (cs_idx != -1 and cs_idx < len(row)) else None
             )
-            cs_asserted = (
-                (cs_state in ("0", "low", "false", "asserted")) if cs_state is not None else True
-            )
+            if cs_state is None or cs_state in ("0", "low", "false", "asserted"):
+                cs_asserted = True
+            elif cs_state in ("1", "high", "true", "deasserted"):
+                cs_asserted = False
+            else:
+                raise ValueError(f"invalid chip-select state at CSV row {row_number}: {cs_state!r}")
 
             if cs_asserted:
                 if not in_tx:
@@ -133,7 +165,12 @@ class SPIParser:
                     in_tx = False
                     if cur_mosi or cur_miso:
                         tx = cls.decode_single_transaction(
-                            len(transactions) + 1, t_start, t_end, cur_mosi, cur_miso
+                            len(transactions) + 1,
+                            t_start,
+                            t_end,
+                            cur_mosi,
+                            cur_miso,
+                            page_size=page_size,
                         )
                         transactions.append(tx)
                     cur_mosi = []
@@ -141,7 +178,12 @@ class SPIParser:
 
         if in_tx and (cur_mosi or cur_miso):
             tx = cls.decode_single_transaction(
-                len(transactions) + 1, t_start, t_end, cur_mosi, cur_miso
+                len(transactions) + 1,
+                t_start,
+                t_end,
+                cur_mosi,
+                cur_miso,
+                page_size=page_size,
             )
             transactions.append(tx)
 
@@ -149,8 +191,16 @@ class SPIParser:
 
     @classmethod
     def decode_single_transaction(
-        cls, index: int, start_time: float, end_time: float, mosi: list[int], miso: list[int]
+        cls,
+        index: int,
+        start_time: float,
+        end_time: float,
+        mosi: list[int],
+        miso: list[int],
+        page_size: int = 256,
     ) -> SPITransaction:
+        if isinstance(page_size, bool) or not isinstance(page_size, int) or page_size <= 0:
+            raise ValueError("page_size must be a positive integer")
         dur_us = max(0.0, (end_time - start_time) * 1_000_000.0)
         opcode = mosi[0] if mosi else None
         opcode_name = (
@@ -196,10 +246,11 @@ class SPIParser:
                     payload_len = max(0, len(mosi) - 4)
                     details["program_address"] = f"0x{address:06X}"
                     details["program_bytes"] = payload_len
-                    details["page_start_offset"] = address & 0xFF
-                    # Detect 256-byte page wrap hazard
-                    if (address & 0xFF) + payload_len > 256:
+                    details["page_start_offset"] = address % page_size
+                    # Detect page-buffer wrap hazard
+                    if (address % page_size) + payload_len > page_size:
                         details["page_wrap_hazard"] = True
+                    details["page_size"] = page_size
 
             # 4. Erase Commands (0x20, 0x52, 0xD8, 0xC7)
             elif opcode in (

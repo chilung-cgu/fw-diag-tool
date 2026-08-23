@@ -493,17 +493,24 @@ elif menu == "⚡ SPI Flash 協定診斷":
         except ValueError as exc:
             st.error(f"無法讀取 SPI trace：{exc}")
     if csv_text:
-        spi_engine = SPIDiagnosticEngine()
-        rep = spi_engine.analyze_csv_content(csv_text)
-        SPIReporter.render_terminal(rep)
-        s1, s2, s3, s4 = st.columns(4)
-        s1.metric("總傳輸次數", rep.summary.total_transactions)
-        s2.metric("讀取次數", rep.summary.read_count)
-        s3.metric("Page Program 寫入", rep.summary.write_count)
-        s4.metric("異常事件", rep.summary.anomaly_count)
-        if rep.summary.detected_flash_chip:
-            st.info(f"識別晶片型號: {rep.summary.detected_flash_chip}")
-        st.markdown(SPIReporter.to_markdown(rep))
+        try:
+            rep = SPIDiagnosticEngine().analyze_csv_content(csv_text)
+        except (TypeError, ValueError) as exc:
+            st.error(f"無法解析 SPI trace：{exc}")
+        else:
+            st.caption(
+                "此頁分析的是 analyzer 已解碼的 MOSI/MISO/CS transaction；沒有 raw SCLK edge 時，"
+                "不能證明 CPOL/CPHA、bit timing 或 signal integrity。"
+            )
+            SPIReporter.render_terminal(rep)
+            s1, s2, s3, s4 = st.columns(4)
+            s1.metric("總傳輸次數", rep.summary.total_transactions)
+            s2.metric("讀取次數", rep.summary.read_count)
+            s3.metric("Page Program 寫入", rep.summary.write_count)
+            s4.metric("異常事件", rep.summary.anomaly_count)
+            if rep.summary.detected_flash_chip:
+                st.info(f"識別晶片型號: {rep.summary.detected_flash_chip}")
+            st.markdown(SPIReporter.to_markdown(rep))
 
 # 9. Register Decoder
 elif menu == "🎛 晶片暫存器 Bitfield 解碼器":

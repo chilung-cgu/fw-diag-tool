@@ -13,11 +13,18 @@ from .parser import SPIParser
 
 class SPIDiagnosticEngine:
     def __init__(self, max_page_size: int = 256):
+        if (
+            isinstance(max_page_size, bool)
+            or not isinstance(max_page_size, int)
+            or max_page_size <= 0
+        ):
+            raise ValueError("max_page_size must be a positive integer")
         self.parser = SPIParser()
         self.anomaly_detector = SPIAnomalyDetector(max_page_size=max_page_size)
+        self.max_page_size = max_page_size
 
     def analyze_csv_content(self, csv_text: str) -> SPIReport:
-        transactions = self.parser.parse_csv_content(csv_text)
+        transactions = self.parser.parse_csv_content(csv_text, page_size=self.max_page_size)
         anomalies = self.anomaly_detector.analyze(transactions)
 
         read_count = 0

@@ -10,6 +10,12 @@ from .models import (
 
 class SPIAnomalyDetector:
     def __init__(self, max_page_size: int = 256):
+        if (
+            isinstance(max_page_size, bool)
+            or not isinstance(max_page_size, int)
+            or max_page_size <= 0
+        ):
+            raise ValueError("max_page_size must be a positive integer")
         self.max_page_size = max_page_size
 
     def analyze(self, transactions: list[SPITransaction]) -> list[SPIDiagnosticIssue]:
@@ -144,15 +150,19 @@ class SPIAnomalyDetector:
                         transaction_id=tx.index,
                         description=(
                             f"Page Program started at in-page offset 0x{start_off:02X} with payload length {p_len} bytes. "
-                            f"Total 0x{start_off:02X} + {p_len} = {start_off + p_len} exceeds 256-byte page boundary."
+                            f"Total 0x{start_off:02X} + {p_len} = {start_off + p_len} exceeds {self.max_page_size}-byte page boundary."
                         ),
                         root_cause_guide=(
                             "【Root Cause 排查建議】\n"
-                            "1. SPI NOR Flash 內部 Page Buffer 固定為 256 bytes。\n"
-                            "2. 跨 Page 寫入時位址指標會 Wrap-around 回 0x00 offset，覆蓋同一頁開頭資料！\n"
-                            "3. 修正方案：韌體中封裝 Page Write 驅動時，計算 chunk = min(length, 256 - (addr & 0xFF))。"
+                            f"1. 目前設定的 SPI NOR Page Buffer 為 {self.max_page_size} bytes；請以 datasheet 確認。\n"
+                            "2. 跨 Page 寫入時位址指標可能 Wrap-around 回同一頁開頭，覆蓋既有資料。\n"
+                            f"3. 修正方案：韌體中封裝 Page Write 驅動時，計算 chunk = min(length, page_size - (addr % page_size))。"
                         ),
-                        details={"page_offset": start_off, "payload_len": p_len, "page_size": 256},
+                        details={
+                            "page_offset": start_off,
+                            "payload_len": p_len,
+                            "page_size": self.max_page_size,
+                        },
                     )
                 )
 

@@ -12,6 +12,11 @@ SPI NOR Flash 是伺服器與嵌入式系統中儲存 BIOS/UEFI 韌體的核心�
 2. 上傳 Saleae Logic 2 匯出的 SPI CSV 檔案（包含 MOSI, MISO, Enable 欄位）。
 3. 工具自動解析所有交易並顯示診斷報告。
 
+若時間欄位不是有限的非負數、時間倒退、MOSI/MISO 不是 `0..255`（或 `0x00..0xFF`），
+或 CS/Enable 不是 active-low 的 `0/low/false/asserted` 或 inactive 的
+`1/high/true/deasserted`，工具會拒絕該檔案；這比把錯誤 byte 靜默截斷後繼續分析更安全。
+請先修正 analyzer export 或欄位 mapping，再重新上傳。
+
 ## 怎麼看懂輸出結果？
 
 ### 頂部 4 大 KPI 指標
