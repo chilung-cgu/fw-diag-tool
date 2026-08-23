@@ -38,6 +38,13 @@ def raw_decode_to_events(result: RawI2CDecodeResult) -> list[RawI2CEvent]:
     therefore source-backed.  No timestamps or ACK values are synthesized.
     """
     events: list[RawI2CEvent] = []
+    all_periods = [
+        period
+        for transaction in result.transactions
+        for sample in (transaction.address_sample, *transaction.data_samples)
+        for period in _sample_periods(sample)
+    ]
+    nominal_period_s = median(all_periods) if all_periods else None
     for packet_id, transaction in enumerate(result.transactions):
         start_type = (
             RawEventType.REPEATED_START
@@ -52,9 +59,18 @@ def raw_decode_to_events(result: RawI2CDecodeResult) -> list[RawI2CEvent]:
                 timestamp_available=True,
             )
         )
-        events.append(_byte_to_event(transaction.address_sample, packet_id, True))
+        events.append(
+            _byte_to_event(
+                transaction.address_sample,
+                packet_id,
+                True,
+                nominal_period_s=nominal_period_s,
+            )
+        )
         for sample in transaction.data_samples:
-            events.append(_byte_to_event(sample, packet_id, False))
+            events.append(
+                _byte_to_event(sample, packet_id, False, nominal_period_s=nominal_period_s)
+            )
 
         if transaction.end_kind == RawConditionKind.STOP:
             events.append(
@@ -68,7 +84,13 @@ def raw_decode_to_events(result: RawI2CDecodeResult) -> list[RawI2CEvent]:
     return events
 
 
-def _byte_to_event(sample: RawI2CByteSample, packet_id: int, is_address: bool) -> RawI2CEvent:
+def _byte_to_event(
+    sample: RawI2CByteSample,
+    packet_id: int,
+    is_address: bool,
+    *,
+    nominal_period_s: float | None = None,
+) -> RawI2CEvent:
     # The sample's first rising edge and ACK rising edge cover eight periods;
     # append one measured period to cover the complete 8-bit + ACK byte.
     ack = AckType.ACK if sample.ack == RawAck.ACK else AckType.NACK
@@ -88,6 +110,14 @@ def _byte_to_event(sample: RawI2CByteSample, packet_id: int, is_address: bool) -
     period = median(periods) if periods else None
     duration_s = (sample.ack_timestamp_s - start) + period if period is not None else None
     bit_rate_khz = median(1.0 / period for period in periods) / 1000.0 if periods else None
+    reference_period = nominal_period_s if nominal_period_s is not None else period
+    extra_stretch_us = (
+        max(0.0, max(periods) - reference_period) * 1_000_000.0
+        if periods and reference_period is not None
+        else 0.0
+    )
+    if extra_stretch_us < 1e-3:  # Ignore CSV floating-point noise below 1 ns.
+        extra_stretch_us = 0.0
     return RawI2CEvent(
         timestamp=start,
         event_type=event_type,
@@ -98,6 +128,10 @@ def _byte_to_event(sample: RawI2CByteSample, packet_id: int, is_address: bool) -
         ack=ack,
         duration_s=duration_s,
         bit_rate_khz=bit_rate_khz,
+        extra={
+            "clock_stretch_us": extra_stretch_us,
+            "timing_evidence": "raw_scl_period_delta",
+        },
         timestamp_available=True,
     )
 

@@ -307,13 +307,23 @@ class I2CDiagnosticEngine:
 
                 # Clock stretch check on single byte transfer
                 clock_stretch_us = 0.0
-                if dur_s is not None and dur_s > 0.000100:  # > 100us for 1 byte
+                if ev.extra and "clock_stretch_us" in ev.extra:
+                    clock_stretch_us = float(ev.extra["clock_stretch_us"])
+                elif dur_s is not None and dur_s > 0.000100:
+                    # Analyzer tables may expose only whole-byte duration. Raw
+                    # digital adapters provide an explicit SCL-low delta instead.
                     clock_stretch_us = dur_s * 1_000_000.0
+                if clock_stretch_us > 0:
                     current_tx.clock_stretching_events.append(
                         {
                             "timestamp": ev.timestamp,
-                            "duration_ms": dur_s * 1000.0,
+                            "duration_ms": clock_stretch_us / 1000.0,
                             "byte_val": f"0x{data_val:02X}",
+                            "evidence": (
+                                ev.extra.get("timing_evidence", "duration-threshold")
+                                if ev.extra
+                                else "duration-threshold"
+                            ),
                         }
                     )
 
@@ -806,6 +816,17 @@ class I2CDiagnosticEngine:
                 raise TypeError(f"I2C event {index} timestamp_available must be boolean")
             if event.extra is not None and not isinstance(event.extra, dict):
                 raise TypeError(f"I2C event {index} extra must be a mapping or None")
+            if event.extra and "clock_stretch_us" in event.extra:
+                stretch_us = event.extra["clock_stretch_us"]
+                if (
+                    isinstance(stretch_us, bool)
+                    or not isinstance(stretch_us, (int, float))
+                    or not math.isfinite(float(stretch_us))
+                    or stretch_us < 0
+                ):
+                    raise ValueError(
+                        f"I2C event {index} clock_stretch_us must be finite and non-negative"
+                    )
             if event.direction is not None and not isinstance(event.direction, I2CDirection):
                 raise TypeError(f"I2C event {index} direction must be an I2CDirection")
             if event.ack is not None and not isinstance(event.ack, AckType):

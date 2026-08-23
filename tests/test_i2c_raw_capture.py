@@ -263,6 +263,23 @@ def test_raw_adapter_keeps_nominal_scl_frequency_separate_from_stretch_duration(
 
     assert report.timing_stats.avg_frequency_khz == pytest.approx(100.0)
     assert report.timing_stats.bus_utilization_pct > 0
+    assert report.timing_stats.max_clock_stretch_ms == pytest.approx(0.03, abs=1e-6)
+
+
+def test_raw_adapter_does_not_call_a_slow_nominal_bus_clock_stretching() -> None:
+    builder = _CaptureBuilder()
+    builder.half_period_s = 10e-6  # 50 kHz, deliberately below Standard-mode nominal.
+    builder.start()
+    builder.byte(0xA0, 0)
+    builder.byte(0x33, 0)
+    builder.stop()
+    decoded = analyze_raw_i2c_csv(builder.csv())
+
+    report = I2CDiagnosticEngine().analyze(raw_decode_to_events(decoded))
+
+    assert report.timing_stats.avg_frequency_khz == pytest.approx(50.0)
+    assert report.timing_stats.clock_stretch_count == 0
+    assert not any(issue.code == "I2C_LONG_CLOCK_STRETCH" for issue in report.issues)
 
 
 def test_raw_adapter_waveform_uses_captured_levels_and_protocol_overlay() -> None:
