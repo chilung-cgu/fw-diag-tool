@@ -1,9 +1,11 @@
+import hashlib
 from pathlib import Path
 
 import pandas as pd
 import streamlit as st
 import yaml
 
+from fw_diag_tool import __version__
 from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.codegen.driver_gen import I2CDriverCodeGenerator
@@ -21,6 +23,7 @@ from fw_diag_tool.mctp.reporter import ServerMgmtReporter
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
 from fw_diag_tool.resources import load_i2c_sample
+from fw_diag_tool.session.session_manager import SessionManager
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.spi.reporter import SPIReporter
 from fw_diag_tool.uart.parser import UARTCrashParser
@@ -78,11 +81,15 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
 
     csv_content = None
     raw_capture_result = None
+    input_name = None
+    input_bytes = None
     if uploaded_file is not None:
         try:
             csv_content = decode_uploaded_text(
                 uploaded_file, allowed_extensions={".csv", ".txt", ".log"}
             )
+            input_name = uploaded_file.name
+            input_bytes = uploaded_file.getvalue()
         except ValueError as exc:
             st.error(f"無法讀取 trace：{exc}")
     elif use_sample:
@@ -92,6 +99,8 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             )
         else:
             csv_content = load_i2c_sample()
+            input_name = "builtin:saleae_normal_pmbus_eeprom.csv"
+            input_bytes = csv_content.encode("utf-8")
             st.info("已載入內建範例 CSV！")
 
     if csv_content:
@@ -269,6 +278,25 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             md_out = I2CReporter.generate_markdown(report)
             st.code(md_out, language="markdown")
             st.download_button("下載 Markdown 報告", md_out, file_name="i2c_report.md")
+            if input_name is not None and input_bytes is not None:
+                session_json = SessionManager.serialize_session(
+                    "i2c-analysis",
+                    {"report": report.to_dict()},
+                    provenance={
+                        "tool_version": __version__,
+                        "input_name": input_name,
+                        "input_sha256": hashlib.sha256(input_bytes).hexdigest(),
+                        "input_mode": input_mode,
+                        "smbus_timeout_ms": float(smbus_timeout),
+                    },
+                )
+                st.download_button(
+                    "下載可重現 Session（不含原始檔）",
+                    session_json,
+                    file_name="i2c_analysis.fwsession.json",
+                    mime="application/json",
+                )
+                st.caption("Session 只保存報告、設定與輸入 SHA-256；請另外保留原始 capture。")
 
 # 2. Packet Builder & Driver CodeGen
 elif menu == "🎨 I2C 封包模擬器與驅動產生":
