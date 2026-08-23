@@ -29,6 +29,16 @@ def test_junior_guide_indexes_all_gui_pages() -> None:
     guide = (ROOT / "docs" / "JUNIOR_FW_GUIDE.md").read_text(encoding="utf-8")
     page_rows = re.findall(r"^\|\s*(\d{1,2})\s*\|", guide, flags=re.MULTILINE)
     assert page_rows == [str(page_id) for page_id in range(1, 13)]
+    assert "[ch12_sop.md](chapters/ch12_sop.md)" in guide
+
+
+def test_sop_teaches_evidence_boundaries() -> None:
+    sop = (ROOT / "docs" / "chapters" / "ch12_sop.md").read_text(encoding="utf-8")
+    for term in ("Measured", "Inferred", "Reconstructed", "Hypothesis", "Unavailable"):
+        assert term in sop
+    for layer in ("L1", "L2", "L3", "L4", "L5", "L6", "L7"):
+        assert layer in sop
+    assert "不能量類比電壓" in sop
 
 
 def test_readme_does_not_overstate_unverified_capabilities() -> None:

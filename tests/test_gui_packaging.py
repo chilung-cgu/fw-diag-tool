@@ -130,3 +130,12 @@ def test_gui_dts_generator_requires_and_renders_explicit_device_topology():
     assert len(at.code) == 1
     assert "clock-frequency = <400000>;" in at.code[0].value
     assert 'compatible = "atmel,24c64";' in at.code[0].value
+
+
+def test_gui_sop_page_explains_all_layers_and_evidence_terms():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("📚 韌體除錯指南 & SOP").run()
+
+    assert not at.exception
+    assert any("L1" in item.value and "L7" in item.value for item in at.subheader)
+    assert any("Measured" in str(item.value) for item in at.table)

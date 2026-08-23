@@ -39,7 +39,7 @@ uv run fw-diag gui
 | 9 | 🎛 晶片暫存器 Bitfield 解碼器 | [ch09_register_codegen.md](chapters/ch09_register_codegen.md) | 內建 YAML |
 | 10 | 🛠 C 語言 Register 巨集產生器 | [ch09_register_codegen.md](chapters/ch09_register_codegen.md)（同第9章） | 內建 YAML |
 | 11 | 🏆 Junior FW 實戰除錯實驗室 (Fault Arena) | [ch10_fault_arena.md](chapters/ch10_fault_arena.md) | 內建案例 |
-| 12 | 📚 韌體除錯指南 & SOP | 直接在 GUI 中查看 L1~L7 分層模型 | 無需檔案 |
+| 12 | 📚 韌體除錯指南 & SOP | [ch12_sop.md](chapters/ch12_sop.md) + GUI L1~L7 分層模型 | 無需檔案 |
 
 > 📂 **測試資料路徑**：`examples/data/` 目錄下有所有演練用的 CSV / Log / Hex 檔案。
 
@@ -61,6 +61,7 @@ docs/
 │   ├── ch08_spi_flash.md        ← SPI NOR Flash 協定診斷
 │   ├── ch09_register_codegen.md ← Bitfield 解碼 + C Header RMW 巨集
 │   ├── ch10_fault_arena.md      ← 20 大故障案例分類總覽
+│   ├── ch12_sop.md               ← L1~L7 分層除錯 SOP 與證據詞彙
 │   └── appendix_chart_guide.md  ← 所有圖表的詳細判讀教學
 └── ...
 ```

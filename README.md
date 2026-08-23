@@ -4,7 +4,7 @@
 目前提供 I2C/PMBus、PCIe AER、SPI Flash、UART Crash Dump、MCTP/IPMB 的檔案分析，以及協定示意圖、差分比較、程式碼產生器與 20 個 synthetic 練習情境。各模組的輸入能力與限制請先閱讀 [能力與限制](docs/LIMITATIONS.md)。
 
 👉 **完整新人圖文教學指南**：請參閱 [docs/JUNIOR_FW_GUIDE.md](docs/JUNIOR_FW_GUIDE.md)。
-> 📂 **各章節詳細文件**：[ch01 I2C波形](docs/chapters/ch01_i2c_pmbus.md) | [ch02 封包/驅動產生](docs/chapters/ch02_packet_builder.md) | [ch03 Waveform Diff](docs/chapters/ch03_waveform_diff.md) | [ch04 UART Crash](docs/chapters/ch04_uart_crash.md) | [ch05 MCTP/IPMB](docs/chapters/ch05_mctp_ipmb.md) | [ch06 Device Tree](docs/chapters/ch06_dts_generator.md) | [ch07 PCIe AER](docs/chapters/ch07_pcie_aer.md) | [ch08 SPI Flash](docs/chapters/ch08_spi_flash.md) | [ch09 Register/Codegen](docs/chapters/ch09_register_codegen.md) | [ch10 Fault Arena](docs/chapters/ch10_fault_arena.md) | [附錄A 圖表判讀](docs/chapters/appendix_chart_guide.md)
+> 📂 **各章節詳細文件**：[ch01 I2C波形](docs/chapters/ch01_i2c_pmbus.md) | [ch02 封包/驅動產生](docs/chapters/ch02_packet_builder.md) | [ch03 Waveform Diff](docs/chapters/ch03_waveform_diff.md) | [ch04 UART Crash](docs/chapters/ch04_uart_crash.md) | [ch05 MCTP/IPMB](docs/chapters/ch05_mctp_ipmb.md) | [ch06 Device Tree](docs/chapters/ch06_dts_generator.md) | [ch07 PCIe AER](docs/chapters/ch07_pcie_aer.md) | [ch08 SPI Flash](docs/chapters/ch08_spi_flash.md) | [ch09 Register/Codegen](docs/chapters/ch09_register_codegen.md) | [ch10 Fault Arena](docs/chapters/ch10_fault_arena.md) | [ch12 SOP](docs/chapters/ch12_sop.md) | [附錄A 圖表判讀](docs/chapters/appendix_chart_guide.md)
 
 ---
 

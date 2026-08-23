@@ -624,12 +624,74 @@ elif menu == "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)":
 
 # 12. SOP
 elif menu == "📚 韌體除錯指南 & SOP":
-    st.header("Junior Firmware 工程師硬韌體除錯指南與心智模型")
-    st.markdown("""
-### 🎯 核心原則：Layer 分層診斷心智模型
+    st.header("Junior Firmware 工程師韌體除錯指南與心智模型")
+    st.info(
+        "先確認證據，再提出假設：工具的圖表與報告能縮小範圍，不能取代示波器、datasheet、"
+        "kernel source、matching ELF 或目標板上的重現。"
+    )
+    st.subheader("🎯 L1～L7 分層診斷模型")
+    st.table(
+        pd.DataFrame(
+            [
+                {
+                    "Layer": "L1 物理 / 電氣",
+                    "先問什麼": "電源、接地、pull-up、線路電平與 clock 是否真的存在？",
+                    "本工具能做什麼": "Raw I2C 的 digital 0/1 edge、tHIGH/tLOW；不能量類比電壓或 PCIe eye。",
+                },
+                {
+                    "Layer": "L2 Link / Framing",
+                    "先問什麼": "CS/START/STOP、ACK/NACK、stretch 或 frame boundary 是否合理？",
+                    "本工具能做什麼": "I2C/SPI analyzer decode、raw I2C bit decode、PCIe AER/config 欄位。",
+                },
+                {
+                    "Layer": "L3 Protocol",
+                    "先問什麼": "opcode、command、register offset、checksum 或 message type 是否正確？",
+                    "本工具能做什麼": "PMBus、EEPROM、SPI opcode、MCTP/IPMB、PCIe capability 解碼。",
+                },
+                {
+                    "Layer": "L4 Driver / Transport",
+                    "先問什麼": "Linux i2c-dev、SPI driver、MCTP transport 或 DMA 是否送出預期序列？",
+                    "本工具能做什麼": "把 capture/log 對回交易順序；不會直接檢查 live kernel state。",
+                },
+                {
+                    "Layer": "L5 Retry / State",
+                    "先問什麼": "是否有 retry、timeout、WREN/Busy、MUX channel 或 reset 狀態機問題？",
+                    "本工具能做什麼": "列出已觀察的重試、NACK、clock stretch、SPI WREN/Busy 證據。",
+                },
+                {
+                    "Layer": "L6 Platform / Board",
+                    "先問什麼": "board wiring、Device Tree binding、power/reset/ownership 是否吻合？",
+                    "本工具能做什麼": "產生 DTS/driver 起始模板；必須用 schematic、datasheet、dtc/dt-schema 驗證。",
+                },
+                {
+                    "Layer": "L7 Application / Meaning",
+                    "先問什麼": "這個 register/telemetry 值對產品行為代表什麼？",
+                    "本工具能做什麼": "Bitfield/PMBus/sensor 候選解碼；需要正確 device profile 才能下語意結論。",
+                },
+            ]
+        )
+    )
 
-1. **L1 物理層 (PHY)**: 檢查上拉電阻 (Pull-up)、檢查 100MHz 差分時鐘、示波器 Eyes Diagram。
-2. **L2 資料鏈結層 (Data Link)**: I2C ACK/NACK, Clock Stretching, PCIe DLP Error (`fw-diag i2c analyze`)。
-3. **L3 傳輸/協定層 (Protocol)**: PMBus, PCIe AER, SPI Opcode (`fw-diag pcie analyze`, `fw-diag spi analyze`)。
-4. **L7 應用/驅動層 (Application)**: Linux Kernel Driver, OpenBMC (`fw-diag reg decode`, `fw-diag gen c-header`)。
-""")
+    st.subheader("🧭 每次除錯固定走這 7 步")
+    st.markdown(
+        "1. **保存原始證據**：不要只截圖；保留原始 CSV/log、來源工具設定與 capture 時間。\n"
+        "2. **標記輸入型態**：decoded table、raw digital、analog、log 或 register dump；看不到的欄位就是 unavailable。\n"
+        "3. **先查 L1**：確認供電、ground、pull-up/termination、CS/START 與 clock；需要時用示波器或公司的 LA。\n"
+        "4. **再查 L2/L3**：看 frame boundary、address/opcode、ACK/checksum、register/data 是否符合 datasheet。\n"
+        "5. **對回 L4/L5**：把 transaction 對到 driver log、retry/timeout、WREN/Busy、MUX 或 reset state。\n"
+        "6. **最後查 L6/L7**：確認 DTS/binding、board variant、symbolicated source 與產品需求；不要由單一圖表直接宣布 root cause。\n"
+        "7. **記錄可重現結論**：分開寫 observed facts、hypotheses、下一個 discriminating test 與尚未驗證項目。"
+    )
+
+    st.subheader("📏 報告中的證據詞怎麼讀")
+    st.table(
+        pd.DataFrame(
+            [
+                {"詞": "Measured", "意思": "直接由輸入 timestamp/edge/value 計算。"},
+                {"詞": "Inferred", "意思": "由多個觀察欄位推論，仍可能有替代解釋。"},
+                {"詞": "Reconstructed", "意思": "依 decoded bytes 畫出的理想示意，不是實測波形。"},
+                {"詞": "Hypothesis", "意思": "排查方向，不是已證明的 root cause。"},
+                {"詞": "Unavailable", "意思": "輸入缺少必要證據；工具不補 0 或猜測。"},
+            ]
+        )
+    )
