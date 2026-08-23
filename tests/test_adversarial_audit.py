@@ -6,7 +6,14 @@ from fw_diag_tool.i2c.eeprom import decode_eeprom_read, decode_eeprom_write
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.models import RawEventType, RawI2CEvent
 from fw_diag_tool.i2c.parser import I2CParser, parse_hex_or_int
-from fw_diag_tool.i2c.pmbus import decode_linear16, decode_pmbus_payload, encode_linear11
+from fw_diag_tool.i2c.pmbus import (
+    decode_linear11,
+    decode_linear16,
+    decode_pmbus_payload,
+    decode_status_byte,
+    encode_linear11,
+    parse_vout_mode_exponent,
+)
 from fw_diag_tool.pcie.diagnostics import diagnose_pcie_device
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
@@ -185,6 +192,39 @@ def test_pmbus_linear_formats_reject_unrepresentable_values_and_exponents():
         encode_linear11(1e-300)
     with pytest.raises(ValueError, match="-16..15"):
         decode_linear16(1, 1024)
+
+
+def test_pmbus_decoders_reject_out_of_range_raw_values():
+    with pytest.raises(ValueError, match="0..0xFFFF"):
+        decode_linear11(-1)
+    with pytest.raises(ValueError, match="0..0xFFFF"):
+        decode_linear11(0x1_0000)
+    with pytest.raises(ValueError, match="0..0xFFFF"):
+        decode_linear16(-1)
+    with pytest.raises(ValueError, match="0..0xFF"):
+        decode_status_byte(0x100)
+    with pytest.raises(ValueError, match="0..0xFF"):
+        parse_vout_mode_exponent(True)
+    with pytest.raises(ValueError, match="0..0xFF"):
+        decode_pmbus_payload(0x78, [0x100])
+
+
+@pytest.mark.parametrize("cmd_code", [0x79, 0x8D])
+def test_pmbus_known_word_commands_mark_short_payload_as_truncated(cmd_code):
+    result = decode_pmbus_payload(cmd_code, [0x01])
+    assert result["evidence"] == "truncated"
+    assert result["is_complete"] is False
+    assert result["required_bytes"] == 2
+    assert result["received_bytes"] == 1
+    assert "insufficient data" in result["summary"]
+
+
+def test_pmbus_empty_known_status_is_not_reported_as_clean_or_quick_command():
+    result = decode_pmbus_payload(0x78, [])
+    assert result["evidence"] == "truncated"
+    assert result["is_complete"] is False
+    assert result["required_bytes"] == 1
+    assert result["received_bytes"] == 0
 
 
 def test_engine_rejects_malformed_direct_event_and_reports_unknown_csv_rows():

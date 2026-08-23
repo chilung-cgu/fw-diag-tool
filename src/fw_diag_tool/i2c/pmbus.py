@@ -284,6 +284,31 @@ PMBUS_COMMANDS: dict[int, PMBusCommandDef] = {
 }
 
 
+def _validate_word(raw_word: int, name: str = "raw_word") -> int:
+    if isinstance(raw_word, bool) or not isinstance(raw_word, int) or not 0 <= raw_word <= 0xFFFF:
+        raise ValueError(f"{name} must be an integer in range 0..0xFFFF")
+    return raw_word
+
+
+def _validate_byte(raw_byte: int, name: str = "byte") -> int:
+    if isinstance(raw_byte, bool) or not isinstance(raw_byte, int) or not 0 <= raw_byte <= 0xFF:
+        raise ValueError(f"{name} must be an integer in range 0..0xFF")
+    return raw_byte
+
+
+def _validate_bytes(data_bytes: list[int]) -> None:
+    if not isinstance(data_bytes, list):
+        raise TypeError("data_bytes must be a list of integers")
+    for index, value in enumerate(data_bytes):
+        _validate_byte(value, f"data_bytes[{index}]")
+
+
+def _validate_exponent(exponent: int, name: str = "vout_exponent") -> int:
+    if isinstance(exponent, bool) or not isinstance(exponent, int) or not -16 <= exponent <= 15:
+        raise ValueError(f"{name} must be an integer in the PMBus range -16..15")
+    return exponent
+
+
 def decode_linear11(raw_word: int) -> float:
     """Decode a 16-bit PMBus Linear11 floating point number.
 
@@ -292,7 +317,7 @@ def decode_linear11(raw_word: int) -> float:
       - Bits [10:0]:  11-bit two's complement mantissa Y (-1024 to +1023)
       - Real Value = Y * 2^N
     """
-    raw_word &= 0xFFFF
+    raw_word = _validate_word(raw_word)
 
     # Extract 5-bit exponent (bits 15..11)
     exponent_raw = (raw_word >> 11) & 0x1F
@@ -315,6 +340,8 @@ def encode_linear11(val: float) -> int:
     """Encode a float value into a 16-bit PMBus Linear11 integer."""
     import math
 
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
+        raise TypeError("val must be a finite numeric value")
     if math.isnan(val) or math.isinf(val):
         raise ValueError(f"Cannot encode NaN or Infinity in Linear11: {val}")
     if val == 0.0:
@@ -348,11 +375,10 @@ def encode_linear11(val: float) -> int:
 
 def decode_linear16(raw_word: int, vout_mode_exponent: int = -9, signed: bool = False) -> float:
     """Decode a 16-bit PMBus Linear16 output voltage value."""
-    if not isinstance(vout_mode_exponent, int) or isinstance(vout_mode_exponent, bool):
-        raise TypeError("vout_mode_exponent must be an integer in the PMBus range -16..15")
-    if not -16 <= vout_mode_exponent <= 15:
-        raise ValueError("vout_mode_exponent must be in the PMBus range -16..15")
-    raw_word &= 0xFFFF
+    _validate_word(raw_word)
+    _validate_exponent(vout_mode_exponent, "vout_mode_exponent")
+    if not isinstance(signed, bool):
+        raise TypeError("signed must be boolean")
     if signed and (raw_word & 0x8000):
         val = raw_word - 65536
     else:
@@ -362,6 +388,7 @@ def decode_linear16(raw_word: int, vout_mode_exponent: int = -9, signed: bool = 
 
 def parse_vout_mode_exponent(vout_mode_byte: int) -> int:
     """Extract 5-bit two's complement exponent from VOUT_MODE (0x20) register byte."""
+    vout_mode_byte = _validate_byte(vout_mode_byte, "vout_mode_byte")
     exponent_raw = vout_mode_byte & 0x1F
     if exponent_raw & 0x10:
         return exponent_raw - 32
@@ -370,6 +397,7 @@ def parse_vout_mode_exponent(vout_mode_byte: int) -> int:
 
 def decode_status_byte(status_byte: int) -> list[str]:
     """Decode STATUS_BYTE (0x78) into human-readable active fault strings."""
+    status_byte = _validate_byte(status_byte, "status_byte")
     flags: list[str] = []
     if status_byte & (1 << 7):
         flags.append("BUSY (Device busy / unable to respond)")
@@ -392,6 +420,7 @@ def decode_status_byte(status_byte: int) -> list[str]:
 
 def decode_status_word(status_word: int) -> list[str]:
     """Decode STATUS_WORD (0x79, 16-bit) into human-readable active fault strings."""
+    status_word = _validate_word(status_word, "status_word")
     low_byte = status_word & 0xFF
     high_byte = (status_word >> 8) & 0xFF
 
@@ -419,6 +448,7 @@ def decode_status_word(status_word: int) -> list[str]:
 
 def decode_status_cml(cml_byte: int) -> list[str]:
     """Decode STATUS_CML (0x7E) Communication/Memory/Logic fault flags."""
+    cml_byte = _validate_byte(cml_byte, "cml_byte")
     flags: list[str] = []
     if cml_byte & (1 << 7):
         flags.append("INVALID_COMMAND (Master sent invalid or unsupported command code)")
@@ -441,6 +471,9 @@ def decode_pmbus_payload(
     cmd_code: int, data_bytes: list[int], vout_exponent: int = -9
 ) -> dict[str, Any]:
     """Decode PMBus data bytes into structured telemetry and diagnostics."""
+    _validate_byte(cmd_code, "cmd_code")
+    _validate_bytes(data_bytes)
+    _validate_exponent(vout_exponent)
     cmd_def = PMBUS_COMMANDS.get(cmd_code)
     result: dict[str, Any] = {
         "command_code": f"0x{cmd_code:02X}",
@@ -448,17 +481,36 @@ def decode_pmbus_payload(
         "raw_bytes": [f"0x{b:02X}" for b in data_bytes],
     }
 
-    if not data_bytes:
-        result["summary"] = f"{result['command_name']} (No Data / Quick Cmd)"
-        return result
-
     if not cmd_def:
+        if not data_bytes:
+            result["summary"] = f"{result['command_name']} (No Data / Quick Cmd)"
+            return result
         result["summary"] = f"Custom PMBus Cmd 0x{cmd_code:02X}: " + " ".join(
             f"{b:02X}" for b in data_bytes
         )
         return result
 
     dtype = cmd_def.data_type
+    required_len = max(cmd_def.write_len, cmd_def.read_len)
+    if required_len and len(data_bytes) < required_len:
+        result.update(
+            {
+                "evidence": "truncated",
+                "is_complete": False,
+                "required_bytes": required_len,
+                "received_bytes": len(data_bytes),
+                "summary": (
+                    f"{cmd_def.name}: insufficient data (received {len(data_bytes)} byte(s), "
+                    f"expected {required_len})"
+                ),
+            }
+        )
+        return result
+    result["is_complete"] = True
+
+    if not data_bytes:
+        result["summary"] = f"{result['command_name']} (No Data / Quick Cmd)"
+        return result
 
     # 1. Linear11 Telemetry (READ_VIN, READ_IOUT, READ_TEMPERATURE, READ_PIN, etc.)
     if dtype == PMBusDataType.LINEAR11 and len(data_bytes) >= 2:
