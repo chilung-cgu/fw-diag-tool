@@ -332,3 +332,34 @@ def test_fuzz_cli_rejects_non_positive_seed_count():
 
     assert result.exit_code == 2
     assert "--seeds must be a positive integer" in result.output
+
+
+def test_cli_i2c_analyze_with_board_profile(tmp_path):
+    profile_path = tmp_path / "board.yaml"
+    profile_path.write_text(
+        """
+board_name: test-board
+version: "1.0"
+i2c_buses:
+  - bus_num: 1
+    speed_mode: fast
+    devices:
+      - address_7bit: 0x50
+        name: eeprom-main
+        category: eeprom
+        protocol: I2C
+        compatible: atmel,24c64
+        register_width: 8
+""",
+        encoding="utf-8",
+    )
+    csv_path = Path(__file__).parent / "data" / "saleae_normal_pmbus_eeprom.csv"
+    result = CliRunner().invoke(app, ["i2c", "analyze", str(csv_path), "--board-profile", str(profile_path)])
+    assert result.exit_code == 0
+    assert "eeprom-main" in result.output
+
+
+def test_cli_i2c_analyze_fail_on_anomaly():
+    csv_path = Path(__file__).parent / "data" / "saleae_anomaly_addr_nack.csv"
+    result = CliRunner().invoke(app, ["i2c", "analyze", str(csv_path), "--fail-on", "error"])
+    assert result.exit_code == 1

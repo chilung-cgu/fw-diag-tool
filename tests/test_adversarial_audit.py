@@ -144,6 +144,55 @@ def test_pmbus_invalid_command_payload_does_not_contaminate_context():
     assert read_tx.command_name == "READ_VIN"
 
 
+def test_pmbus_linear11_huge_values_raise_value_error_not_overflow():
+    with pytest.raises(ValueError, match="representable"):
+        encode_linear11(1e308)
+    with pytest.raises(ValueError, match="representable"):
+        encode_linear11(-1e308)
+
+
+def test_bitfield_rejects_huge_bit_positions():
+    with pytest.raises(ValueError, match="64-bit width"):
+        _ = BitField(name="OVERFLOW", bit_range="1000:0").bit_mask
+
+
+def test_i2c_bus_hang_raw_event_is_reported_as_critical_anomaly():
+    events = [
+        RawI2CEvent(timestamp=0.001, event_type=RawEventType.START),
+        RawI2CEvent(timestamp=0.0011, event_type=RawEventType.ADDRESS, address_7bit=0x50, ack=AckType.ACK),
+        RawI2CEvent(timestamp=0.0012, event_type=RawEventType.BUS_HANG),
+    ]
+    report = I2CDiagnosticEngine().analyze(events)
+    assert report.total_transactions == 1
+    assert report.transactions[0].is_aborted is True
+    assert any(issue.code == "I2C_MISSING_STOP" and issue.severity.value == "CRITICAL" for issue in report.issues)
+
+
+def test_spi_busy_state_flags_anomaly_on_subsequent_write():
+    csv_data = """Time,MOSI,MISO,Enable
+0.001,0x05,0x00,0
+0.002,0x00,0x01,0
+0.003,0x00,0x00,1
+0.010,0x06,0x00,0
+0.011,0x00,0x00,1
+"""
+    report = SPIDiagnosticEngine().analyze_csv_content(csv_data)
+    assert any(issue.code == "SPI_FLASH_BUSY" for issue in report.anomalies)
+
+
+def test_pcie_tlp_header_rejects_non_32bit_dwords():
+    with pytest.raises(ValueError, match="unsigned 32-bit"):
+        PCIeAnalyzer.decode_tlp_header(-1, 0, 0, 0)
+    with pytest.raises(ValueError, match="unsigned 32-bit"):
+        PCIeAnalyzer.decode_tlp_header(0x1_0000_0000, 0, 0, 0)
+
+
+def test_pcie_64byte_short_dump_does_not_invent_extended_capabilities():
+    raw_64 = bytes([0xEE, 0x10, 0x24, 0x70] + [0] * 60)
+    cfg = PCIeAnalyzer.decode_config_space(raw_64)
+    assert len(cfg.extended_capabilities) == 0
+
+
 def test_spi_volatile_wren_and_chip_erase_alt():
     csv_data = """Time [s],MOSI,MISO,Enable
 0.001,0x50,0x00,0

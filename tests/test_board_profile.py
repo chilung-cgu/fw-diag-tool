@@ -276,3 +276,20 @@ def profile_mapping():
             }
         ],
     }
+
+
+def test_engine_uses_board_profile_for_device_mapping():
+    from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
+
+    profile = load_board_profile(REPRESENTATIVE_PROFILE_YAML)
+    engine = I2CDiagnosticEngine(board_profile=profile)
+    csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
+0.001,0,0x20,Write,,ACK
+0.0011,0,,Write,0x02,ACK
+0.0012,0,,Write,0xAA,ACK
+"""
+    report = engine.analyze_csv_content(csv_data)
+    tx = report.transactions[0]
+    assert tx.device_name == "board-gpio"
+    assert tx.identity_confidence == "board-profile"
+    assert tx.device_category == "gpio-expander"

@@ -10,6 +10,7 @@ from rich.table import Table
 
 from fw_diag_tool import __version__
 from fw_diag_tool.analyzers.register_mapper import RegisterMapCatalog
+from fw_diag_tool.board_profile import SchemaError, load_board_profile
 from fw_diag_tool.cli_extra import register_extra_commands
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
@@ -102,13 +103,20 @@ def analyze_i2c_trace(
     sda_column: str | None = typer.Option(
         None, "--sda-column", help="Explicit raw-capture SDA column (use with --raw-digital)."
     ),
+    board_profile: Path | None = typer.Option(
+        None, "--board-profile", "-b", help="Path to board profile YAML/JSON file."
+    ),
+    fail_on: str | None = typer.Option(
+        None, "--fail-on", help="Exit with code 1 if issues meet threshold (warning|error|critical)."
+    ),
 ):
     """Analyze an I2C / SMBus / PMBus trace, decode transactions, check timing, and diagnose faults."""
     if not file_path.exists():
         console.print(f"[bold red]Error: File {file_path} not found![/]")
         raise typer.Exit(code=1)
     try:
-        engine = I2CDiagnosticEngine(smbus_timeout_ms=smbus_timeout)
+        profile = load_board_profile(board_profile) if board_profile else None
+        engine = I2CDiagnosticEngine(smbus_timeout_ms=smbus_timeout, board_profile=profile)
         if raw_digital:
             result = analyze_raw_i2c_csv(
                 file_path.read_bytes(),
@@ -127,7 +135,19 @@ def analyze_i2c_trace(
         if json_out:
             json_out.write_text(report.to_json(indent=2), encoding="utf-8")
             console.print(f"[green]✔ JSON report exported to {json_out}[/]")
-    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        if fail_on:
+            thresholds = {
+                "warning": ["WARNING", "ERROR", "CRITICAL"],
+                "error": ["ERROR", "CRITICAL"],
+                "critical": ["CRITICAL"],
+            }
+            allowed = thresholds.get(fail_on.lower())
+            if not allowed:
+                console.print(f"[bold red]Error: invalid --fail-on level {fail_on!r}; choose: warning, error, critical[/]")
+                raise typer.Exit(code=2)
+            if any(issue.severity.value in allowed for issue in report.issues):
+                raise typer.Exit(code=1)
+    except (OSError, UnicodeError, TypeError, ValueError, SchemaError) as exc:
         label = "raw digital capture" if raw_digital else "I2C trace"
         console.print(f"[bold red]Error: {label} or report generation failed: {exc}[/]")
         raise typer.Exit(code=2) from exc

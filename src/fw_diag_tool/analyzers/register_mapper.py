@@ -25,8 +25,12 @@ class BitField:
             raise ValueError(f"invalid bit range: {self.bit_range!r}")
         if ":" in cleaned:
             parts = [int(p) for p in cleaned.split(":")]
+            if max(parts) > 63:
+                raise ValueError(f"bit position {max(parts)} exceeds supported 64-bit width")
             return max(parts), min(parts)
         val = int(cleaned)
+        if val > 63:
+            raise ValueError(f"bit position {val} exceeds supported 64-bit width")
         return val, val
 
     @property

@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from fw_diag_tool.board_profile import BoardProfile
 from fw_diag_tool.i2c.anomaly import I2CAnomalyDetector
 from fw_diag_tool.i2c.chip_db import get_all_matching_devices, lookup_device
 from fw_diag_tool.i2c.eeprom import EEPROM_MODELS, decode_eeprom_read, decode_eeprom_write
@@ -46,6 +47,7 @@ class I2CDiagnosticEngine:
         default_vout_exponent: int = -9,
         default_eeprom_address_bytes: int | None = None,
         eeprom_profile: str | None = None,
+        board_profile: BoardProfile | None = None,
     ):
         self.smbus_timeout_ms = self._positive_finite_config(
             "smbus_timeout_ms", smbus_timeout_ms, maximum=60_000.0
@@ -74,6 +76,7 @@ class I2CDiagnosticEngine:
         self.default_vout_exponent = default_vout_exponent
         self.default_eeprom_address_bytes = default_eeprom_address_bytes
         self.eeprom_profile = eeprom_profile
+        self.board_profile = board_profile
         self.mux_tracker = I2CMuxTracker()
         self.anomaly_detector = I2CAnomalyDetector(
             smbus_timeout_ms=self.smbus_timeout_ms,
@@ -114,7 +117,12 @@ class I2CDiagnosticEngine:
             tx.timestamp_available = tx.timestamp_available and event.timestamp_available
             if tx.timestamp_available:
                 tx.end_time = event.timestamp
-                tx.duration_us = max(0.0, (tx.end_time - tx.start_time) * 1_000_000.0)
+                dur = (tx.end_time - tx.start_time) * 1_000_000.0
+                if math.isfinite(dur) and dur >= 0:
+                    tx.duration_us = dur
+                else:
+                    tx.duration_us = 0.0
+                    tx.timestamp_available = False
             else:
                 tx.duration_us = 0.0
 
@@ -180,6 +188,35 @@ class I2CDiagnosticEngine:
                         finish_at_event(current_tx, ev)
                         transactions.append(current_tx)
                     current_tx = None
+                continue
+
+            # Explicit BUS_HANG
+            if ev.event_type == RawEventType.BUS_HANG:
+                if current_tx is not None:
+                    current_tx.is_aborted = True
+                    current_tx.has_stop = False
+                    finish_at_event(current_tx, ev)
+                    transactions.append(current_tx)
+                    current_tx = None
+                else:
+                    hang_tx = I2CTransaction(
+                        id=tx_counter,
+                        start_time=ev.timestamp,
+                        end_time=ev.timestamp,
+                        address_7bit=0x00,
+                        address_8bit=0x00,
+                        direction=I2CDirection.WRITE,
+                        address_ack=AckType.NONE,
+                        has_stop=False,
+                        is_aborted=True,
+                        timestamp_available=ev.timestamp_available,
+                        address_available=False,
+                        direction_available=False,
+                        source_error=True,
+                    )
+                    hang_tx.semantic_summary = "Bus Hang / Clock line held low indefinitely"
+                    transactions.append(hang_tx)
+                    tx_counter += 1
                 continue
 
             # ADDRESS Event
@@ -458,9 +495,12 @@ class I2CDiagnosticEngine:
             current_tx.byte_packets or getattr(current_tx, "_has_address", False)
         ):
             if current_tx.timestamp_available:
-                current_tx.duration_us = max(
-                    0.0, (current_tx.end_time - current_tx.start_time) * 1_000_000.0
-                )
+                dur = (current_tx.end_time - current_tx.start_time) * 1_000_000.0
+                if math.isfinite(dur) and dur >= 0:
+                    current_tx.duration_us = dur
+                else:
+                    current_tx.duration_us = 0.0
+                    current_tx.timestamp_available = False
             else:
                 current_tx.duration_us = 0.0
             transactions.append(current_tx)
@@ -469,7 +509,7 @@ class I2CDiagnosticEngine:
 
     def decode_semantic_layer(self, transactions: list[I2CTransaction]) -> list[DataQualityIssue]:
         """Perform chip identification and protocol semantic decoding across transactions."""
-        device_context: dict[int, dict[str, Any]] = {}
+        device_context: dict[Any, dict[str, Any]] = {}
         ambiguous_eeprom_writes = 0
         eeprom_truncated = 0
         eeprom_out_of_range = 0
@@ -486,6 +526,8 @@ class I2CDiagnosticEngine:
         semantic_source_error = 0
 
         for tx in transactions:
+            if tx.device_category == "I2C Multiplexer (PCA9548A/PCA9546)":
+                continue
             if not tx.address_available:
                 tx.device_name = "Unknown Device (address unavailable)"
                 tx.device_category = "Unknown / Incomplete Address Evidence"
@@ -530,10 +572,35 @@ class I2CDiagnosticEngine:
                 address_nack_data += 1
                 continue
             addr = tx.address_7bit
+            dev_profile = None
+            if self.board_profile is not None:
+                for bus in self.board_profile.i2c_buses:
+                    if tx.mux_channels:
+                        for mux in bus.muxes:
+                            for ch in mux.channels:
+                                if ch.channel in tx.mux_channels:
+                                    for d in ch.devices:
+                                        if d.address_7bit == addr:
+                                            dev_profile = d
+                                            break
+                    if dev_profile is None:
+                        for d in bus.devices:
+                            if d.address_7bit == addr:
+                                dev_profile = d
+                                break
+                    if dev_profile is not None:
+                        break
+
             candidates = get_all_matching_devices(addr)
             chip = lookup_device(addr) if len(candidates) == 1 else None
             tx.device_candidates = [candidate.name for candidate in candidates]
-            if chip is not None:
+            if dev_profile is not None:
+                tx.device_name = dev_profile.name
+                tx.device_category = dev_profile.category
+                tx.protocol = dev_profile.protocol
+                tx.identity_confidence = "board-profile"
+                tx.device_candidates = [dev_profile.name]
+            elif chip is not None:
                 tx.device_name = f"Possible: {chip.name}"
                 tx.device_category = chip.category
                 tx.protocol = chip.protocol
@@ -592,8 +659,9 @@ class I2CDiagnosticEngine:
                 data_nack_semantic_unavailable += 1
                 continue
 
+            context_key = (tuple(tx.mux_channels) if tx.mux_channels else None, addr)
             ctx = device_context.setdefault(
-                addr,
+                context_key,
                 {"last_cmd": None, "last_offset": None, "vout_exp": self.default_vout_exponent},
             )
 
@@ -992,6 +1060,7 @@ class I2CDiagnosticEngine:
         # state belongs to one capture and must never leak into the next report.
         self.mux_tracker = I2CMuxTracker()
         transactions = self.group_events_into_transactions(events)
+        mux_issues = self.mux_tracker.process_transactions(transactions)
         semantic_quality_issues = self.decode_semantic_layer(transactions)
 
         known_timestamps = [event.timestamp for event in events if event.timestamp_available]
@@ -1000,7 +1069,6 @@ class I2CDiagnosticEngine:
         )
 
         timing_stats = analyze_timing_statistics(transactions, total_duration)
-        mux_issues = self.mux_tracker.process_transactions(transactions)
         issues = self.anomaly_detector.analyze_transactions(transactions, timing_stats) + mux_issues
         timestamp_availability = {tx.id: tx.timestamp_available for tx in transactions}
         for issue in issues:

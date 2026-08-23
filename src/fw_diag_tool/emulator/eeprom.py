@@ -129,6 +129,8 @@ class VirtualEEPROM24C64:
             raise ValueError("start must be a non-negative integer")
         if isinstance(length, bool) or not isinstance(length, int) or length < 0:
             raise ValueError("length must be a non-negative integer")
+        if length > 65536:
+            raise ValueError("dump length must not exceed 65536 bytes")
         if start + length > self.capacity:
             raise ValueError(f"Dump out of range: start=0x{start:04X} len={length}")
         lines = []

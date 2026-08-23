@@ -346,6 +346,8 @@ def encode_linear11(val: float) -> int:
         raise ValueError(f"Cannot encode NaN or Infinity in Linear11: {val}")
     if val == 0.0:
         return 0x0000
+    if not -33_554_432.0 <= val <= 33_521_664.0:
+        raise ValueError(f"value {val!r} is outside the representable PMBus Linear11 range")
     # Find suitable exponent N in [-16, 15] such that mantissa fits in [-1024, 1023]
     if val == 0.0:
         return 0x0000

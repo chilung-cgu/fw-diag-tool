@@ -356,7 +356,7 @@ class PCIeAnalyzer:
         # Traverse extended capabilities list (starting at offset 0x100)
         ext_ptr = 0x100
         ext_visited = set()
-        while 0x100 <= ext_ptr <= 0xFFC and ext_ptr not in ext_visited:
+        while 0x100 <= ext_ptr <= 0xFFC and ext_ptr + 4 <= source_length and ext_ptr not in ext_visited:
             ext_visited.add(ext_ptr)
             header_dw = struct.unpack_from("<I", raw_data, ext_ptr)[0]
             if header_dw == 0 or header_dw == 0xFFFFFFFF:
@@ -403,6 +403,9 @@ class PCIeAnalyzer:
 
     @classmethod
     def decode_tlp_header(cls, dw0: int, dw1: int, dw2: int, dw3: int) -> TLPHeaderDecoded:
+        for name, dw in (("dw0", dw0), ("dw1", dw1), ("dw2", dw2), ("dw3", dw3)):
+            if isinstance(dw, bool) or not isinstance(dw, int) or not 0 <= dw <= 0xFFFFFFFF:
+                raise ValueError(f"{name} must be an unsigned 32-bit integer (0..0xFFFFFFFF)")
         fmt = (dw0 >> 29) & 0x07
         type_ = (dw0 >> 24) & 0x1F
         tc = (dw0 >> 20) & 0x07

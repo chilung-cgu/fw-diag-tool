@@ -25,6 +25,7 @@ class SPIAnomalyDetector:
         wel_latched: bool | None = None
         volatile_wel_latched = False
         reset_armed = False
+        flash_busy: bool | None = None
 
         for tx in transactions:
             op = tx.opcode
@@ -117,6 +118,10 @@ class SPIAnomalyDetector:
                     tx.decoded_details["wel_evidence"] = "status-read"
                 else:
                     tx.wel_state_before = wel_latched
+                observed_busy = tx.decoded_details.get("busy")
+                if isinstance(observed_busy, bool):
+                    flash_busy = observed_busy
+                    tx.decoded_details["busy_state_observed"] = observed_busy
 
             # 3. Write / Program / Erase without WREN Checks
             is_array_write_or_erase = op in (
@@ -133,6 +138,26 @@ class SPIAnomalyDetector:
                 SPIOpcode.WRITE_STATUS_REG_2,
                 SPIOpcode.WRITE_STATUS_REG_3,
             )
+
+            if flash_busy is True and (is_array_write_or_erase or op == SPIOpcode.WRITE_ENABLE):
+                issues.append(
+                    SPIDiagnosticIssue(
+                        code="SPI_FLASH_BUSY",
+                        title=f"Command issued while Flash is BUSY (WIP=1) @ Tx #{tx.index}",
+                        severity=SPISeverity.ERROR,
+                        timestamp=tx.start_time,
+                        transaction_id=tx.index,
+                        description=(
+                            f"Command {tx.opcode_name} was issued while the most recent observed "
+                            "status register reported BUSY=1. The internal write/erase cycle has not finished."
+                        ),
+                        root_cause_guide=(
+                            "【排查建議】確認韌體是否有對 Status Register 1 進行 Busy Polling (RDSR 0x05 直到 WIP=0)，"
+                            "避免在前一次 Program/Erase 尚未完成時發送新指令導致指令被晶片忽略或損壞。"
+                        ),
+                        details={"opcode": f"0x{op:02X}", "busy_state": True},
+                    )
+                )
 
             if is_array_write_or_erase:
                 tx.wel_state_before = wel_latched
@@ -188,6 +213,7 @@ class SPIAnomalyDetector:
                 else:
                     wel_latched = None
                 volatile_wel_latched = False
+                flash_busy = True
 
             elif is_sr_write:
                 tx.wel_state_before = wel_latched
