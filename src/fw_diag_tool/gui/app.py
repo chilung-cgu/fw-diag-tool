@@ -403,10 +403,14 @@ elif menu == "⚖️ 雙波形對比檢視 (Waveform Diff)":
         except ValueError as exc:
             st.error(f"無法讀取比較 trace：{exc}")
             st.stop()
-        eng = I2CDiagnosticEngine()
-        g_rep = eng.analyze_csv_content(g_text)
-        f_rep = eng.analyze_csv_content(f_text)
-        diff_res = WaveformDiffEngine.compare_reports(g_rep, f_rep)
+        try:
+            eng = I2CDiagnosticEngine()
+            g_rep = eng.analyze_csv_content(g_text)
+            f_rep = eng.analyze_csv_content(f_text)
+            diff_res = WaveformDiffEngine.compare_reports(g_rep, f_rep)
+        except (OSError, UnicodeError, TypeError, ValueError) as exc:
+            st.error(f"無法分析比較 trace：{exc}")
+            st.stop()
         if diff_res.is_identical:
             st.success("🎉 Golden 與 Failing 兩份波形在協定層完全一致！")
         else:

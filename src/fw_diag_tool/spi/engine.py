@@ -108,6 +108,13 @@ class SPIDiagnosticEngine:
             op = tx.opcode
             if op is None:
                 continue
+            if tx.decoded_details.get("response_truncated") or tx.decoded_details.get(
+                "response_overlong"
+            ):
+                # Keep malformed fixed-width frames visible in the transaction
+                # table and data-quality panel, but do not count them as
+                # accepted read/write/erase operations.
+                continue
             if op in (
                 SPIOpcode.READ_DATA,
                 SPIOpcode.FAST_READ,

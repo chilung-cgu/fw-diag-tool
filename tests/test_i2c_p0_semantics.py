@@ -169,6 +169,26 @@ def test_source_provided_byte_duration_produces_frequency_measurement():
     assert "Samples: 2" in frequency_figure.layout.title.text
 
 
+def test_bus_utilization_is_unavailable_without_trace_duration():
+    report = I2CDiagnosticEngine().analyze(
+        [
+            RawI2CEvent(
+                timestamp=0.0,
+                event_type=RawEventType.ADDRESS,
+                address_7bit=0x50,
+                direction=I2CDirection.WRITE,
+                ack=AckType.ACK,
+                duration_s=90e-6,
+                timestamp_available=False,
+            )
+        ]
+    )
+
+    assert report.timing_stats.frequency_sample_count == 1
+    assert report.timing_stats.bus_utilization_evidence == "unavailable"
+    assert report.timing_stats.bus_utilization_pct == 0.0
+
+
 def test_final_controller_read_nack_is_neutral_in_timeline_and_health():
     csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
 0.001000,0,0x48,Read,,ACK

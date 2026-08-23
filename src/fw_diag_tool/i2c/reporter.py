@@ -107,8 +107,16 @@ class I2CReporter:
         )
         timing_tbl.add_row(
             "Bus Utilization",
-            f"{t.bus_utilization_pct:.2f} %",
-            "Active transfer time / total duration",
+            (
+                f"{t.bus_utilization_pct:.2f} %"
+                if t.bus_utilization_evidence != "unavailable"
+                else "Unavailable"
+            ),
+            (
+                "Active transfer time / measured total duration"
+                if t.bus_utilization_evidence != "unavailable"
+                else "Total trace duration is unavailable"
+            ),
         )
         console.print(timing_tbl)
         console.print()
@@ -288,7 +296,10 @@ class I2CReporter:
         lines.append(
             f"- **Average Inter-transaction Delay**: `{t.avg_inter_transaction_delay_ms:.2f} ms`"
         )
-        lines.append(f"- **Bus Utilization**: `{t.bus_utilization_pct:.2f} %`")
+        if t.bus_utilization_evidence != "unavailable":
+            lines.append(f"- **Bus Utilization**: `{t.bus_utilization_pct:.2f} %`")
+        else:
+            lines.append("- **Bus Utilization**: `Unavailable` (total trace duration is unavailable)")
         lines.append("")
 
         # Device Map Table

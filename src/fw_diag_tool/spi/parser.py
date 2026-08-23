@@ -90,7 +90,9 @@ class SPIParser:
             raise TypeError("csv_text must be a string")
         if isinstance(page_size, bool) or not isinstance(page_size, int) or page_size <= 0:
             raise ValueError("page_size must be a positive integer")
-        reader = csv.reader(io.StringIO(csv_text.strip()))
+        # Strip a UTF-8 BOM before header alias matching.  Without this, a
+        # normal Logic export can fail to find its timestamp column.
+        reader = csv.reader(io.StringIO(csv_text.lstrip("\ufeff").strip()))
         rows = [r for r in reader if r and not r[0].strip().startswith("#")]
         if not rows:
             return []
@@ -382,7 +384,15 @@ class SPIParser:
                     address = (mosi[1] << 16) | (mosi[2] << 8) | mosi[3]
                     details["erase_address"] = f"0x{address:06X}"
 
-            elif opcode in (SPIOpcode.CHIP_ERASE, SPIOpcode.CHIP_ERASE_ALT):
+            elif opcode in (SPIOpcode.CHIP_ERASE, SPIOpcode.CHIP_ERASE_ALT) or opcode in (
+                SPIOpcode.WRITE_ENABLE,
+                SPIOpcode.WRITE_DISABLE,
+                SPIOpcode.VOLATILE_SR_WRITE_ENABLE,
+                SPIOpcode.ENABLE_RESET,
+                SPIOpcode.RESET_DEVICE,
+                SPIOpcode.DEEP_POWER_DOWN,
+                SPIOpcode.RELEASE_POWER_DOWN,
+            ):
                 if len(mosi) > 1:
                     details.update(
                         {

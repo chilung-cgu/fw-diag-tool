@@ -246,7 +246,7 @@ def _validate_decode_result(result: RawI2CDecodeResult) -> None:
     # This also validates a manually constructed/mutated RawDigitalCapture.  The
     # CSV parser already enforces these invariants, but dataclasses are public and
     # can be instantiated without going through that parser.
-    decode_i2c_capture(result.capture)
+    canonical = decode_i2c_capture(result.capture)
     if not isinstance(result.conditions, (tuple, list)):
         raise RawCaptureValidationError("raw decode conditions must be a sequence")
     for index, condition in enumerate(result.conditions):
@@ -260,6 +260,19 @@ def _validate_decode_result(result: RawI2CDecodeResult) -> None:
         raise RawCaptureValidationError("raw decode transactions must be a non-empty sequence")
     for index, transaction in enumerate(result.transactions):
         _validate_transaction(transaction, index)
+
+    # The capture is the source of truth.  Do not allow a caller to replace a
+    # decoded transaction/condition with internally-consistent metadata that
+    # contradicts the measured SCL/SDA bits (for example, changing 0x50 to
+    # 0x51 or stretching sample timestamps after decode).
+    if tuple(result.conditions) != canonical.conditions:
+        raise RawCaptureValidationError(
+            "raw decode conditions do not match the supplied digital capture"
+        )
+    if tuple(result.transactions) != canonical.transactions:
+        raise RawCaptureValidationError(
+            "raw decode transactions do not match the supplied digital capture"
+        )
 
 
 def _validate_transaction(transaction: RawI2CTransaction, index: int) -> None:

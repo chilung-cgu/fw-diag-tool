@@ -168,5 +168,6 @@ def analyze_timing_statistics(
         stats.bus_utilization_pct = min(
             100.0, (total_active_time_s / total_trace_duration_s) * 100.0
         )
+        stats.bus_utilization_evidence = "source-provided"
 
     return stats

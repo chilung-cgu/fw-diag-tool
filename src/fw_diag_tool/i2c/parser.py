@@ -129,6 +129,11 @@ class I2CParser:
         header = next(reader, None)
         if not header:
             return []
+        # Logic 2 and spreadsheet exports may include a UTF-8 BOM on the
+        # first header cell.  Remove it before alias matching; otherwise the
+        # timestamp column becomes invisible and every row loses timing
+        # evidence even though the CSV is otherwise valid.
+        header[0] = header[0].lstrip("\ufeff")
 
         # Normalize headers
         col_map: dict[str, int] = {}
@@ -257,10 +262,20 @@ class I2CParser:
             addr_7bit = None
             if raw_addr is not None:
                 if raw_addr > 0x7F:
-                    # Likely 8-bit address: extract top 7 bits and R/W bit if direction missing
+                    # Likely 8-bit address: extract top 7 bits and R/W bit if
+                    # direction is missing.  If both forms are present they
+                    # must agree; silently preferring the explicit column can
+                    # turn 0xA1, WRITE into a different bus transaction.
+                    implied_rw = I2CDirection.READ if (raw_addr & 0x01) else I2CDirection.WRITE
+                    if raw_rw is not None and raw_rw != implied_rw:
+                        source_error = (
+                            f"8-bit address {raw_addr:#04x} conflicts with explicit direction "
+                            f"{raw_rw.value}; implied direction is {implied_rw.value}"
+                        )
+                        structural_source_error = True
                     addr_7bit = (raw_addr >> 1) & 0x7F
                     if raw_rw is None:
-                        raw_rw = I2CDirection.READ if (raw_addr & 0x01) else I2CDirection.WRITE
+                        raw_rw = implied_rw
                 else:
                     addr_7bit = raw_addr
 
@@ -644,6 +659,19 @@ class I2CParser:
             parsed_timestamp = _nonnegative_finite_float(raw_timestamp)
             timestamp_available = parsed_timestamp is not None
             ts = parsed_timestamp if parsed_timestamp is not None else 0.0
+            source_errors: list[str] = []
+
+            def has_value(value: Any) -> bool:
+                return value is not None and str(value).strip().lower() not in {
+                    "",
+                    "-",
+                    "none",
+                    "null",
+                    "n/a",
+                }
+
+            if has_value(raw_timestamp) and not timestamp_available:
+                source_errors.append("timestamp is not finite and non-negative")
             raw_event_type = rec.get("event_type", rec.get("type", "DATA"))
             if isinstance(raw_event_type, RawEventType):
                 ev_type = raw_event_type
@@ -656,20 +684,32 @@ class I2CParser:
                         f"raw I2C record {index} has unknown event_type {raw_event_type!r}"
                     ) from exc
 
-            addr = parse_hex_or_int(rec.get("address", rec.get("address_7bit", rec.get("addr"))))
+            raw_address = rec.get("address", rec.get("address_7bit", rec.get("addr")))
+            addr = parse_hex_or_int(raw_address)
+            if has_value(raw_address) and addr is None:
+                source_errors.append("address is not a numeric 7-bit/8-bit value")
             if addr is not None and not 0 <= addr <= 0xFF:
                 raise ValueError(
                     f"raw I2C record {index} address must be a 7-bit or 8-bit value (0..0xFF), got {addr}"
                 )
             addr_7bit = ((addr >> 1) & 0x7F) if (addr is not None and addr > 0x7F) else addr
 
-            rw = parse_direction(rec.get("direction", rec.get("rw", rec.get("read_write"))))
-            data_val = parse_hex_or_int(rec.get("data", rec.get("data_byte", rec.get("byte"))))
+            raw_direction = rec.get("direction", rec.get("rw", rec.get("read_write")))
+            rw = parse_direction(raw_direction)
+            if has_value(raw_direction) and rw is None:
+                source_errors.append("direction is not READ/WRITE")
+            raw_data = rec.get("data", rec.get("data_byte", rec.get("byte")))
+            data_val = parse_hex_or_int(raw_data)
+            if has_value(raw_data) and data_val is None:
+                source_errors.append("data byte is not numeric")
             if data_val is not None and not 0 <= data_val <= 0xFF:
                 raise ValueError(
                     f"raw I2C record {index} data byte must be in range 0..0xFF, got {data_val}"
                 )
-            ack_val = parse_ack(rec.get("ack", rec.get("ack_nak")))
+            raw_ack = rec.get("ack", rec.get("ack_nak"))
+            ack_val = parse_ack(raw_ack)
+            if has_value(raw_ack) and ack_val == AckType.NONE:
+                source_errors.append("ACK is not ACK/NACK")
 
             raw_packet_id = rec.get("packet_id")
             packet_id = None
@@ -680,8 +720,18 @@ class I2CParser:
                         f"raw I2C record {index} packet_id must be a non-negative integer"
                     )
 
-            duration_s = _positive_finite_float(rec.get("duration_s"))
-            bit_rate_khz = _positive_finite_float(rec.get("bit_rate_khz"))
+            raw_duration = rec.get("duration_s")
+            duration_s = _positive_finite_float(raw_duration)
+            if has_value(raw_duration) and duration_s is None:
+                source_errors.append("duration_s is not positive and finite")
+            raw_bit_rate = rec.get("bit_rate_khz")
+            bit_rate_khz = _positive_finite_float(raw_bit_rate)
+            if has_value(raw_bit_rate) and bit_rate_khz is None:
+                source_errors.append("bit_rate_khz is not positive and finite")
+
+            extra = dict(rec)
+            if source_errors:
+                extra["source_error"] = "; ".join(source_errors)
 
             events.append(
                 RawI2CEvent(
@@ -695,7 +745,7 @@ class I2CParser:
                     ack=ack_val,
                     duration_s=duration_s,
                     bit_rate_khz=bit_rate_khz,
-                    extra=rec,
+                    extra=extra,
                 )
             )
         return events

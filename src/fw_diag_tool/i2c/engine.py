@@ -492,6 +492,7 @@ class I2CDiagnosticEngine:
                 tx.protocol = "I2C"
                 tx.identity_confidence = "unavailable"
                 tx.semantic_summary = "Address unavailable; semantic decoding withheld"
+                tx.decoded_values = {"evidence": "source-error" if tx.source_error else "address-unavailable"}
                 continue
             if not tx.direction_available:
                 tx.device_name = f"Possible Device (0x{tx.address_7bit:02X})"
@@ -499,6 +500,7 @@ class I2CDiagnosticEngine:
                 tx.protocol = "I2C"
                 tx.identity_confidence = "address-only"
                 tx.semantic_summary = "Read/write direction unavailable; semantic decoding withheld"
+                tx.decoded_values = {"evidence": "source-error" if tx.source_error else "direction-unavailable"}
                 continue
             if tx.source_error and tx.aggregate_ack == AckType.NONE:
                 tx.semantic_summary = "Source field invalid; semantic decoding withheld"
@@ -619,21 +621,35 @@ class I2CDiagnosticEngine:
                         elif decoded.get("evidence") == "phase-mismatch":
                             pmbus_phase_mismatch += 1
 
-                        # If VOUT_MODE was written, update exponent in context
-                        if cmd_code == 0x20 and payload:
+                        # Only an accepted/complete VOUT_MODE payload may
+                        # change the decoder context.  Truncated, overlong, or
+                        # phase-invalid bytes are source evidence, not a new
+                        # exponent to apply to later telemetry.
+                        if (
+                            cmd_code == 0x20
+                            and payload
+                            and decoded.get("is_complete") is True
+                        ):
                             from fw_diag_tool.i2c.pmbus import parse_vout_mode_exponent
 
                             ctx["vout_exp"] = parse_vout_mode_exponent(payload[0])
-                        ctx["last_cmd"] = cmd_code
+                        if decoded.get("evidence") not in {
+                            "truncated",
+                            "overlong",
+                            "phase-mismatch",
+                            "block-count-mismatch",
+                            "block-count-invalid",
+                        } or (not payload and decoded.get("evidence") == "truncated"):
+                            # A command-select write (read-only command with
+                            # no payload) is valid context even when a
+                            # command definition also permits a write payload
+                            # and the decoder reports a missing response byte.
+                            ctx["last_cmd"] = cmd_code
                     else:
                         tx.semantic_summary = "PMBus Quick Command / Address Probe"
                 else:
                     cmd_code = int(ctx["last_cmd"]) if ctx.get("last_cmd") is not None else 0x88
                     tx.command_code = cmd_code
-                    if cmd_code == 0x20 and tx.data_bytes:
-                        from fw_diag_tool.i2c.pmbus import parse_vout_mode_exponent
-
-                        ctx["vout_exp"] = parse_vout_mode_exponent(tx.data_bytes[0])
                     decoded = decode_pmbus_payload(
                         cmd_code, tx.data_bytes, vout_exponent=ctx["vout_exp"], phase="read"
                     )
@@ -650,6 +666,10 @@ class I2CDiagnosticEngine:
                         pmbus_overlong += 1
                     elif decoded.get("evidence") == "phase-mismatch":
                         pmbus_phase_mismatch += 1
+                    if cmd_code == 0x20 and tx.data_bytes and decoded.get("is_complete") is True:
+                        from fw_diag_tool.i2c.pmbus import parse_vout_mode_exponent
+
+                        ctx["vout_exp"] = parse_vout_mode_exponent(tx.data_bytes[0])
 
             # 2. EEPROM Protocol Semantic Decoding
             elif tx.protocol == "EEPROM" or (chip and "EEPROM" in chip.category):

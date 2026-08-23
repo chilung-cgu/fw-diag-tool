@@ -25,10 +25,14 @@ def register_extra_commands(app: typer.Typer, i2c_app: typer.Typer, console: Con
         if not golden.exists() or not failing.exists():
             console.print("[bold red]Error: Both files must exist![/]")
             raise typer.Exit(code=1)
-        engine = I2CDiagnosticEngine()
-        g_rep = engine.analyze_csv_file(str(golden))
-        f_rep = engine.analyze_csv_file(str(failing))
-        diff_result = WaveformDiffEngine.compare_reports(g_rep, f_rep)
+        try:
+            engine = I2CDiagnosticEngine()
+            g_rep = engine.analyze_csv_file(str(golden))
+            f_rep = engine.analyze_csv_file(str(failing))
+            diff_result = WaveformDiffEngine.compare_reports(g_rep, f_rep)
+        except (OSError, UnicodeError, TypeError, ValueError) as exc:
+            console.print(f"[bold red]Error: I2C diff input is invalid: {exc}[/]")
+            raise typer.Exit(code=2) from exc
         if diff_result.is_identical:
             console.print("[bold green]Traces are identical.[/]")
         else:
@@ -48,6 +52,10 @@ def register_extra_commands(app: typer.Typer, i2c_app: typer.Typer, console: Con
     ):
         """Run parser stress tests with randomly generated malformed inputs."""
         from fw_diag_tool.uart.parser import UARTCrashParser
+
+        if seeds <= 0:
+            console.print("[bold red]Error: --seeds must be a positive integer.[/]")
+            raise typer.Exit(code=2)
 
         passed = 0
         failed = 0

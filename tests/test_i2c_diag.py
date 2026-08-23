@@ -312,3 +312,23 @@ def test_cli_reports_invalid_smbus_timeout_without_traceback(tmp_path):
     assert result.exit_code == 2
     assert "I2C trace or report generation failed" in result.output
     assert "Traceback" not in result.output
+
+
+def test_i2c_diff_reports_malformed_trace_without_traceback(tmp_path):
+    golden = tmp_path / "golden.csv"
+    failing = tmp_path / "failing.csv"
+    golden.write_text("Time,Time\n0,0\n", encoding="utf-8")
+    failing.write_text("Time,Address\n0,0x50\n", encoding="utf-8")
+
+    result = CliRunner().invoke(app, ["i2c", "diff", str(golden), str(failing)])
+
+    assert result.exit_code == 2
+    assert "I2C diff input is invalid" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_fuzz_cli_rejects_non_positive_seed_count():
+    result = CliRunner().invoke(app, ["fuzz", "--seeds", "0"])
+
+    assert result.exit_code == 2
+    assert "--seeds must be a positive integer" in result.output

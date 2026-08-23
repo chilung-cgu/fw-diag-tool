@@ -202,6 +202,14 @@ def test_spi_hex_byte_helper_does_not_guess_bare_decimal_as_hex():
     assert SPIParser.parse_hex_byte("AA") == 0xAA
 
 
+def test_spi_parser_accepts_utf8_bom_on_timestamp_header():
+    transactions = SPIParser.parse_csv_content(
+        "\ufeffTime,MOSI,MISO,Enable\n0.0,0x06,0x00,0\n0.1,0x00,0x00,1\n"
+    )
+    assert len(transactions) == 1
+    assert transactions[0].opcode == 0x06
+
+
 def test_spi_direct_decoder_rejects_malformed_time_and_bytes():
     with pytest.raises(ValueError, match="finite"):
         SPIParser.decode_single_transaction(1, float("nan"), 1.0, [0x06], [0x00])
@@ -276,6 +284,35 @@ def test_spi_fixed_width_erase_frames_report_overlong_evidence(opcode, extra):
         + "\n0.010,0x00,0x00,1\n"
     )
     assert any(issue.code == "SPI_RESPONSE_OVERLONG" for issue in report.data_quality_issues)
+    assert report.summary.erase_count == 0
+
+
+@pytest.mark.parametrize("opcode", [0x06, 0x04, 0x50, 0x66, 0x99, 0xB9, 0xAB])
+def test_spi_control_frames_reject_extra_bytes(opcode):
+    tx = SPIParser.decode_single_transaction(1, 0.0, 0.001, [opcode, 0xAA], [0x00, 0x00])
+    assert tx.decoded_details["response_overlong"] is True
+
+
+def test_spi_reset_without_reset_enable_does_not_clear_wel_state():
+    rows = [
+        "0.001,0x06,0x00,0",
+        "0.002,0x00,0x00,1",
+        "0.003,0x99,0x00,0",
+        "0.004,0x00,0x00,1",
+        "0.010,0x02,0x00,0",
+        "0.011,0x00,0x00,0",
+        "0.012,0x00,0x00,0",
+        "0.013,0x00,0x00,0",
+        "0.014,0x55,0x00,0",
+        "0.015,0x00,0x00,1",
+    ]
+    report = SPIDiagnosticEngine().analyze_csv_content(
+        "Time,MOSI,MISO,Enable\n" + "\n".join(rows) + "\n"
+    )
+    assert report.summary.anomaly_count == 0
+    assert report.transactions[1].decoded_details["reset_evidence"] == (
+        "reset-enable-not-observed"
+    )
 
 
 def test_spi_device_reset_clears_observed_wel_before_program():
@@ -346,4 +383,19 @@ def test_spi_cli_reports_invalid_csv_without_traceback(tmp_path):
     result = CliRunner().invoke(app, ["spi", "analyze", str(trace_path)])
 
     assert result.exit_code == 2
-    assert "SPI CSV is invalid" in result.output
+    assert "SPI CSV or report export is invalid" in result.output
+
+
+def test_spi_cli_reports_export_failure_without_traceback(tmp_path):
+    trace_path = tmp_path / "valid.csv"
+    trace_path.write_text(
+        "Time [s],MOSI,MISO,Enable\n0.001,0x06,0x00,0\n0.002,0x00,0x00,1\n",
+        encoding="utf-8",
+    )
+    missing_parent = tmp_path / "missing" / "report.md"
+
+    result = CliRunner().invoke(app, ["spi", "analyze", str(trace_path), "--md", str(missing_parent)])
+
+    assert result.exit_code == 2
+    assert "report export is invalid" in result.output
+    assert "Traceback" not in result.output

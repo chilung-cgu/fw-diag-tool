@@ -24,6 +24,7 @@ class SPIAnomalyDetector:
         # not observed, not that the flash was proven to have WEL=0.
         wel_latched: bool | None = None
         volatile_wel_latched = False
+        reset_armed = False
 
         for tx in transactions:
             op = tx.opcode
@@ -70,21 +71,43 @@ class SPIAnomalyDetector:
                     )
 
             # 2. Track Write Enable Latches
+            frame_valid = not bool(
+                tx.decoded_details.get("response_truncated")
+                or tx.decoded_details.get("response_overlong")
+            )
+            if not frame_valid:
+                # A truncated/overlong frame cannot prove either its command
+                # side effect or the WEL transition it would normally cause.
+                # Leave state unchanged and rely on the explicit quality issue.
+                tx.wel_state_before = wel_latched
+                continue
             if op == SPIOpcode.WRITE_ENABLE:
-                wel_latched = True
-                volatile_wel_latched = True
+                if frame_valid:
+                    wel_latched = True
+                    volatile_wel_latched = True
             elif op == SPIOpcode.VOLATILE_SR_WRITE_ENABLE:
-                volatile_wel_latched = True
+                if frame_valid:
+                    volatile_wel_latched = True
             elif op == SPIOpcode.WRITE_DISABLE:
-                wel_latched = False
-                volatile_wel_latched = False
+                if frame_valid:
+                    wel_latched = False
+                    volatile_wel_latched = False
+            elif op == SPIOpcode.ENABLE_RESET:
+                reset_armed = frame_valid
             elif op == SPIOpcode.RESET_DEVICE:
-                # A completed device reset clears volatile write-enable state.
-                # Treat this as observed WEL=0 rather than carrying a WREN
-                # from before reset into a later program/erase conclusion.
-                wel_latched = False
-                volatile_wel_latched = False
-                tx.decoded_details["wel_reset_evidence"] = "device-reset"
+                if reset_armed and frame_valid:
+                    # Most flashes require the preceding 0x66 reset-enable
+                    # command.  A bare 0x99 is not proof of reset completion.
+                    wel_latched = False
+                    volatile_wel_latched = False
+                    tx.decoded_details["wel_reset_evidence"] = "device-reset"
+                else:
+                    tx.decoded_details["reset_evidence"] = "reset-enable-not-observed"
+                reset_armed = False
+            elif op != SPIOpcode.ENABLE_RESET:
+                # RESET ENABLE is a short-lived command sequence; any other
+                # opcode invalidates the arm before a later 0x99.
+                reset_armed = False
 
             if op == SPIOpcode.READ_STATUS_REG_1:
                 observed_wel = tx.decoded_details.get("wel")

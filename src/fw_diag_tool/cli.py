@@ -229,13 +229,13 @@ def analyze_spi_trace(
         raise typer.Exit(code=1)
     try:
         report = SPIDiagnosticEngine().analyze_csv_file(file_path)
+        SPIReporter.render_terminal(report, console=console)
+        if markdown_out:
+            markdown_out.write_text(SPIReporter.to_markdown(report), encoding="utf-8")
+            console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
-        console.print(f"[bold red]Error: SPI CSV is invalid: {exc}[/]")
+        console.print(f"[bold red]Error: SPI CSV or report export is invalid: {exc}[/]")
         raise typer.Exit(code=2) from exc
-    SPIReporter.render_terminal(report, console=console)
-    if markdown_out:
-        markdown_out.write_text(SPIReporter.to_markdown(report), encoding="utf-8")
-        console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
 
 
 @uart_app.command("analyze")
@@ -255,13 +255,13 @@ def analyze_uart_crash(
             if p.exists():
                 content = p.read_text(encoding="utf-8")
         report = UARTCrashParser.parse_log_text(content)
+        UARTReporter.render_terminal(report, console=console)
+        if markdown_out:
+            markdown_out.write_text(UARTReporter.to_markdown(report), encoding="utf-8")
+            console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
-        console.print(f"[bold red]Error: UART crash log is invalid: {exc}[/]")
+        console.print(f"[bold red]Error: UART crash log or report export is invalid: {exc}[/]")
         raise typer.Exit(code=2) from exc
-    UARTReporter.render_terminal(report, console=console)
-    if markdown_out:
-        markdown_out.write_text(UARTReporter.to_markdown(report), encoding="utf-8")
-        console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
 
 
 @mctp_app.command("analyze")
@@ -279,13 +279,13 @@ def analyze_mctp(
             if p.exists():
                 content = p.read_text(encoding="utf-8")
         report = ServerMgmtParser.parse_text_dump(content)
+        ServerMgmtReporter.render_terminal(report, console=console)
+        if markdown_out:
+            markdown_out.write_text(ServerMgmtReporter.to_markdown(report), encoding="utf-8")
+            console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
-        console.print(f"[bold red]Error: MCTP/IPMB input is invalid: {exc}[/]")
+        console.print(f"[bold red]Error: MCTP/IPMB input or report export is invalid: {exc}[/]")
         raise typer.Exit(code=2) from exc
-    ServerMgmtReporter.render_terminal(report, console=console)
-    if markdown_out:
-        markdown_out.write_text(ServerMgmtReporter.to_markdown(report), encoding="utf-8")
-        console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
 
 
 @reg_app.command("decode")

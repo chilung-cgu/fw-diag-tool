@@ -128,6 +128,22 @@ def test_pmbus_vout_mode_read_dynamic_update():
     assert tx_vout.decoded_values.get("value") == 1.0
 
 
+def test_pmbus_invalid_command_payload_does_not_contaminate_context():
+    csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
+0.001,0,0x58,Write,,ACK
+0.0011,0,,Write,0x20,ACK
+0.0012,0,,Write,0x14,ACK
+0.0013,0,,Write,0xFF,ACK
+0.002,1,0x58,Read,,ACK
+0.0021,1,,Read,0x00,ACK
+0.0022,1,,Read,0x10,ACK
+"""
+    report = I2CDiagnosticEngine().analyze_csv_content(csv_data)
+    write_tx, read_tx = report.transactions
+    assert write_tx.decoded_values["evidence"] == "overlong"
+    assert read_tx.command_name == "READ_VIN"
+
+
 def test_spi_volatile_wren_and_chip_erase_alt():
     csv_data = """Time [s],MOSI,MISO,Enable
 0.001,0x50,0x00,0
@@ -258,6 +274,36 @@ def test_i2c_raw_record_boundaries_are_rejected_not_reinterpreted():
         I2CParser.parse_raw_records([{"type": "ADDRESS", "address": -1}])
     with pytest.raises(ValueError, match="data byte"):
         I2CParser.parse_raw_records([{"type": "DATA", "data": 256}])
+
+
+def test_i2c_parser_preserves_bom_and_rejects_8bit_direction_conflict():
+    events = I2CParser.parse_csv_string(
+        "\ufeffTime,Address,Read/Write,Data,ACK/NACK\n"
+        "0.001,0xA1,WRITE,,ACK\n"
+    )
+    assert events[0].timestamp_available is True
+    assert events[0].address_7bit is None
+    assert events[0].extra.get("source_error")
+
+
+def test_parse_raw_records_marks_invalid_optional_fields_as_source_error():
+    events = I2CParser.parse_raw_records(
+        [
+            {
+                "type": "ADDRESS",
+                "timestamp": "nan",
+                "address": "oops",
+                "direction": "SIDEWAYS",
+                "ack": "WHAT",
+                "duration_s": "nan",
+            }
+        ]
+    )
+    assert events[0].timestamp_available is False
+    assert "source_error" in events[0].extra
+    report = I2CDiagnosticEngine().analyze(events)
+    assert report.transactions[0].source_error is True
+    assert report.transactions[0].decoded_values["evidence"] == "source-error"
 
 
 @pytest.mark.parametrize(

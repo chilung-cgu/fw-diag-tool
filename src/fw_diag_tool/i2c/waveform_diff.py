@@ -32,6 +32,54 @@ class WaveformDiffReport:
 class WaveformDiffEngine:
     # Compares Golden (Normal) vs Failing (Defective) I2C traces and pinpoints root divergence
 
+    _SOURCE_LIMITATION_CODES = frozenset(
+        {
+            "I2C_UNKNOWN_EVENT_TYPE",
+            "I2C_SEMANTIC_EVIDENCE_INCOMPLETE",
+        }
+    )
+
+    @classmethod
+    def _has_source_limitation(cls, report: I2CAnalysisReport) -> bool:
+        """Return whether parser/source evidence makes protocol identity unprovable."""
+        if any(tx.source_error and tx.aggregate_ack == AckType.NONE for tx in report.transactions):
+            return True
+        return any(
+            issue.code in cls._SOURCE_LIMITATION_CODES for issue in report.data_quality_issues
+        )
+
+    @staticmethod
+    def _has_unprovable_protocol_evidence(report: I2CAnalysisReport) -> bool:
+        """Return whether ACK/framing fields are too incomplete for identity claims."""
+        for tx in report.transactions:
+            if tx.aggregate_ack != AckType.NONE:
+                # Aggregate ACK/NACK is intentionally compared as its own
+                # outcome; do not reinterpret its per-byte NONE values here.
+                continue
+            if tx.address_ack in (AckType.NONE, None):
+                return True
+            if any(packet.ack in (AckType.NONE, None) for packet in tx.byte_packets):
+                return True
+            if not tx.has_stop and not tx.is_repeated_start:
+                return True
+        limitation_codes = {
+            "I2C_ACK_UNAVAILABLE",
+            "I2C_ADDRESS_UNAVAILABLE",
+            "I2C_DIRECTION_UNAVAILABLE",
+            "I2C_DATA_UNAVAILABLE",
+            "I2C_TIMESTAMP_OUT_OF_ORDER",
+        }
+        for issue in report.data_quality_issues:
+            if (
+                issue.code == "I2C_ACK_UNAVAILABLE"
+                and report.transactions
+                and all(tx.aggregate_ack != AckType.NONE for tx in report.transactions)
+            ):
+                continue
+            if issue.code in limitation_codes:
+                return True
+        return False
+
     @staticmethod
     def _ack_outcome(tx: I2CTransaction) -> str:
         """Return a comparison-safe ACK outcome, excluding normal read termination NACK."""
@@ -70,6 +118,32 @@ class WaveformDiffEngine:
                     "Insufficient evidence: both golden and failing traces contain no transactions; "
                     "protocol identity cannot be established."
                 ),
+            )
+
+        if cls._has_source_limitation(golden) or cls._has_source_limitation(failing):
+            return WaveformDiffReport(
+                is_identical=False,
+                total_compared=max_len,
+                summary=(
+                    "Insufficient evidence: at least one trace contains source/parser errors; "
+                    "protocol identity and waveform equivalence cannot be established."
+                ),
+                golden_first_tx=g_txs[0] if g_txs else None,
+                failing_first_tx=f_txs[0] if f_txs else None,
+            )
+
+        if cls._has_unprovable_protocol_evidence(golden) or cls._has_unprovable_protocol_evidence(
+            failing
+        ):
+            return WaveformDiffReport(
+                is_identical=False,
+                total_compared=max_len,
+                summary=(
+                    "Insufficient evidence: at least one trace has unknown ACK or incomplete "
+                    "transaction framing; protocol identity cannot be established."
+                ),
+                golden_first_tx=g_txs[0] if g_txs else None,
+                failing_first_tx=f_txs[0] if f_txs else None,
             )
 
         for idx in range(max_len):

@@ -54,3 +54,36 @@ def test_waveform_diff_empty_inputs_are_insufficient_evidence_not_identical():
     assert diff.is_identical is False
     assert diff.total_compared == 0
     assert "Insufficient evidence" in diff.summary
+
+
+def test_waveform_diff_does_not_call_source_error_identical():
+    good = """Time,Address,Read/Write,Data,ACK/NACK
+0.001,0x50,Write,,ACK
+0.0011,,Write,0x00,ACK
+"""
+    malformed = good.replace(",ACK\n", ",WHAT\n")
+    engine = I2CDiagnosticEngine()
+    diff = WaveformDiffEngine.compare_reports(
+        engine.analyze_csv_content(good), engine.analyze_csv_content(malformed)
+    )
+
+    assert diff.is_identical is False
+    assert "source/parser errors" in diff.summary
+
+
+def test_waveform_diff_does_not_call_unterminated_traces_identical():
+    golden = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK
+0.001,0,0x50,Write,,ACK
+0.0011,0,,Write,0x33,ACK
+"""
+    failing = """Time,Address,Read/Write,Data,ACK/NACK
+0.001,0x50,Write,,ACK
+0.0011,,Write,0x33,ACK
+"""
+    engine = I2CDiagnosticEngine()
+    diff = WaveformDiffEngine.compare_reports(
+        engine.analyze_csv_content(golden), engine.analyze_csv_content(failing)
+    )
+
+    assert diff.is_identical is False
+    assert "incomplete" in diff.summary

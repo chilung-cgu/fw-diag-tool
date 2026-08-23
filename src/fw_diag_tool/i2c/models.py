@@ -233,6 +233,7 @@ class TimingStatistics:
     bus_utilization_pct: float = 0.0
     frequency_sample_count: int = 0
     frequency_evidence: str = "unavailable"
+    bus_utilization_evidence: str = "unavailable"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -251,6 +252,7 @@ class TimingStatistics:
             "bus_utilization_pct": round(self.bus_utilization_pct, 2),
             "frequency_sample_count": self.frequency_sample_count,
             "frequency_evidence": self.frequency_evidence,
+            "bus_utilization_evidence": self.bus_utilization_evidence,
         }
 
 

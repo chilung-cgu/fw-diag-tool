@@ -348,6 +348,25 @@ def test_raw_adapter_rejects_malformed_condition_metadata() -> None:
         raw_decode_to_waveform(malformed)
 
 
+def test_raw_adapter_rejects_forged_transaction_not_matching_capture() -> None:
+    builder = _CaptureBuilder()
+    builder.start()
+    builder.byte(0xA0, 0)
+    builder.stop()
+    decoded = analyze_raw_i2c_csv(builder.csv())
+    transaction = decoded.transactions[0]
+    forged_sample = replace(transaction.address_sample, value=0xA2)
+    forged_transaction = replace(
+        transaction,
+        address_7bit=0x51,
+        address_sample=forged_sample,
+    )
+    forged = replace(decoded, transactions=(forged_transaction,))
+
+    with pytest.raises(RawCaptureValidationError, match="do not match"):
+        raw_decode_to_events(forged)
+
+
 def test_level_sampled_unchanged_rows_do_not_break_stop_detection() -> None:
     builder = _CaptureBuilder()
     builder.start()
