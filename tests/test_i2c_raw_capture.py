@@ -277,6 +277,48 @@ def test_raw_adapter_keeps_nominal_scl_frequency_separate_from_stretch_duration(
     assert report.timing_stats.max_clock_stretch_ms == pytest.approx(0.03, abs=1e-6)
 
 
+def test_raw_adapter_preserves_address_clock_stretch_evidence() -> None:
+    builder = _CaptureBuilder()
+    builder.start()
+    builder.byte(0xA0, 0, stretch_at=8)
+    builder.byte(0x33, 0)
+    builder.stop()
+    decoded = analyze_raw_i2c_csv(builder.csv())
+
+    report = I2CDiagnosticEngine().analyze(raw_decode_to_events(decoded))
+
+    assert report.timing_stats.clock_stretch_count == 1
+    assert report.timing_stats.max_clock_stretch_ms == pytest.approx(0.03, abs=1e-6)
+
+
+def test_raw_adapter_uses_per_transaction_nominal_clock_for_mixed_rates() -> None:
+    slow = _CaptureBuilder()
+    slow.start()
+    slow.byte(0xA0, 0)
+    slow.byte(0x33, 0)
+    slow.stop()
+
+    fast = _CaptureBuilder()
+    fast.half_period_s = 1.25e-6
+    fast.start()
+    fast.byte(0xA0, 0)
+    fast.byte(0x55, 0)
+    fast.stop()
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(["Time [s]", "SCL", "SDA"])
+    writer.writerows(slow.rows)
+    writer.writerows((time_s + 0.01, scl, sda) for time_s, scl, sda in fast.rows)
+    decoded = analyze_raw_i2c_csv(output.getvalue())
+
+    report = I2CDiagnosticEngine().analyze(raw_decode_to_events(decoded))
+
+    assert report.total_transactions == 2
+    assert report.timing_stats.clock_stretch_count == 0
+    assert not any(issue.code == "I2C_LONG_CLOCK_STRETCH" for issue in report.issues)
+
+
 def test_raw_adapter_does_not_call_a_slow_nominal_bus_clock_stretching() -> None:
     builder = _CaptureBuilder()
     builder.half_period_s = 10e-6  # 50 kHz, deliberately below Standard-mode nominal.

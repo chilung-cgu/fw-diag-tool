@@ -347,6 +347,57 @@ def test_i2c_direct_timing_and_waveform_inputs_reject_nonfinite_values():
         I2CWaveformReconstructor(default_clock_khz=float("nan"))
 
 
+def test_i2c_missing_direction_and_data_are_not_guessed():
+    report = I2CDiagnosticEngine().analyze(
+        [
+            RawI2CEvent(
+                timestamp=0.0,
+                event_type=RawEventType.ADDRESS,
+                address_7bit=0x50,
+                ack=AckType.ACK,
+            ),
+            RawI2CEvent(
+                timestamp=0.0001,
+                event_type=RawEventType.DATA,
+                address_7bit=0x50,
+                data_byte=None,
+            ),
+        ]
+    )
+    tx = report.transactions[0]
+    assert tx.address_available is True
+    assert tx.direction_available is False
+    assert tx.data_bytes == []
+    assert tx.hex_dump == "[unavailable]"
+    serialized = report.to_dict()["transactions"][0]
+    assert serialized["direction"] is None
+    assert any(issue.code == "I2C_DIRECTION_UNAVAILABLE" for issue in report.data_quality_issues)
+    assert any(issue.code == "I2C_DATA_UNAVAILABLE" for issue in report.data_quality_issues)
+    assert not any(issue.code == "I2C_DATA_NACK" for issue in report.issues)
+
+
+def test_i2c_missing_middle_byte_is_visible_and_withholds_semantics():
+    report = I2CDiagnosticEngine(eeprom_profile="24C02").analyze(
+        [
+            RawI2CEvent(0.0, RawEventType.ADDRESS, address_7bit=0x50, direction=I2CDirection.WRITE),
+            RawI2CEvent(0.0001, RawEventType.DATA, address_7bit=0x50, direction=I2CDirection.WRITE),
+            RawI2CEvent(
+                0.0002,
+                RawEventType.DATA,
+                address_7bit=0x50,
+                direction=I2CDirection.WRITE,
+                data_byte=0x12,
+            ),
+            RawI2CEvent(0.0003, RawEventType.STOP),
+        ]
+    )
+    tx = report.transactions[0]
+    assert tx.hex_dump == "[unavailable, 0x12]"
+    assert tx.semantic_summary == "Data byte unavailable; semantic decoding withheld"
+    assert tx.decoded_values == {"evidence": "data-unavailable"}
+    assert any(issue.code == "I2C_DATA_UNAVAILABLE" for issue in report.data_quality_issues)
+
+
 def test_reused_engine_does_not_leak_mux_state_between_captures():
     engine = I2CDiagnosticEngine()
     first = engine.analyze_csv_content(

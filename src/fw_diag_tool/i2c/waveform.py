@@ -59,6 +59,14 @@ class I2CWaveformReconstructor:
     def reconstruct_transaction_waveform(
         self, tx: I2CTransaction, clock_khz: float | None = None, t_offset_us: float = 0.0
     ) -> I2CWaveformData:
+        if not isinstance(tx, I2CTransaction):
+            raise TypeError("tx must be an I2CTransaction")
+        if not tx.address_available or not tx.direction_available:
+            raise ValueError(
+                "cannot reconstruct a protocol waveform without trustworthy address and direction evidence"
+            )
+        if any(not packet.byte_available for packet in tx.byte_packets if not packet.is_address):
+            raise ValueError("cannot reconstruct a protocol waveform with unavailable data bytes")
         if clock_khz is not None:
             self._validate_clock(clock_khz, "clock_khz")
         clk_khz = self.default_clock_khz if clock_khz is None else clock_khz
@@ -206,7 +214,7 @@ class I2CWaveformReconstructor:
 
         # 4. Emit Data Bytes
         if tx.address_ack == AckType.ACK:
-            data_pkts = [p for p in tx.byte_packets if not p.is_address]
+            data_pkts = [p for p in tx.byte_packets if not p.is_address and p.byte_available]
             for idx, data_b in enumerate(tx.data_bytes):
                 pkt_ack = data_pkts[idx].ack if idx < len(data_pkts) else AckType.ACK
                 # Label detail

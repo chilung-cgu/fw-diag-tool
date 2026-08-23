@@ -154,8 +154,11 @@ class I2CReporter:
         tx_tbl.add_column("Status", justify="center")
 
         for tx in report.transactions:
-            rw_color = "cyan" if tx.direction == I2CDirection.READ else "magenta"
-            rw_text = f"[{rw_color}]{tx.direction.value}[/]"
+            if tx.direction_available:
+                rw_color = "cyan" if tx.direction == I2CDirection.READ else "magenta"
+                rw_text = f"[{rw_color}]{tx.direction.value}[/]"
+            else:
+                rw_text = "[yellow]UNKNOWN[/]"
 
             status_text = "[green]ACK[/]"
             if tx.address_ack == AckType.NACK:
@@ -178,7 +181,7 @@ class I2CReporter:
             tx_tbl.add_row(
                 str(tx.id),
                 f"{tx.start_time:.6f}" if tx.timestamp_available else "n/a",
-                f"0x{tx.address_7bit:02X}",
+                f"0x{tx.address_7bit:02X}" if tx.address_available else "n/a",
                 rw_text,
                 tx.hex_dump,
                 summary_str,
@@ -330,10 +333,13 @@ class I2CReporter:
             if tx.decoded_values.get("rollover_hazard"):
                 summary = f"⚠️ **{summary}**"
 
+            addr_text = f"0x{tx.address_7bit:02X}" if tx.address_available else "n/a"
+            direction_text = tx.direction.value if tx.direction_available else "UNKNOWN"
+
             lines.append(
-                f"| {tx.id} | {tx.start_time:.6f} | `0x{tx.address_7bit:02X}` | `{tx.direction.value}` | `{tx.hex_dump}` | {summary} | {status} |"
+                f"| {tx.id} | {tx.start_time:.6f} | `{addr_text}` | `{direction_text}` | `{tx.hex_dump}` | {summary} | {status} |"
                 if tx.timestamp_available
-                else f"| {tx.id} | n/a | `0x{tx.address_7bit:02X}` | `{tx.direction.value}` | `{tx.hex_dump}` | {summary} | {status} |"
+                else f"| {tx.id} | n/a | `{addr_text}` | `{direction_text}` | `{tx.hex_dump}` | {summary} | {status} |"
             )
         lines.append("")
 

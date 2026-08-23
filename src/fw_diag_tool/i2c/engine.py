@@ -145,6 +145,8 @@ class I2CDiagnosticEngine:
                     is_repeated_start=(ev.event_type == RawEventType.REPEATED_START),
                     has_stop=False,
                     timestamp_available=ev.timestamp_available,
+                    address_available=ev.address_7bit is not None,
+                    direction_available=ev.direction is not None,
                 )
                 current_tx._is_placeholder = True
                 current_tx._has_address = ev.address_7bit is not None
@@ -168,9 +170,11 @@ class I2CDiagnosticEngine:
 
             # ADDRESS Event
             if ev.event_type == RawEventType.ADDRESS or (
-                ev.address_7bit is not None and ev.data_byte is None
+                ev.event_type == RawEventType.UNKNOWN
+                and ev.address_7bit is not None
+                and ev.data_byte is None
             ):
-                addr_7b = ev.address_7bit or 0x00
+                addr_7b = ev.address_7bit if ev.address_7bit is not None else 0x00
                 rw = ev.direction or I2CDirection.WRITE
                 addr_8b = (addr_7b << 1) | (1 if rw == I2CDirection.READ else 0)
 
@@ -203,9 +207,11 @@ class I2CDiagnosticEngine:
                         address_ack=ev.ack or AckType.NONE,
                         has_stop=(ev.packet_id is not None),
                         timestamp_available=ev.timestamp_available,
+                        address_available=ev.address_7bit is not None,
+                        direction_available=ev.direction is not None,
                     )
                     current_tx._packet_id = ev.packet_id
-                    current_tx._has_address = True
+                    current_tx._has_address = ev.address_7bit is not None
                     current_tx._is_placeholder = False
                     tx_counter += 1
                 else:
@@ -214,6 +220,12 @@ class I2CDiagnosticEngine:
                     current_tx.address_8bit = addr_8b
                     current_tx.direction = rw
                     current_tx.address_ack = ev.ack or AckType.NONE
+                    current_tx.address_available = (
+                        current_tx.address_available or ev.address_7bit is not None
+                    )
+                    current_tx.direction_available = (
+                        current_tx.direction_available or ev.direction is not None
+                    )
                     current_tx.timestamp_available = (
                         current_tx.timestamp_available and ev.timestamp_available
                     )
@@ -225,15 +237,35 @@ class I2CDiagnosticEngine:
 
                 # Record address byte packet
                 dur_s = ev.duration_s
+                clock_stretch_us = 0.0
+                if ev.extra and "clock_stretch_us" in ev.extra:
+                    clock_stretch_us = float(ev.extra["clock_stretch_us"])
+                elif dur_s is not None and dur_s > 0.000100:
+                    clock_stretch_us = dur_s * 1_000_000.0
+                if clock_stretch_us > 0:
+                    current_tx.clock_stretching_events.append(
+                        {
+                            "timestamp": ev.timestamp,
+                            "duration_ms": clock_stretch_us / 1000.0,
+                            "byte_val": f"0x{addr_8b:02X}",
+                            "evidence": (
+                                ev.extra.get("timing_evidence", "duration-threshold")
+                                if ev.extra
+                                else "duration-threshold"
+                            ),
+                        }
+                    )
                 pkt = I2CBytePacket(
                     timestamp=ev.timestamp,
                     byte_val=addr_8b,
                     is_address=True,
-                    direction=rw,
+                    direction=ev.direction,
                     ack=ev.ack or AckType.NONE,
                     timestamp_available=ev.timestamp_available,
                     duration_s=dur_s,
                     bit_rate_khz=ev.bit_rate_khz,
+                    clock_stretch_us=clock_stretch_us,
+                    byte_available=(ev.address_7bit is not None and ev.direction is not None),
                 )
                 current_tx.byte_packets.append(pkt)
                 if ev.timestamp_available:
@@ -245,8 +277,11 @@ class I2CDiagnosticEngine:
                 continue
 
             # DATA Event
-            if ev.event_type == RawEventType.DATA or ev.data_byte is not None:
-                data_val = ev.data_byte if ev.data_byte is not None else 0x00
+            if ev.event_type == RawEventType.DATA or (
+                ev.event_type == RawEventType.UNKNOWN and ev.data_byte is not None
+            ):
+                data_available = ev.data_byte is not None
+                data_val = ev.data_byte if data_available else 0x00
 
                 pkt_changed = (
                     ev.packet_id is not None
@@ -257,11 +292,13 @@ class I2CDiagnosticEngine:
                 dir_changed = (
                     current_tx is not None
                     and ev.direction is not None
+                    and current_tx.direction_available
                     and ev.direction != current_tx.direction
                 )
                 addr_changed = (
                     current_tx is not None
                     and ev.address_7bit is not None
+                    and current_tx.address_available
                     and ev.address_7bit != current_tx.address_7bit
                 )
                 if current_tx is None or pkt_changed or dir_changed or addr_changed:
@@ -272,7 +309,7 @@ class I2CDiagnosticEngine:
                         current_tx.has_stop = True
                         transactions.append(current_tx)
                     # Implicit transaction start without explicit START/ADDRESS event
-                    addr_7b = ev.address_7bit or 0x00
+                    addr_7b = ev.address_7bit if ev.address_7bit is not None else 0x00
                     rw = ev.direction or I2CDirection.WRITE
                     current_tx = I2CTransaction(
                         id=tx_counter,
@@ -284,6 +321,8 @@ class I2CDiagnosticEngine:
                         address_ack=AckType.NONE,
                         has_stop=(ev.packet_id is not None),
                         timestamp_available=ev.timestamp_available,
+                        address_available=ev.address_7bit is not None,
+                        direction_available=ev.direction is not None,
                     )
                     current_tx._packet_id = ev.packet_id
                     current_tx._has_address = ev.address_7bit is not None
@@ -292,6 +331,16 @@ class I2CDiagnosticEngine:
                     last_byte_end_time = ev.timestamp if ev.timestamp_available else None
                 else:
                     current_tx._is_placeholder = False
+                    if ev.address_7bit is not None:
+                        current_tx.address_7bit = ev.address_7bit
+                        current_tx.address_8bit = (ev.address_7bit << 1) | (
+                            1 if ev.direction == I2CDirection.READ else 0
+                        )
+                        current_tx.address_available = True
+                        current_tx._has_address = True
+                    if ev.direction is not None:
+                        current_tx.direction = ev.direction
+                        current_tx.direction_available = True
                     current_tx.timestamp_available = (
                         current_tx.timestamp_available and ev.timestamp_available
                     )
@@ -338,9 +387,11 @@ class I2CDiagnosticEngine:
                     bit_rate_khz=ev.bit_rate_khz,
                     inter_byte_delay_us=inter_byte_us,
                     clock_stretch_us=clock_stretch_us,
+                    byte_available=data_available,
                 )
                 current_tx.byte_packets.append(pkt)
-                current_tx.data_bytes.append(data_val)
+                if data_available:
+                    current_tx.data_bytes.append(data_val)
                 if ev.timestamp_available:
                     current_tx.end_time = ev.timestamp + (dur_s or 0.0)
                     last_byte_end_time = current_tx.end_time
@@ -370,6 +421,26 @@ class I2CDiagnosticEngine:
         pmbus_block_mismatch = 0
 
         for tx in transactions:
+            if not tx.address_available:
+                tx.device_name = "Unknown Device (address unavailable)"
+                tx.device_category = "Unknown / Incomplete Address Evidence"
+                tx.protocol = "I2C"
+                tx.identity_confidence = "unavailable"
+                tx.semantic_summary = "Address unavailable; semantic decoding withheld"
+                continue
+            if not tx.direction_available:
+                tx.device_name = f"Possible Device (0x{tx.address_7bit:02X})"
+                tx.device_category = "Direction unavailable"
+                tx.protocol = "I2C"
+                tx.identity_confidence = "address-only"
+                tx.semantic_summary = "Read/write direction unavailable; semantic decoding withheld"
+                continue
+            if any(
+                not packet.byte_available for packet in tx.byte_packets if not packet.is_address
+            ):
+                tx.semantic_summary = "Data byte unavailable; semantic decoding withheld"
+                tx.decoded_values = {"evidence": "data-unavailable"}
+                continue
             addr = tx.address_7bit
             candidates = get_all_matching_devices(addr)
             chip = lookup_device(addr) if len(candidates) == 1 else None
@@ -660,6 +731,8 @@ class I2CDiagnosticEngine:
 
         devices_detected: dict[str, dict[str, Any]] = {}
         for tx in transactions:
+            if not tx.address_available:
+                continue
             addr_hex = f"0x{tx.address_7bit:02X}"
             if addr_hex not in devices_detected:
                 devices_detected[addr_hex] = {
@@ -711,6 +784,50 @@ class I2CDiagnosticEngine:
                         "protocol conclusions."
                     ),
                     count=source_error_count,
+                )
+            )
+
+        address_unavailable_count = sum(not tx.address_available for tx in transactions)
+        if address_unavailable_count:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_ADDRESS_UNAVAILABLE",
+                    message=(
+                        "Some transactions do not contain a trustworthy 7-bit address; device mapping, "
+                        "NACK attribution, and semantic decoding were withheld for those transactions."
+                    ),
+                    count=address_unavailable_count,
+                )
+            )
+        direction_unavailable_count = sum(
+            not tx.direction_available for tx in transactions if tx.address_available
+        )
+        if direction_unavailable_count:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_DIRECTION_UNAVAILABLE",
+                    message=(
+                        "Some transactions contain an address but no trustworthy READ/WRITE direction; "
+                        "direction-dependent semantic conclusions were withheld."
+                    ),
+                    count=direction_unavailable_count,
+                )
+            )
+        data_unavailable_count = sum(
+            not packet.byte_available
+            for tx in transactions
+            for packet in tx.byte_packets
+            if not packet.is_address
+        )
+        if data_unavailable_count:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_DATA_UNAVAILABLE",
+                    message=(
+                        "Some data-byte positions are present in the source but their byte value is unavailable; "
+                        "they were excluded from payload and anomaly conclusions."
+                    ),
+                    count=data_unavailable_count,
                 )
             )
         missing_timestamp_count = sum(not event.timestamp_available for event in events)

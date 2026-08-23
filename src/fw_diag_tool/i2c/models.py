@@ -90,6 +90,7 @@ class I2CBytePacket:
     inter_byte_delay_us: float = 0.0
     clock_stretch_us: float = 0.0
     timestamp_available: bool = True
+    byte_available: bool = True
 
 
 @dataclass
@@ -131,10 +132,24 @@ class I2CTransaction:
     _is_placeholder: bool = field(default=False, repr=False)
     _has_address: bool = field(default=False, repr=False)
     _packet_id: int | None = field(default=None, repr=False)
+    address_available: bool = True
+    direction_available: bool = True
 
     @property
     def hex_dump(self) -> str:
         """Format data bytes as readable hex string."""
+        data_packets = [packet for packet in self.byte_packets if not packet.is_address]
+        if any(not packet.byte_available for packet in data_packets):
+            if not data_packets:
+                return "[unavailable]"
+            return (
+                "["
+                + ", ".join(
+                    f"0x{packet.byte_val:02X}" if packet.byte_available else "unavailable"
+                    for packet in data_packets
+                )
+                + "]"
+            )
         if not self.data_bytes:
             return "[]"
         return "[" + ", ".join(f"0x{b:02X}" for b in self.data_bytes) + "]"
@@ -284,12 +299,15 @@ class I2CAnalysisReport:
                     "start_time": round(tx.start_time, 6) if tx.timestamp_available else None,
                     "end_time": round(tx.end_time, 6) if tx.timestamp_available else None,
                     "duration_us": round(tx.duration_us, 2),
-                    "address_7bit": f"0x{tx.address_7bit:02X}",
-                    "address_8bit": f"0x{tx.address_8bit:02X}",
-                    "direction": tx.direction.value,
+                    "address_7bit": (f"0x{tx.address_7bit:02X}" if tx.address_available else None),
+                    "address_8bit": (f"0x{tx.address_8bit:02X}" if tx.address_available else None),
+                    "direction": tx.direction.value if tx.direction_available else None,
                     "address_ack": tx.address_ack.value,
                     "data_hex": tx.hex_dump,
                     "byte_count": len(tx.data_bytes),
+                    "source_byte_count": sum(
+                        1 for packet in tx.byte_packets if not packet.is_address
+                    ),
                     "has_stop": tx.has_stop,
                     "is_repeated_start": tx.is_repeated_start,
                     "device_name": tx.device_name,

@@ -64,7 +64,9 @@ class I2CTimingCharts:
     def create_bus_activity_timeline(report: I2CAnalysisReport) -> go.Figure:
         data: list[dict[str, Any]] = []
         for tx in report.transactions:
-            if tx.address_ack == AckType.NACK:
+            if not tx.address_available or not tx.direction_available:
+                status = "EVIDENCE INCOMPLETE"
+            elif tx.address_ack == AckType.NACK:
                 status = "ADDR NAK"
             elif tx.address_ack == AckType.NONE:
                 status = "ACK UNKNOWN"
@@ -79,10 +81,17 @@ class I2CTimingCharts:
             data.append(
                 {
                     "Transaction ID": f"#{tx.id}",
-                    "Device": tx.device_name or f"0x{tx.address_7bit:02X}",
+                    "Device": (
+                        tx.device_name
+                        or (
+                            f"0x{tx.address_7bit:02X}"
+                            if tx.address_available
+                            else "Address unavailable"
+                        )
+                    ),
                     "Start Time (s)": tx.start_time if tx.timestamp_available else None,
                     "Duration (ms)": tx.duration_us / 1000.0 if tx.timestamp_available else None,
-                    "Direction": tx.direction.value,
+                    "Direction": tx.direction.value if tx.direction_available else "UNKNOWN",
                     "Status": status,
                     "Bytes": len(tx.data_bytes),
                 }
@@ -117,6 +126,7 @@ class I2CTimingCharts:
                 "DATA NAK": "#FFA15A",
                 "READ END NAK": "#636EFA",
                 "ACK UNKNOWN": "#7F7F7F",
+                "EVIDENCE INCOMPLETE": "#7F7F7F",
             },
             "hover_data": ["Transaction ID", "Direction", "Bytes", "Duration (ms)"],
             "title": timeline_title,

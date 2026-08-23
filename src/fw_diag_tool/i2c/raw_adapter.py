@@ -38,14 +38,16 @@ def raw_decode_to_events(result: RawI2CDecodeResult) -> list[RawI2CEvent]:
     therefore source-backed.  No timestamps or ACK values are synthesized.
     """
     events: list[RawI2CEvent] = []
-    all_periods = [
-        period
-        for transaction in result.transactions
-        for sample in (transaction.address_sample, *transaction.data_samples)
-        for period in _sample_periods(sample)
-    ]
-    nominal_period_s = median(all_periods) if all_periods else None
     for packet_id, transaction in enumerate(result.transactions):
+        # A capture can legally contain transactions at different controller
+        # rates.  Use a per-transaction nominal period so a valid 100 kHz byte
+        # is not mislabelled as a stretched 400 kHz byte (or vice versa).
+        transaction_periods = [
+            period
+            for sample in (transaction.address_sample, *transaction.data_samples)
+            for period in _sample_periods(sample)
+        ]
+        nominal_period_s = median(transaction_periods) if transaction_periods else None
         start_type = (
             RawEventType.REPEATED_START
             if transaction.start_kind == RawConditionKind.REPEATED_START

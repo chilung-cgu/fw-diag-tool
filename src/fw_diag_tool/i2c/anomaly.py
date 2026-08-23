@@ -54,12 +54,18 @@ class I2CAnomalyDetector:
 
         # 1. Transaction-level checks
         for i, tx in enumerate(transactions):
+            if not tx.address_available:
+                # The engine retains incomplete transactions for evidence reporting, but
+                # anomaly text must not turn placeholder 0x00 values into facts.
+                continue
+            direction_label = tx.direction.value if tx.direction_available else "UNKNOWN"
             # Check Address NACK
             if tx.address_ack == AckType.NACK:
                 # Check if this is EEPROM Acknowledge Polling (expected during internal write cycle)
                 is_eeprom = bool(tx.device_category and "EEPROM" in tx.device_category)
                 prev_was_write = (
                     i > 0
+                    and transactions[i - 1].direction_available
                     and transactions[i - 1].direction == I2CDirection.WRITE
                     and transactions[i - 1].address_7bit == tx.address_7bit
                 )
@@ -92,7 +98,7 @@ class I2CAnomalyDetector:
                     issues.append(
                         I2CDiagnosticIssue(
                             code="I2C_ADDR_NACK",
-                            title=f"Address NACK on 0x{tx.address_7bit:02X} ({tx.direction.value})",
+                            title=f"Address NACK on 0x{tx.address_7bit:02X} ({direction_label})",
                             severity=Severity.ERROR,
                             category="Protocol/Addressing",
                             timestamp=tx.start_time,
@@ -119,11 +125,14 @@ class I2CAnomalyDetector:
                     )
 
             # Check Data NACK
-            for byte_idx, pkt in enumerate(tx.byte_packets):
-                if not pkt.is_address and pkt.ack == AckType.NACK:
+            data_packets = [
+                pkt for pkt in tx.byte_packets if not pkt.is_address and pkt.byte_available
+            ]
+            for byte_idx, pkt in enumerate(data_packets) if tx.direction_available else []:
+                if pkt.ack == AckType.NACK:
                     if tx.direction == I2CDirection.READ:
                         # Master Read NACK on last byte is normal protocol termination
-                        if byte_idx == len(tx.byte_packets) - 1:
+                        if byte_idx == len(data_packets) - 1:
                             pass  # Normal I2C Master NACK before STOP
                         else:
                             issues.append(
