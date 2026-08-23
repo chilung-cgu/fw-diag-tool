@@ -39,3 +39,36 @@ Stacked xPSR: 0x61000000"""
     assert report.arm_hardfault.pc_faulting == 0x08001234
     assert any("DIVBYZERO" in flag for flag in report.arm_hardfault.fault_flags)
     assert "除以零錯誤" in report.arm_hardfault.root_cause_analysis
+
+
+def test_arm64_kernel_panic_parsing():
+    panic_log = """Internal error: synchronous external abort: 96000210 [#1] SMP
+FAR_EL1: ffff800008000000
+pc : nvme_poll+0x44/0x180 [nvme]
+lr : nvme_irq_handler+0x8c/0x100 [nvme]
+sp : ffff80000a003dc0
+x0 : 0000000000000000 x1 : ffff800008000000
+Call trace:
+ nvme_poll+0x44/0x180 [nvme]
+ nvme_irq_handler+0x8c/0x100 [nvme]
+"""
+    report = UARTCrashParser.parse_log_text(panic_log)
+    assert report.crash_type == CrashType.KERNEL_PANIC
+    assert report.kernel_panic is not None
+    assert report.kernel_panic.architecture == "ARM64"
+    assert report.kernel_panic.faulting_func == "nvme_poll"
+    assert len(report.kernel_panic.call_trace) >= 1
+
+
+def test_riscv_kernel_panic_parsing():
+    panic_log = """Unable to handle kernel paging request at virtual address 0000000000000020
+epc : 0000000080201234
+ra : 0000000080205678
+sp : ffffffff81003d00
+status: 0000000200000100 badvaddr: 0000000000000020 cause: 000000000000000d
+"""
+    report = UARTCrashParser.parse_log_text(panic_log)
+    assert report.crash_type == CrashType.KERNEL_PANIC
+    assert report.kernel_panic is not None
+    assert report.kernel_panic.architecture == "RISC-V"
+    assert report.kernel_panic.faulting_address == "0x0000000000000020"

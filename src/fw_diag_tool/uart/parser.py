@@ -32,7 +32,20 @@ class UARTCrashParser:
             )
 
         if any(
-            keyword in text for keyword in ("Kernel panic", "BUG:", "Oops:", "Call Trace:", "RIP:")
+            keyword in text.lower()
+            for keyword in (
+                "kernel panic",
+                "bug:",
+                "oops:",
+                "call trace:",
+                "rip:",
+                "internal error:",
+                "unable to handle kernel",
+                "far_el1",
+                "epc :",
+                "epc:",
+                "synchronous external abort",
+            )
         ):
             kp_report = cls.parse_kernel_panic(text)
             return UARTReport(
