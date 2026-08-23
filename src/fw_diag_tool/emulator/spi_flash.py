@@ -10,7 +10,7 @@ class VirtualSPIFlashW25Q128:
         if isinstance(total_size, bool) or not isinstance(total_size, int) or total_size <= 0:
             raise ValueError("total_size must be a positive integer")
         self.total_size = total_size
-        self.memory: bytearray = bytearray(total_size)
+        self.memory: bytearray = bytearray([0xFF]) * total_size
         self.wel_latched = False
         self.busy = False
 
@@ -18,7 +18,8 @@ class VirtualSPIFlashW25Q128:
         return list(self.JEDEC_ID)
 
     def write_enable(self) -> None:
-        self.wel_latched = True
+        if not self.busy:
+            self.wel_latched = True
 
     def write_disable(self) -> None:
         self.wel_latched = False
@@ -28,6 +29,8 @@ class VirtualSPIFlashW25Q128:
         self._validate_bytes(data)
         if not data or len(data) > 256:
             raise ValueError("page program data length must be in range 1..256")
+        if self.busy:
+            return False
         if not self.wel_latched:
             return False
         start_offset = address & 0xFF
@@ -37,13 +40,15 @@ class VirtualSPIFlashW25Q128:
         if any(addr >= self.total_size for addr in addresses):
             raise ValueError("page program address exceeds flash capacity")
         for addr, val in zip(addresses, data):
-            self.memory[addr] = val
+            self.memory[addr] &= val
         self.wel_latched = False
         self.busy = True
         return True
 
     def sector_erase(self, address: int) -> bool:
         self._validate_address(address)
+        if self.busy:
+            return False
         if not self.wel_latched:
             return False
         sector_start = (address // 4096) * 4096
@@ -54,6 +59,10 @@ class VirtualSPIFlashW25Q128:
         self.wel_latched = False
         self.busy = True
         return True
+
+    def complete_operation(self) -> None:
+        """Finish the simulated program/erase cycle so the flash is ready."""
+        self.busy = False
 
     def read_data(self, address: int, length: int) -> list[int]:
         self._validate_address(address)

@@ -53,11 +53,26 @@ def test_spi_flash_jedec_and_wren_program_read():
     flash = VirtualSPIFlashW25Q128()
     jedec = flash.read_jedec_id()
     assert jedec == [0xEF, 0x40, 0x18]
+    assert flash.read_data(0x001000, 4) == [0xFF, 0xFF, 0xFF, 0xFF]
     flash.write_enable()
     ok = flash.page_program(address=0x001000, data=[0xDE, 0xAD, 0xBE, 0xEF])
     assert ok is True
     read_back = flash.read_data(address=0x001000, length=4)
     assert read_back == [0xDE, 0xAD, 0xBE, 0xEF]
+
+
+def test_spi_flash_program_obeys_nor_one_to_zero_and_busy_cycle():
+    flash = VirtualSPIFlashW25Q128(total_size=256)
+    flash.write_enable()
+    assert flash.page_program(0, [0x00]) is True
+    assert flash.read_data(0, 1) == [0x00]
+    flash.write_enable()
+    assert flash.page_program(1, [0xAA]) is False
+    assert flash.wel_latched is False
+    flash.complete_operation()
+    flash.write_enable()
+    assert flash.page_program(0, [0xFF]) is True
+    assert flash.read_data(0, 1) == [0x00]
 
 
 def test_spi_flash_write_without_wren_returns_false():
@@ -103,7 +118,7 @@ def test_spi_page_program_is_atomic_on_capacity_failure():
     flash.write_enable()
     with pytest.raises(ValueError, match="capacity"):
         flash.page_program(0x100, [0xAA, 0xBB])
-    assert flash.memory[0x100] == 0x00
+    assert flash.memory[0x100] == 0xFF
     assert flash.wel_latched is True
 
 
