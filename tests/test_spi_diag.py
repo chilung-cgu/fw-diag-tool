@@ -3,7 +3,13 @@ from typer.testing import CliRunner
 
 from fw_diag_tool.cli import app
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
-from fw_diag_tool.spi.models import SPIReport, SPIReportSummary, SPISeverity, SPITransaction
+from fw_diag_tool.spi.models import (
+    FlashStatusRegister1,
+    SPIReport,
+    SPIReportSummary,
+    SPISeverity,
+    SPITransaction,
+)
 from fw_diag_tool.spi.parser import SPIParser
 from fw_diag_tool.spi.reporter import SPIReporter
 
@@ -160,6 +166,15 @@ def test_spi_parser_requires_cs_framing_and_rejects_one_sided_rows():
         SPIParser.parse_csv_content("Time,MOSI,MISO,Enable\n0.001,,0x00,0\n")
 
 
+def test_spi_parser_rejects_ambiguous_headers_extra_columns_and_channel_mismatch():
+    with pytest.raises(ValueError, match="duplicate"):
+        SPIParser.parse_csv_content("Time,MOSI,MOSI,MISO,Enable\n0,0x06,0x00,0x00,0\n")
+    with pytest.raises(ValueError, match="expected"):
+        SPIParser.parse_csv_content("Time,MOSI,MISO,Enable\n0,0x06,0x00\n")
+    with pytest.raises(ValueError, match="same number"):
+        SPIParser.decode_single_transaction(1, 0.0, 0.1, [0x06, 0x00], [0x00])
+
+
 def test_spi_direct_decoder_rejects_malformed_time_and_bytes():
     with pytest.raises(ValueError, match="finite"):
         SPIParser.decode_single_transaction(1, float("nan"), 1.0, [0x06], [0x00])
@@ -169,6 +184,33 @@ def test_spi_direct_decoder_rejects_malformed_time_and_bytes():
         SPIParser.decode_single_transaction(1, 1.0, 1.0, [0x06, 256], [0x00])
     with pytest.raises(ValueError, match="non-empty"):
         SPIParser.decode_single_transaction(1, 1.0, 1.0, [], [0x00])
+
+
+def test_spi_status_decoder_rejects_out_of_range_raw_values():
+    with pytest.raises(ValueError, match="0..0xFF"):
+        FlashStatusRegister1.decode(256)
+    with pytest.raises(ValueError, match="0..0xFF"):
+        FlashStatusRegister1.decode(True)
+
+
+@pytest.mark.parametrize(
+    "mosi,miso",
+    [
+        ("0x9F,0x00", "0x9F,0x00"),
+        ("0x05", "0x05"),
+        ("0x02,0x00,0x00,0x00", "0x02,0x00,0x00,0x00"),
+    ],
+)
+def test_spi_command_specific_short_responses_are_data_quality(mosi, miso):
+    # Add any remaining command bytes while CS is asserted.
+    mosi_bytes = mosi.split(",")
+    miso_bytes = miso.split(",")
+    rows = ["Time,MOSI,MISO,Enable"]
+    for index, (tx_byte, rx_byte) in enumerate(zip(mosi_bytes, miso_bytes), start=1):
+        rows.append(f"0.00{index},{tx_byte},{rx_byte},0")
+    rows.append("0.010,0x00,0x00,1")
+    report = SPIDiagnosticEngine().analyze_csv_content("\n".join(rows) + "\n")
+    assert any(issue.code == "SPI_RESPONSE_TRUNCATED" for issue in report.data_quality_issues)
 
 
 @pytest.mark.parametrize(

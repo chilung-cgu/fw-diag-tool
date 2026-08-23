@@ -68,6 +68,20 @@ class SPIDiagnosticEngine:
                     count=incomplete_count,
                 )
             )
+        response_truncated_count = sum(
+            bool(tx.decoded_details.get("response_truncated")) for tx in transactions
+        )
+        if response_truncated_count:
+            data_quality_issues.append(
+                SPIDataQualityIssue(
+                    code="SPI_RESPONSE_TRUNCATED",
+                    message=(
+                        "One or more SPI commands ended before the minimum response or payload "
+                        "bytes required for a trustworthy decode were captured."
+                    ),
+                    count=response_truncated_count,
+                )
+            )
 
         read_count = 0
         write_count = 0

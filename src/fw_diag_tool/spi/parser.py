@@ -81,6 +81,8 @@ class SPIParser:
             return []
 
         header = [h.strip().lower() for h in rows[0]]
+        if len(header) != len(set(header)):
+            raise ValueError("SPI CSV header contains duplicate column names")
         # Find column indices
         t_idx = -1
         mosi_idx = -1
@@ -96,6 +98,18 @@ class SPIParser:
                 miso_idx = i
             elif "enable" in col or "cs" in col or "ss" in col or "select" in col:
                 cs_idx = i
+
+        if t_idx >= 0 and sum("time" in col or "start" in col for col in header) > 1:
+            raise ValueError("SPI CSV contains ambiguous timestamp columns")
+        if sum("mosi" in col or "tx" in col or "din" in col for col in header) > 1:
+            raise ValueError("SPI CSV contains ambiguous MOSI columns")
+        if sum("miso" in col or "rx" in col or "dout" in col for col in header) > 1:
+            raise ValueError("SPI CSV contains ambiguous MISO columns")
+        if (
+            sum("enable" in col or "cs" in col or "ss" in col or "select" in col for col in header)
+            > 1
+        ):
+            raise ValueError("SPI CSV contains ambiguous CS/Enable columns")
 
         # Fallback if standard Saleae format
         if t_idx == -1:
@@ -121,9 +135,9 @@ class SPIParser:
         data_rows = rows[1:]
         previous_timestamp: float | None = None
         for row_number, row in enumerate(data_rows, start=2):
-            if not row or len(row) <= max(t_idx, mosi_idx, miso_idx):
+            if not row or len(row) != len(header):
                 raise ValueError(
-                    f"CSV row {row_number} is missing a required time/MOSI/MISO column"
+                    f"CSV row {row_number} has {len(row)} fields; expected {len(header)}"
                 )
             try:
                 timestamp = float(row[t_idx])
@@ -148,10 +162,8 @@ class SPIParser:
                 )
 
             # Check CS state if column present
-            cs_state = (
-                str(row[cs_idx]).strip().lower() if (cs_idx != -1 and cs_idx < len(row)) else None
-            )
-            if cs_state is None or cs_state in ("0", "low", "false", "asserted"):
+            cs_state = str(row[cs_idx]).strip().lower()
+            if cs_state in ("0", "low", "false", "asserted"):
                 cs_asserted = True
             elif cs_state in ("1", "high", "true", "deasserted"):
                 cs_asserted = False
@@ -230,6 +242,8 @@ class SPIParser:
             for byte_index, value in enumerate(values):
                 if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 0xFF:
                     raise ValueError(f"{name}[{byte_index}] must be an integer in range 0..0xFF")
+        if len(mosi) != len(miso):
+            raise ValueError("mosi and miso must contain the same number of bytes")
         dur_us = max(0.0, (end_time - start_time) * 1_000_000.0)
         opcode = mosi[0] if mosi else None
         opcode_name = (
@@ -245,7 +259,17 @@ class SPIParser:
         if opcode is not None:
             # 1. JEDEC ID (0x9F)
             if opcode == SPIOpcode.JEDEC_ID:
-                if len(miso) >= 4:
+                if len(mosi) < 4 or len(miso) < 4:
+                    details.update(
+                        {
+                            "response_truncated": True,
+                            "required_mosi_bytes": 4,
+                            "required_miso_bytes": 4,
+                            "received_mosi_bytes": len(mosi),
+                            "received_miso_bytes": len(miso),
+                        }
+                    )
+                else:
                     mfr_id = miso[1]
                     mem_type = miso[2]
                     cap_id = miso[3]
@@ -257,16 +281,38 @@ class SPIParser:
                     details["capacity_id"] = f"0x{cap_id:02X}"
                     details["identified_chip"] = chip_name
 
-            # 2. Read Commands (0x03, 0x0B)
-            elif opcode in (SPIOpcode.READ_DATA, SPIOpcode.FAST_READ):
+            # 2. Read Commands (0x03, 0x0B, dual/quad variants)
+            elif opcode in (
+                SPIOpcode.READ_DATA,
+                SPIOpcode.FAST_READ,
+                SPIOpcode.FAST_READ_DUAL_OUT,
+                SPIOpcode.FAST_READ_QUAD_OUT,
+            ):
                 addr_len = 3
-                dummy_len = 1 if opcode == SPIOpcode.FAST_READ else 0
-                if len(mosi) >= 1 + addr_len:
+                dummy_len = 1 if opcode != SPIOpcode.READ_DATA else 0
+                required_header = 1 + addr_len + dummy_len
+                if len(mosi) < required_header:
+                    details.update(
+                        {
+                            "response_truncated": True,
+                            "required_mosi_bytes": required_header,
+                            "received_mosi_bytes": len(mosi),
+                        }
+                    )
+                else:
                     address = (mosi[1] << 16) | (mosi[2] << 8) | mosi[3]
                     data_offset = 1 + addr_len + dummy_len
                     payload_len = max(0, len(miso) - data_offset)
                     details["read_address"] = f"0x{address:06X}"
                     details["read_bytes"] = payload_len
+                    if len(miso) <= data_offset:
+                        details.update(
+                            {
+                                "response_truncated": True,
+                                "required_miso_bytes": data_offset + 1,
+                                "received_miso_bytes": len(miso),
+                            }
+                        )
 
             # 3. Page Program (0x02, 0x32)
             elif opcode in (SPIOpcode.PAGE_PROGRAM, SPIOpcode.QUAD_PAGE_PROGRAM):
@@ -280,6 +326,23 @@ class SPIParser:
                     if (address % page_size) + payload_len > page_size:
                         details["page_wrap_hazard"] = True
                     details["page_size"] = page_size
+                    if payload_len == 0:
+                        details.update(
+                            {
+                                "response_truncated": True,
+                                "required_mosi_bytes": 5,
+                                "received_mosi_bytes": len(mosi),
+                                "program_no_payload": True,
+                            }
+                        )
+                else:
+                    details.update(
+                        {
+                            "response_truncated": True,
+                            "required_mosi_bytes": 5,
+                            "received_mosi_bytes": len(mosi),
+                        }
+                    )
 
             # 4. Erase Commands (0x20, 0x52, 0xD8, 0xC7)
             elif opcode in (
@@ -291,13 +354,26 @@ class SPIParser:
                     address = (mosi[1] << 16) | (mosi[2] << 8) | mosi[3]
                     details["erase_address"] = f"0x{address:06X}"
 
-            # 5. Read Status Register 1 (0x05)
-            elif opcode == SPIOpcode.READ_STATUS_REG_1 and len(miso) >= 2:
-                sr1 = FlashStatusRegister1.decode(miso[1])
-                details["sr1_raw"] = f"0x{sr1.raw_val:02X}"
-                details["busy"] = sr1.busy
-                details["wel"] = sr1.wel
-                details["block_protect"] = (sr1.bp2 << 2) | (sr1.bp1 << 1) | sr1.bp0
+            # 5. Read Status Registers (0x05, 0x35, 0x15)
+            elif opcode in (
+                SPIOpcode.READ_STATUS_REG_1,
+                SPIOpcode.READ_STATUS_REG_2,
+                SPIOpcode.READ_STATUS_REG_3,
+            ):
+                if len(miso) < 2:
+                    details.update(
+                        {
+                            "response_truncated": True,
+                            "required_miso_bytes": 2,
+                            "received_miso_bytes": len(miso),
+                        }
+                    )
+                elif opcode == SPIOpcode.READ_STATUS_REG_1:
+                    sr1 = FlashStatusRegister1.decode(miso[1])
+                    details["sr1_raw"] = f"0x{sr1.raw_val:02X}"
+                    details["busy"] = sr1.busy
+                    details["wel"] = sr1.wel
+                    details["block_protect"] = (sr1.bp2 << 2) | (sr1.bp1 << 1) | sr1.bp0
 
         return SPITransaction(
             index=index,

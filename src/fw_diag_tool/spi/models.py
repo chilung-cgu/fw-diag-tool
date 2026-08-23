@@ -102,6 +102,8 @@ class FlashStatusRegister1:
 
     @classmethod
     def decode(cls, val: int) -> FlashStatusRegister1:
+        if isinstance(val, bool) or not isinstance(val, int) or not 0 <= val <= 0xFF:
+            raise ValueError("status register value must be an integer in range 0..0xFF")
         return cls(
             raw_val=val,
             busy=bool(val & (1 << 0)),
