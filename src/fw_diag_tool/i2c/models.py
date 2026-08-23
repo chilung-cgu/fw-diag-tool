@@ -134,6 +134,7 @@ class I2CTransaction:
     _packet_id: int | None = field(default=None, repr=False)
     address_available: bool = True
     direction_available: bool = True
+    source_error: bool = False
 
     @property
     def hex_dump(self) -> str:
@@ -321,6 +322,7 @@ class I2CAnalysisReport:
                     "identity_confidence": tx.identity_confidence,
                     "device_candidates": tx.device_candidates,
                     "anomalies": tx.anomalies,
+                    "source_error": tx.source_error,
                 }
                 for tx in self.transactions
             ],
