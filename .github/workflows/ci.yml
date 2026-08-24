@@ -3,6 +3,10 @@ name: CI / Build & Test
 on:
   push:
     branches: [main, develop]
+    tags: ["v*"]
+  schedule:
+    # Nightly at 02:00 UTC for fuzz, performance, and dependency regression.
+    - cron: "0 2 * * *"
   pull_request:
     branches: [main, develop]
 
@@ -44,21 +48,35 @@ jobs:
       - name: Type-check with mypy
         run: uv run --locked --extra dev mypy src/fw_diag_tool
 
+      - name: Build documentation with MkDocs strict
+        run: uv run --locked --extra dev mkdocs build --strict --site-dir /tmp/mkdocs-site
+
       - name: Run tests with pytest and coverage
-        run: |
-          uv run --locked --extra dev pytest --cov=src/fw_diag_tool --cov-report=xml --junitxml=junit.xml -v
+        run: uv run --locked --extra dev pytest --cov=src/fw_diag_tool --cov-branch --cov-report=xml --cov-fail-under=80 --junitxml=junit.xml -v
 
       - name: Build and smoke-test isolated wheel
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
         run: |
           uv build
+          version="$(uv run --locked --extra dev python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          wheel="$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
+          sdist="$(find dist -maxdepth 1 -name '*.tar.gz' -print -quit)"
+          test "$(basename "$wheel")" = "fw_diag_tool-${version}-py3-none-any.whl"
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            test "$GITHUB_REF_NAME" = "v${version}"
+          fi
+          if tar -tzf "$sdist" | grep -Eq '(^|/)(site|build|dist|tests|test-results|\.pytest_cache|\.ruff_cache|\.mypy_cache|htmlcov|\.coverage|coverage\.xml|junit\.xml)(/|$)'; then
+            echo "sdist contains an excluded build or test artifact"
+            exit 1
+          fi
           uv venv --python "${{ matrix.python-version }}" .wheel-smoke
-          uv pip install --python .wheel-smoke/bin/python dist/*.whl
+          uv pip install --python .wheel-smoke/bin/python "$wheel"
           wheel_python="$GITHUB_WORKSPACE/.wheel-smoke/bin/python"
           wheel_cli="$GITHUB_WORKSPACE/.wheel-smoke/bin/fw-diag"
           cd "$RUNNER_TEMP"
-          test "$("$wheel_cli" --version)" = "1.0.0"
-          "$wheel_python" -c 'from fw_diag_tool.i2c.engine import I2CDiagnosticEngine; from fw_diag_tool.resources import load_i2c_sample; assert I2CDiagnosticEngine().analyze_csv_content(load_i2c_sample()).total_transactions > 0'
+          test "$("$wheel_cli" --version)" = "$version"
+          test "$("$wheel_python" -c 'import importlib.metadata; print(importlib.metadata.version("fw-diag-tool"))')" = "$version"
+          "$wheel_python" -c 'from importlib.resources import files; from fw_diag_tool.i2c.engine import I2CDiagnosticEngine; from fw_diag_tool.resources import load_i2c_sample; guide = files("fw_diag_tool").joinpath("docs", "chapters", "ch01_i2c_pmbus.md"); assert guide.is_file() and "I2C" in guide.read_text(encoding="utf-8"); assert I2CDiagnosticEngine().analyze_csv_content(load_i2c_sample()).total_transactions > 0'
 
       - name: Upload coverage reports to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'

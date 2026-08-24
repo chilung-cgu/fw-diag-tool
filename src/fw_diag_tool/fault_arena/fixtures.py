@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -195,7 +197,7 @@ def case_10_pcie_poisoned_tlp() -> str:
     return "0000:04:00.0 Memory controller: Synthetic Device 7024\n" + "\n".join(lines) + "\n"
 
 
-def _chunks(data: bytes, size: int = 16):
+def _chunks(data: bytes, size: int = 16) -> Any:
     for start in range(0, len(data), size):
         yield start, data[start : start + size]
 
@@ -496,7 +498,7 @@ class FaultArenaFixtures:
         return {case.case_id: case.builder() for case in _CASES}
 
     @staticmethod
-    def write_all(directory) -> list:
+    def write_all(directory: Any) -> list[Path]:
         from pathlib import Path
 
         out_dir = Path(directory)

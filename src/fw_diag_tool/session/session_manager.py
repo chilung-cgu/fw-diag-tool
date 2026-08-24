@@ -6,10 +6,52 @@ import re
 import tempfile
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from fw_diag_tool import __version__
+
+
+@dataclass(frozen=True)
+class SessionDocument:
+    schema_version: str
+    tool_version: str
+    created_at: str | None
+    name: str | None
+    capture_sha256: str | None
+    board_profile_name: str | None
+    config: dict[str, Any]
+    report: dict[str, Any]
+    notes: str
+    provenance: dict[str, Any] | None = None
+
+    @classmethod
+    def from_payload(cls, payload: dict[str, Any]) -> SessionDocument:
+        config = payload.get("config", {})
+        report = payload.get("report")
+        provenance = payload.get("provenance")
+        if not isinstance(config, dict):
+            raise TypeError("session config must be a mapping")
+        if not isinstance(report, dict):
+            raise TypeError("session report must be a mapping")
+        if provenance is not None and not isinstance(provenance, dict):
+            raise TypeError("session provenance must be a mapping")
+        notes = payload.get("notes", "")
+        if not isinstance(notes, str):
+            raise TypeError("session notes must be a string")
+        return cls(
+            schema_version=str(payload["schema_version"]),
+            tool_version=str(payload.get("tool_version", "unknown")),
+            created_at=payload.get("created_at"),
+            name=payload.get("name"),
+            capture_sha256=payload.get("capture_sha256"),
+            board_profile_name=payload.get("board_profile_name"),
+            config=dict(config),
+            report=dict(report),
+            notes=notes,
+            provenance=dict(provenance) if provenance is not None else None,
+        )
 
 
 class SessionManager:
@@ -25,7 +67,16 @@ class SessionManager:
 
     def __init__(self, session_dir: str | Path | None = None):
         self.session_dir = Path(session_dir) if session_dir else Path.home() / ".fw-diag-sessions"
-        self.session_dir.mkdir(parents=True, exist_ok=True)
+        self.session_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if os.name == "posix":
+            self.session_dir.chmod(0o700)
+
+    @classmethod
+    def _size_limit_label(cls) -> str:
+        mib = 1024 * 1024
+        if cls.MAX_SESSION_BYTES % mib == 0:
+            return f"{cls.MAX_SESSION_BYTES // mib} MiB"
+        return f"{cls.MAX_SESSION_BYTES}-byte"
 
     @staticmethod
     def _safe_name(name: str) -> str:
@@ -95,7 +146,7 @@ class SessionManager:
         config: dict[str, Any] | None = None,
         notes: str = "",
     ) -> str:
-        return (
+        text = (
             json.dumps(
                 cls.build_payload(
                     name,
@@ -112,6 +163,9 @@ class SessionManager:
             )
             + "\n"
         )
+        if len(text.encode("utf-8")) > cls.MAX_SESSION_BYTES:
+            raise ValueError(f"session exceeds the {cls._size_limit_label()} safety limit")
+        return text
 
     def save_session(
         self,
@@ -143,6 +197,8 @@ class SessionManager:
             prefix=f".{safe_name}.", suffix=".fwsession.json.tmp", dir=self.session_dir
         )
         try:
+            if os.name == "posix":
+                os.fchmod(fd, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(payload_text)
                 f.flush()
@@ -199,27 +255,42 @@ class SessionManager:
         json.dumps(migrated, ensure_ascii=False, allow_nan=False)
         return migrated
 
-    def load_session(self, filepath: str | Path) -> dict[str, Any]:
+    @classmethod
+    def deserialize_session(cls, content: str | bytes) -> SessionDocument:
+        if isinstance(content, str):
+            encoded = content.encode("utf-8")
+        elif isinstance(content, bytes):
+            encoded = content
+        else:
+            raise TypeError("session content must be text or bytes")
+        if len(encoded) > cls.MAX_SESSION_BYTES:
+            raise ValueError(f"session exceeds the {cls._size_limit_label()} safety limit")
+        try:
+            payload = json.loads(encoded.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError("invalid session JSON") from exc
+        if not isinstance(payload, dict):
+            raise TypeError("session root must be a mapping")
+        version = payload.get("schema_version", payload.get("version"))
+        if version == cls.LEGACY_VERSION and "data" in payload:
+            payload = cls.migrate_v1(payload)
+        elif version != cls.CURRENT_VERSION:
+            raise ValueError(f"unsupported session version: {version!r}")
+        return SessionDocument.from_payload(payload)
+
+    def load_document(self, filepath: str | Path) -> SessionDocument:
         p = Path(filepath)
         if not p.exists():
             raise FileNotFoundError(f"Session file not found: {p}")
         if p.stat().st_size > self.MAX_SESSION_BYTES:
-            raise ValueError("session file exceeds the 10 MiB safety limit")
+            raise ValueError(f"session file exceeds the {self._size_limit_label()} safety limit")
         try:
-            content = json.loads(p.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            return self.deserialize_session(p.read_bytes())
+        except OSError as exc:
             raise ValueError(f"invalid session JSON: {p}") from exc
-        if not isinstance(content, dict):
-            raise TypeError("session root must be a mapping")
-        version = content.get("schema_version", content.get("version"))
-        if version == self.LEGACY_VERSION and "data" in content:
-            return self.migrate_v1(content).get("report", {})
-        if version != self.CURRENT_VERSION:
-            raise ValueError(f"unsupported session version: {version!r}")
-        data = content.get("report")
-        if not isinstance(data, dict):
-            raise TypeError("session report must be a mapping")
-        return data
+
+    def load_session(self, filepath: str | Path) -> dict[str, Any]:
+        return self.load_document(filepath).report
 
     def list_sessions(self) -> list[dict[str, Any]]:
         sessions: list[dict[str, Any]] = []
@@ -242,3 +313,6 @@ class SessionManager:
             except (OSError, UnicodeError, json.JSONDecodeError, KeyError):
                 continue
         return sessions
+
+
+__all__ = ["SessionDocument", "SessionManager"]

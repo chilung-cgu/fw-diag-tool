@@ -9,10 +9,12 @@ claiming that a reconstructed analyzer-table waveform was measured.
 from __future__ import annotations
 
 import math
+from bisect import bisect_right
 from itertools import pairwise
 from statistics import median
 from typing import TYPE_CHECKING
 
+from fw_diag_tool.errors import ResourceLimitError
 from fw_diag_tool.i2c.models import (
     AckType,
     I2CDirection,
@@ -32,20 +34,31 @@ from fw_diag_tool.i2c.raw_capture import (
     RawI2CTransaction,
     decode_i2c_capture,
 )
+from fw_diag_tool.limits import AnalysisLimits, coerce_limits
 
 if TYPE_CHECKING:
     from fw_diag_tool.i2c.waveform import I2CWaveformData
 
 
-def raw_decode_to_events(result: RawI2CDecodeResult) -> list[RawI2CEvent]:
+def raw_decode_to_events(
+    result: RawI2CDecodeResult, *, limits: AnalysisLimits | None = None
+) -> list[RawI2CEvent]:
     """Convert a validated raw capture into events accepted by the main engine.
 
     Byte duration is derived only from the measured rising-edge period and is
     therefore source-backed.  No timestamps or ACK values are synthesized.
     """
+    limits = coerce_limits(limits)
     if not isinstance(result, RawI2CDecodeResult):
         raise TypeError("result must be a RawI2CDecodeResult")
     _validate_decode_result(result)
+    if len(result.transactions) > limits.max_transactions:
+        raise ResourceLimitError(
+            f"raw capture exceeds the {limits.max_transactions}-transaction safety limit",
+            resource="transactions",
+            limit=limits.max_transactions,
+            observed=len(result.transactions),
+        )
     events: list[RawI2CEvent] = []
     for packet_id, transaction in enumerate(result.transactions):
         # A capture can legally contain transactions at different controller
@@ -92,6 +105,13 @@ def raw_decode_to_events(result: RawI2CDecodeResult) -> list[RawI2CEvent]:
                     timestamp_available=True,
                 )
             )
+    if len(events) > limits.max_records:
+        raise ResourceLimitError(
+            f"raw decoded events exceed the {limits.max_records}-record safety limit",
+            resource="records",
+            limit=limits.max_records,
+            observed=len(events),
+        )
     return events
 
 
@@ -153,16 +173,28 @@ def _sample_periods(sample: RawI2CByteSample) -> list[float]:
     return [period for period in periods if period > 0]
 
 
-def raw_decode_to_waveform(result: RawI2CDecodeResult) -> I2CWaveformData:
+def raw_decode_to_waveform(
+    result: RawI2CDecodeResult, *, limits: AnalysisLimits | None = None
+) -> I2CWaveformData:
     """Build a measured digital-level waveform with protocol annotations."""
+    limits = coerce_limits(limits)
     if not isinstance(result, RawI2CDecodeResult):
         raise TypeError("result must be a RawI2CDecodeResult")
     _validate_decode_result(result)
+    transitions = list(result.capture.transitions)
+    if len(transitions) > limits.max_render_rows:
+        # Deterministic stride downsampling preserves first and last edges
+        # so the waveform always shows START and STOP boundaries.
+        stride = (len(transitions) + limits.max_render_rows - 1) // limits.max_render_rows
+        indices = list(range(0, len(transitions), stride))
+        if indices[-1] != len(transitions) - 1:
+            indices.append(len(transitions) - 1)
+        transitions = [transitions[i] for i in sorted(set(indices))]
     from fw_diag_tool.i2c.waveform import I2CWaveformData, ProtocolAnnotation
 
-    time_us = [transition.timestamp_s * 1_000_000.0 for transition in result.capture.transitions]
-    scl = [transition.scl for transition in result.capture.transitions]
-    sda = [transition.sda for transition in result.capture.transitions]
+    time_us = [transition.timestamp_s * 1_000_000.0 for transition in transitions]
+    scl = [transition.scl for transition in transitions]
+    sda = [transition.sda for transition in transitions]
     annotations: list[ProtocolAnnotation] = []
 
     colors = {
@@ -235,9 +267,9 @@ def raw_decode_to_waveform(result: RawI2CDecodeResult) -> I2CWaveformData:
 
 
 def _next_transition_us(times: list[float], timestamp_s: float) -> float:
-    for candidate in times:
-        if candidate > timestamp_s:
-            return candidate * 1_000_000.0
+    index = bisect_right(times, timestamp_s)
+    if index < len(times):
+        return times[index] * 1_000_000.0
     return timestamp_s * 1_000_000.0
 
 

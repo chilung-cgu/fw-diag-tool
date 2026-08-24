@@ -1,4 +1,4 @@
-# 第 12 章：韌體除錯分層 SOP
+# 韌體除錯分層 SOP
 
 若你第一次使用 GUI，先看[12 個 GUI 頁面的閱讀地圖](appendix_gui_reading_guide.md)，再用本章的 L1～L7 SOP 組織跨模組排查。
 

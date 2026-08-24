@@ -361,6 +361,7 @@ def test_ambiguous_address_is_presented_as_candidates_not_exact_identity():
 
     assert device["identity_confidence"] == "ambiguous"
     assert len(device["candidates"]) == len(candidates)
+    assert report.transactions[0].device_name is not None
     assert report.transactions[0].device_name.startswith("Possible devices (")
 
 

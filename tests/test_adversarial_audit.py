@@ -51,6 +51,7 @@ def test_pcie_config_tlp_dw2_ext_register():
     dw2 = (0x01 << 24) | (0x01 << 8)
     tlp = PCIeAnalyzer.decode_tlp_header(dw0, dw1, dw2, 0)
     assert tlp.type_name == "CfgRd0 (Config Read Type 0)"
+    assert tlp.address is not None
     assert (tlp.address & 0xFFF) == 0x100
 
 
@@ -269,6 +270,7 @@ def test_engine_surfaces_eeprom_profile_capacity_limit():
     )
     tx = report.transactions[0]
     assert tx.decoded_values["evidence"] == "address-out-of-range"
+    assert report.transactions[1].semantic_summary is not None
     assert "0xFFFF" not in report.transactions[1].semantic_summary
     assert any(
         issue.code == "I2C_EEPROM_ADDRESS_OUT_OF_RANGE" for issue in report.data_quality_issues
@@ -374,7 +376,7 @@ def test_i2c_engine_rejects_invalid_configuration(kwargs):
 
 def test_i2c_anomaly_detector_rejects_invalid_configuration():
     with pytest.raises((TypeError, ValueError)):
-        I2CAnomalyDetector(smbus_timeout_ms="25")
+        I2CAnomalyDetector(smbus_timeout_ms="25")  # type: ignore[arg-type]
     with pytest.raises((TypeError, ValueError)):
         I2CAnomalyDetector(high_jitter_threshold_pct=float("nan"))
 
@@ -716,6 +718,7 @@ def test_reused_engine_does_not_leak_mux_state_between_captures():
     first = engine.analyze_csv_content(
         "Time,Address,Read/Write,Data,ACK/NACK\n0.001,0x70,Write,0x01,ACK\n"
     )
+    assert first.transactions[0].semantic_summary is not None
     assert "MUX 0x70" in first.transactions[0].semantic_summary
 
     second = engine.analyze_csv_content(

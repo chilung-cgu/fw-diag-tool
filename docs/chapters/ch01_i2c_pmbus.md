@@ -1,4 +1,4 @@
-# 第一章：I2C / PMBus 協定診斷與波形判讀
+# I2C / PMBus 協定診斷與波形判讀
 
 ## 這個頁面在做什麼？
 
@@ -6,7 +6,8 @@ I2C 是嵌入式系統中最常見的通訊匯流排，連接 EEPROM、溫度感
 當 I2C 通訊失敗時，光看程式碼的回傳值（如 `-EIO`）通常無法定位發生在哪一筆交易。
 邏輯分析儀資料可以補上 address、方向、data、ACK/NACK 與時間關係，但能判斷的範圍取決於你匯出的是 analyzer CSV、raw digital edge，還是 analog capture。
 
-> [!IMPORTANT]
+> **重要：**
+>
 > Analyzer CSV 中的 decoded bytes 可以用來重建「協定示意圖」，但示意圖不是實際 SCL/SDA capture。只有輸入包含可靠 edge 或 duration 時，工具才能把 clock frequency、jitter 或 tHIGH/tLOW 標成量測值。完整差異請先讀[能力與限制](../LIMITATIONS.md)。
 
 ## 怎麼操作？

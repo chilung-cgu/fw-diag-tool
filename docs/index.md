@@ -51,7 +51,7 @@ uv run fw-diag gui
 
 ```
 docs/
-├── JUNIOR_FW_GUIDE.md          ← 你目前在看的總目錄（本檔案）
+├── index.md                    ← 唯一的總目錄與學習路線（本檔案）
 ├── chapters/                    ← 各章節詳細教學（每個 GUI 頁面一個檔案）
 │   ├── ch01_i2c_pmbus.md        ← I2C 波形診斷與數位波形判讀
 │   ├── ch02_packet_builder.md   ← 封包模擬器與 C 驅動產生

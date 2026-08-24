@@ -1,15 +1,17 @@
-# 第三章：Golden vs Failing 雙波形差分對比 (Waveform Diff)
+# Golden vs Failing 雙波形差分對比 (Waveform Diff)
 
 ## 這個頁面在做什麼？
 
 在硬體除錯中，A/B 比對可以協助縮小問題範圍：
+
 - **Golden（參考資料）**：已確認行為符合預期的 decoded I2C trace。
 - **Failing（待分析資料）**：在相同測試條件下取得的 decoded I2C trace。
 
 目前工具依交易順序逐筆比對兩份 trace，自動找出第一個分歧點，
 並告訴你分歧的原因是 NACK、資料不一致、還是方向錯誤。
 
-> [!IMPORTANT]
+> **重要：**
+>
 > 這裡比較的是已解碼交易，不是 SCL/SDA raw edge 或類比波形。Failing 多出一次 retry 時，後續交易可能因 index 位移而需要人工重新對齊。
 
 ## 怎麼操作？
@@ -42,6 +44,7 @@
 ```
 
 **白話翻譯**：工具在第 3 筆已解碼交易找到 ACK/NACK 差異。
+
 **下一步行動**：先確認兩份 capture 的 transaction alignment 與 NACK 發送端，再檢查供電、reset、MUX channel 和裝置 busy 狀態。
 
 ## 測試資料

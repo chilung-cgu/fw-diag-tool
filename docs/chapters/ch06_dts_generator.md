@@ -1,8 +1,9 @@
-# 第六章：Linux & OpenBMC Device Tree (.dts) 自動產生器
+# Linux & OpenBMC Device Tree (.dts) 自動產生器
 
 ## 這個頁面在做什麼？
 
 在 Linux Kernel 與 OpenBMC 開發中，你必須撰寫 Device Tree Source (.dts) 檔案來告訴 Kernel：
+
 - 匯流排上掛了哪些晶片（EEPROM、溫度感測器、電源管理 IC）
 - 每顆晶片的 I2C 位址是多少
 - 使用哪個 Linux Driver 來驅動它（compatible 字串）
@@ -89,5 +90,6 @@ binding 要求這些欄位，請在生成後依產品 DTS 慣例補上並用 `dt
 | I2C 通訊失敗 | 位址、MUX channel、供電、reset、driver ownership 都可能造成 | 對照 schematic 與 `/sys/bus/i2c/devices`；掃描 bus 前先確認該 bus 可安全 probe |
 | MUX 通道切換失敗 | compatible、channel node、父 bus、reset 或 idle policy 都可能造成 | 對照 MUX binding 與 driver log；`i2c-mux-idle-disconnect` 是 policy，不是所有失敗的通用修正 |
 
-> [!CAUTION]
+> **注意：**
+>
 > `i2cdetect` 會主動對多個位址送出 probe，部分裝置可能把 probe 當成命令。公司板卡上執行前，先確認 bus、device datasheet、driver ownership 與團隊操作規範。

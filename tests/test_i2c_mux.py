@@ -13,6 +13,7 @@ def test_i2c_mux_topology_tracking():
     report = engine.analyze_csv_content(csv_data)
     assert len(report.transactions) >= 2
     tx_mux = report.transactions[0]
+    assert tx_mux.semantic_summary is not None
     assert "MUX 0x70" in tx_mux.semantic_summary
     # Subsequent transaction to 0x50 should have topology path
     tx_eeprom = report.transactions[1]

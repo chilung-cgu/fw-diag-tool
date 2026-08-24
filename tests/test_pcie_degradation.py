@@ -50,3 +50,26 @@ def test_multi_lspci_parsing():
     assert len(devices) == 2
     assert devices[0].vendor_id == 0x8086
     assert devices[1].vendor_id == 0x10EE
+
+
+def test_multi_lspci_invalid_device_is_retained_as_data_quality():
+    text = """0000:00:14.3 Host bridge: Intel Corporation Device a2af
+00: truncated dump without byte tokens
+10: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+20: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+30: ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+
+0000:01:00.0 Processing accelerators: Xilinx Corporation Device 7024
+00: ee 10 24 70 06 00 10 00 01 00 80 12 00 00 00 00
+10: 0c 00 00 f0 00 00 00 00 00 00 00 00 00 00 00 00
+20: 00 00 00 00 00 00 00 00 00 00 00 00 ee 10 24 70
+30: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+"""
+    devices = PCIeAnalyzer.parse_multi_lspci_text(text)
+
+    assert [device.bdf for device in devices] == ["0000:00:14.3", "0000:01:00.0"]
+    assert len(devices[0].data_quality_issues) == 1
+    assert "Device dump could not be decoded" in devices[0].data_quality_issues[0]
+    assert devices[1].vendor_id == 0x10EE
+    assert devices[1].data_quality_issues == []
+    assert "Device dump could not be decoded" in PCIeReporter.to_markdown(devices[0])

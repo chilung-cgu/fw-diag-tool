@@ -1,6 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
+
+
+class ProtocolMode(str, Enum):
+    """Protocol demultiplexing mode for MCTP/IPMB parser."""
+
+    AUTO = "auto"
+    MCTP = "mctp"
+    IPMB = "ipmb"
 
 
 @dataclass
@@ -18,6 +27,22 @@ class MCTPPacket:
     payload_hex: str = ""
     summary: str = ""
     pldm_command: str | None = None
+
+
+@dataclass
+class MCTPMessage:
+    src_eid: int
+    dest_eid: int
+    msg_tag: int
+    msg_type: int
+    msg_type_name: str
+    packets_count: int
+    payload: list[int] = field(default_factory=list)
+    payload_hex: str = ""
+    is_complete: bool = True
+    error: str | None = None
+    pldm_command: str | None = None
+    summary: str = ""
 
 
 @dataclass
@@ -40,6 +65,10 @@ class IPMBFrame:
 @dataclass
 class ServerMgmtReport:
     mctp_packets: list[MCTPPacket] = field(default_factory=list)
+    mctp_messages: list[MCTPMessage] = field(default_factory=list)
     ipmb_frames: list[IPMBFrame] = field(default_factory=list)
+    ambiguous_lines: list[str] = field(default_factory=list)
     total_frames: int = 0
     summary_text: str = ""
+    unparsed_lines: list[str] = field(default_factory=list)
+    source_errors: list[str] = field(default_factory=list)

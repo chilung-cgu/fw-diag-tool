@@ -85,7 +85,7 @@ class DecodedRegisterResult:
 
 
 class RegisterMapCatalog:
-    def __init__(self):
+    def __init__(self) -> None:
         self.registers: dict[int, RegisterDef] = {}
         self.name_map: dict[str, RegisterDef] = {}
 

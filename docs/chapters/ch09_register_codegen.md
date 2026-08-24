@@ -1,4 +1,4 @@
-# 第九章：晶片暫存器 Bitfield 視覺化與 C 語言巨集生成
+# 晶片暫存器 Bitfield 視覺化與 C 語言巨集生成
 
 ## 這兩個頁面在做什麼？
 
@@ -50,5 +50,6 @@ Raw value 必須是非負、且不超過該 register 宣告的寬度；例如 8-
 4. 頁面即時顯示完整的 C 標頭檔代碼。
 5. 點擊 **「下載 pmbus_regs.h」** 按鈕存檔。
 
-> [!CAUTION]
+> **注意：**
+>
 > 產生器只建立巨集模板，不知道硬體的 read-only、write-one-to-clear、副作用或存取順序，除非 YAML schema 明確提供並通過驗證。套用到 driver 前仍須對照 datasheet。

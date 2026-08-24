@@ -12,7 +12,9 @@ Provides actionable root-cause analysis and step-by-step debug checklists.
 from __future__ import annotations
 
 import math
+from bisect import bisect_right
 
+from fw_diag_tool.errors import ResourceLimitError
 from fw_diag_tool.i2c.models import (
     AckType,
     I2CDiagnosticIssue,
@@ -21,6 +23,7 @@ from fw_diag_tool.i2c.models import (
     Severity,
     TimingStatistics,
 )
+from fw_diag_tool.limits import AnalysisLimits, coerce_limits
 
 
 class I2CAnomalyDetector:
@@ -28,7 +31,14 @@ class I2CAnomalyDetector:
 
     _EEPROM_ACK_POLL_WINDOW_S = 0.010
 
-    def __init__(self, smbus_timeout_ms: float = 25.0, high_jitter_threshold_pct: float = 35.0):
+    def __init__(
+        self,
+        smbus_timeout_ms: float = 25.0,
+        high_jitter_threshold_pct: float = 35.0,
+        *,
+        limits: AnalysisLimits | None = None,
+    ):
+        self.limits = coerce_limits(limits)
         self.smbus_timeout_ms = self._positive_finite_config(
             "smbus_timeout_ms", smbus_timeout_ms, maximum=60_000.0
         )
@@ -53,9 +63,17 @@ class I2CAnomalyDetector:
             raise TypeError("transactions must be a list")
         if any(not isinstance(tx, I2CTransaction) for tx in transactions):
             raise TypeError("transactions must contain I2CTransaction objects")
+        if len(transactions) > self.limits.max_transactions:
+            raise ResourceLimitError(
+                f"I2C capture exceeds the {self.limits.max_transactions}-transaction safety limit",
+                resource="transactions",
+                limit=self.limits.max_transactions,
+                observed=len(transactions),
+            )
         if not isinstance(timing_stats, TimingStatistics):
             raise TypeError("timing_stats must be a TimingStatistics object")
         issues: list[I2CDiagnosticIssue] = []
+        eeprom_probe_times = self._build_eeprom_probe_index(transactions)
 
         if not transactions:
             return issues
@@ -71,7 +89,9 @@ class I2CAnomalyDetector:
             if tx.address_ack == AckType.NACK:
                 # Check if this is EEPROM Acknowledge Polling (expected during internal write cycle)
                 is_eeprom = bool(tx.device_category and "EEPROM" in tx.device_category)
-                if is_eeprom and self._is_confirmed_eeprom_ack_poll(transactions, i):
+                if is_eeprom and self._is_confirmed_eeprom_ack_poll(
+                    transactions, i, eeprom_probe_times
+                ):
                     issues.append(
                         I2CDiagnosticIssue(
                             code="I2C_EEPROM_ACK_POLL",
@@ -311,11 +331,41 @@ class I2CAnomalyDetector:
                 )
             )
 
+        if len(issues) > self.limits.max_findings:
+            raise ResourceLimitError(
+                f"I2C findings exceed the {self.limits.max_findings}-finding safety limit",
+                resource="findings",
+                limit=self.limits.max_findings,
+                observed=len(issues),
+            )
         return issues
 
     @classmethod
+    def _build_eeprom_probe_index(
+        cls, transactions: list[I2CTransaction]
+    ) -> dict[int, list[tuple[float, int]]]:
+        probes: dict[int, list[tuple[float, int]]] = {}
+        for index, transaction in enumerate(transactions):
+            if (
+                transaction.timestamp_available
+                and transaction.direction_available
+                and transaction.direction == I2CDirection.WRITE
+                and transaction.address_ack == AckType.ACK
+                and transaction.has_stop
+            ):
+                probes.setdefault(transaction.address_7bit, []).append(
+                    (transaction.start_time, index)
+                )
+        for candidates in probes.values():
+            candidates.sort()
+        return probes
+
+    @classmethod
     def _is_confirmed_eeprom_ack_poll(
-        cls, transactions: list[I2CTransaction], nack_index: int
+        cls,
+        transactions: list[I2CTransaction],
+        nack_index: int,
+        probe_times: dict[int, list[tuple[float, int]]] | None = None,
     ) -> bool:
         """Require evidence for an EEPROM write-cycle polling interpretation.
 
@@ -350,20 +400,15 @@ class I2CAnomalyDetector:
         ):
             return False
 
-        for candidate in transactions[nack_index + 1 :]:
-            if not candidate.timestamp_available:
-                continue
-            elapsed = candidate.start_time - nack.start_time
-            if elapsed < 0:
-                continue
-            if elapsed > cls._EEPROM_ACK_POLL_WINDOW_S:
-                break
-            if (
-                candidate.address_7bit == nack.address_7bit
-                and candidate.direction_available
-                and candidate.direction == I2CDirection.WRITE
-                and candidate.address_ack == AckType.ACK
-                and candidate.has_stop
-            ):
-                return True
-        return False
+        probes = probe_times if probe_times is not None else cls._build_eeprom_probe_index(transactions)
+        candidates = probes.get(nack.address_7bit, [])
+        if not candidates:
+            return False
+        probe_index = bisect_right(candidates, (nack.start_time, nack_index))
+        if probe_index >= len(candidates):
+            return False
+        candidate_time, candidate_index = candidates[probe_index]
+        return (
+            candidate_index > nack_index
+            and candidate_time - nack.start_time <= cls._EEPROM_ACK_POLL_WINDOW_S
+        )

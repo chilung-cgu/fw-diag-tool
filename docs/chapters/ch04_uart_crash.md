@@ -1,9 +1,10 @@
-# 第四章：UART Serial Crash Dump 與 ARM HardFault 智慧診斷
+# UART Serial Crash Dump 與 ARM HardFault 智慧診斷
 
 ## 這個頁面在做什麼？
 
 當嵌入式系統當機時，工程師最依賴的就是 UART Serial Log。
 這個工具能解析兩種最常見的 Crash Dump：
+
 - **Linux Kernel Panic**：伺服器/開發板的 Linux 作業系統崩潰。
 - **ARM Cortex-M HardFault**：MCU（如 STM32、NXP）的 HardFault 中斷觸發。
 

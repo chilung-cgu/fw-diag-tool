@@ -11,6 +11,7 @@ import math
 from typing import Any
 
 from fw_diag_tool.board_profile import BoardProfile
+from fw_diag_tool.errors import ResourceLimitError
 from fw_diag_tool.i2c.anomaly import I2CAnomalyDetector
 from fw_diag_tool.i2c.chip_db import get_all_matching_devices, lookup_device
 from fw_diag_tool.i2c.eeprom import EEPROM_MODELS, decode_eeprom_read, decode_eeprom_write
@@ -32,6 +33,7 @@ from fw_diag_tool.i2c.sensor_decoders import (
     decode_pca9555_gpio,
 )
 from fw_diag_tool.i2c.timing import analyze_timing_statistics
+from fw_diag_tool.limits import AnalysisLimits, coerce_limits
 
 from .mux_tracker import I2CMuxTracker
 
@@ -48,7 +50,10 @@ class I2CDiagnosticEngine:
         default_eeprom_address_bytes: int | None = None,
         eeprom_profile: str | None = None,
         board_profile: BoardProfile | None = None,
+        *,
+        limits: AnalysisLimits | None = None,
     ):
+        self.limits = coerce_limits(limits)
         self.smbus_timeout_ms = self._positive_finite_config(
             "smbus_timeout_ms", smbus_timeout_ms, maximum=60_000.0
         )
@@ -81,6 +86,7 @@ class I2CDiagnosticEngine:
         self.anomaly_detector = I2CAnomalyDetector(
             smbus_timeout_ms=self.smbus_timeout_ms,
             high_jitter_threshold_pct=self.high_jitter_threshold_pct,
+            limits=self.limits,
         )
 
     @staticmethod
@@ -105,6 +111,13 @@ class I2CDiagnosticEngine:
     def group_events_into_transactions(self, events: list[RawI2CEvent]) -> list[I2CTransaction]:
         """Group raw stream of physical I2C events into logical I2C Transactions."""
         self._validate_events(events)
+        if len(events) > self.limits.max_records:
+            raise ResourceLimitError(
+                f"I2C events exceed the {self.limits.max_records}-record safety limit",
+                resource="records",
+                limit=self.limits.max_records,
+                observed=len(events),
+            )
         transactions: list[I2CTransaction] = []
         if not events:
             return transactions
@@ -151,6 +164,7 @@ class I2CDiagnosticEngine:
                         if ev.event_type == RawEventType.REPEATED_START:
                             current_tx.has_stop = False
                         transactions.append(current_tx)
+                        self._check_transaction_limit(transactions)
                     current_tx = None
 
                 # Initialize next transaction placeholder
@@ -187,6 +201,7 @@ class I2CDiagnosticEngine:
                         current_tx.has_stop = True
                         finish_at_event(current_tx, ev)
                         transactions.append(current_tx)
+                        self._check_transaction_limit(transactions)
                     current_tx = None
                 continue
 
@@ -197,6 +212,7 @@ class I2CDiagnosticEngine:
                     current_tx.has_stop = False
                     finish_at_event(current_tx, ev)
                     transactions.append(current_tx)
+                    self._check_transaction_limit(transactions)
                     current_tx = None
                 else:
                     hang_tx = I2CTransaction(
@@ -216,6 +232,7 @@ class I2CDiagnosticEngine:
                     )
                     hang_tx.semantic_summary = "Bus Hang / Clock line held low indefinitely"
                     transactions.append(hang_tx)
+                    self._check_transaction_limit(transactions)
                     tx_counter += 1
                 continue
 
@@ -255,6 +272,7 @@ class I2CDiagnosticEngine:
                     current_tx.has_stop = False
                     current_tx.source_error = True
                     transactions.append(current_tx)
+                    self._check_transaction_limit(transactions)
                     current_tx = None
                     is_placeholder = False
 
@@ -267,6 +285,7 @@ class I2CDiagnosticEngine:
                             True  # packet_id boundary in Saleae represents clean packet framing
                         )
                         transactions.append(current_tx)
+                        self._check_transaction_limit(transactions)
 
                     current_tx = I2CTransaction(
                         id=tx_counter,
@@ -393,6 +412,7 @@ class I2CDiagnosticEngine:
                         if implicit_boundary:
                             current_tx.source_error = True
                         transactions.append(current_tx)
+                        self._check_transaction_limit(transactions)
                     # Implicit transaction start without explicit START/ADDRESS event
                     addr_7b = ev.address_7bit if ev.address_7bit is not None else 0x00
                     rw = ev.direction or I2CDirection.WRITE
@@ -504,8 +524,18 @@ class I2CDiagnosticEngine:
             else:
                 current_tx.duration_us = 0.0
             transactions.append(current_tx)
+            self._check_transaction_limit(transactions)
 
         return transactions
+
+    def _check_transaction_limit(self, transactions: list[I2CTransaction]) -> None:
+        if len(transactions) > self.limits.max_transactions:
+            raise ResourceLimitError(
+                f"I2C capture exceeds the {self.limits.max_transactions}-transaction safety limit",
+                resource="transactions",
+                limit=self.limits.max_transactions,
+                observed=len(transactions),
+            )
 
     def decode_semantic_layer(self, transactions: list[I2CTransaction]) -> list[DataQualityIssue]:
         """Perform chip identification and protocol semantic decoding across transactions."""
@@ -1070,6 +1100,13 @@ class I2CDiagnosticEngine:
 
         timing_stats = analyze_timing_statistics(transactions, total_duration)
         issues = self.anomaly_detector.analyze_transactions(transactions, timing_stats) + mux_issues
+        if len(issues) > self.limits.max_findings:
+            raise ResourceLimitError(
+                f"I2C findings exceed the {self.limits.max_findings}-finding safety limit",
+                resource="findings",
+                limit=self.limits.max_findings,
+                observed=len(issues),
+            )
         timestamp_availability = {tx.id: tx.timestamp_available for tx in transactions}
         for issue in issues:
             if issue.transaction_id is not None and not timestamp_availability.get(
@@ -1367,23 +1404,23 @@ class I2CDiagnosticEngine:
 
     def analyze_csv_string(self, csv_text: str) -> I2CAnalysisReport:
         """Convenience method to parse and analyze CSV text."""
-        events = I2CParser.parse_csv_string(csv_text)
+        events = I2CParser.parse_csv_string(csv_text, limits=self.limits)
         return self.analyze(events)
 
     def analyze_csv_file(self, file_path: str) -> I2CAnalysisReport:
         """Convenience method to parse and analyze a CSV file from disk."""
         with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-            events = I2CParser.parse_csv_stream(f)
+            events = I2CParser.parse_csv_stream(f, limits=self.limits)
         return self.analyze(events)
 
     def analyze_text(self, text_trace: str) -> I2CAnalysisReport:
         """Convenience method to parse and analyze a text log trace."""
-        events = I2CParser.parse_text_trace(text_trace)
+        events = I2CParser.parse_text_trace(text_trace, limits=self.limits)
         return self.analyze(events)
 
     def analyze_records(self, records: list[dict[str, Any]]) -> I2CAnalysisReport:
         """Convenience method to analyze raw Python dictionaries."""
-        events = I2CParser.parse_raw_records(records)
+        events = I2CParser.parse_raw_records(records, limits=self.limits)
         return self.analyze(events)
 
     def analyze_csv_content(self, csv_text: str) -> I2CAnalysisReport:
