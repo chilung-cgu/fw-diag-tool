@@ -2,22 +2,25 @@ site_name: Firmware Diagnostic Toolkit
 site_description: Local Logic Analyzer & System Trace RCA Assistant for Junior Firmware Engineers
 theme:
   name: mkdocs
+plugins:
+  - search
 
 nav:
   - 總指南: index.md
+  - 舊版指南網址: JUNIOR_FW_GUIDE.md
   - 限制與邊界: LIMITATIONS.md
   - 章節教學:
-      - 01. I2C / PMBus 波形診斷: chapters/ch01_i2c_pmbus.md
-      - 02. I2C 封包模擬器: chapters/ch02_packet_builder.md
-      - 03. 雙波形對比 (Waveform Diff): chapters/ch03_waveform_diff.md
-      - 04. UART Crash & HardFault: chapters/ch04_uart_crash.md
-      - 05. MCTP / IPMB 伺服器協定: chapters/ch05_mctp_ipmb.md
-      - 06. Device Tree 產生器: chapters/ch06_dts_generator.md
-      - 07. PCIe Config & AER 診斷: chapters/ch07_pcie_aer.md
-      - 08. SPI Flash 協定診斷: chapters/ch08_spi_flash.md
-      - 09. 暫存器解碼與 C 巨集: chapters/ch09_register_codegen.md
-      - 10. Fault Arena 除錯演練: chapters/ch10_fault_arena.md
-      - 12. 韌體除錯 SOP: chapters/ch12_sop.md
+      - I2C / PMBus 波形診斷: chapters/ch01_i2c_pmbus.md
+      - I2C 封包模擬器: chapters/ch02_packet_builder.md
+      - 雙波形對比 (Waveform Diff): chapters/ch03_waveform_diff.md
+      - UART Crash & HardFault: chapters/ch04_uart_crash.md
+      - MCTP / IPMB 伺服器協定: chapters/ch05_mctp_ipmb.md
+      - Device Tree 產生器: chapters/ch06_dts_generator.md
+      - PCIe Config & AER 診斷: chapters/ch07_pcie_aer.md
+      - SPI Flash 協定診斷: chapters/ch08_spi_flash.md
+      - 暫存器解碼與 C 巨集: chapters/ch09_register_codegen.md
+      - Fault Arena 除錯演練: chapters/ch10_fault_arena.md
+      - 韌體除錯 SOP: chapters/ch12_sop.md
   - 附錄:
       - 附錄 A 圖表判讀指南: chapters/appendix_chart_guide.md
       - 附錄 B 12 個 GUI 頁面地圖: chapters/appendix_gui_reading_guide.md

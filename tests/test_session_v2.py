@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -12,7 +14,7 @@ from fw_diag_tool.fault_arena import FaultArenaFixtures
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
-from fw_diag_tool.session.session_manager import SessionManager
+from fw_diag_tool.session.session_manager import SessionDocument, SessionManager
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.uart.parser import UARTCrashParser
 
@@ -64,6 +66,30 @@ class TestSessionV2Schema:
         raw = json.loads(filepath.read_text(encoding="utf-8"))
         assert raw["capture_sha256"] == hashlib.sha256(b"capture").hexdigest()
         assert raw["board_profile_name"] == "board-a"
+
+    def test_load_document_round_trips_all_v2_fields(self, tmp_path: Path):
+        mgr = SessionManager(session_dir=tmp_path)
+        filepath = mgr.save_session(
+            "round-trip-document",
+            {"anomaly_count": 3},
+            provenance={"input_name": "capture.csv"},
+            capture_sha256="deadbeef",
+            board_profile_name="board-a",
+            config={"smbus_timeout_ms": 25.0},
+            notes="keep the source capture separately",
+        )
+
+        document = mgr.load_document(filepath)
+
+        assert isinstance(document, SessionDocument)
+        assert document.schema_version == "2.0"
+        assert document.name == "round-trip-document"
+        assert document.capture_sha256 == "deadbeef"
+        assert document.board_profile_name == "board-a"
+        assert document.config == {"smbus_timeout_ms": 25.0}
+        assert document.report == {"anomaly_count": 3}
+        assert document.notes == "keep the source capture separately"
+        assert document.provenance == {"input_name": "capture.csv"}
 
     def test_list_sessions_reports_schema_version(self, tmp_path: Path):
         mgr = SessionManager(session_dir=tmp_path)
@@ -237,6 +263,22 @@ class TestSessionManagerValidation:
         with pytest.raises(TypeError, match="capture_sha256"):
             mgr.save_session("bad-sha", {}, capture_sha256=123)  # type: ignore[arg-type]
 
+    def test_serialize_rejects_session_that_cannot_be_loaded(self, monkeypatch):
+        monkeypatch.setattr(SessionManager, "MAX_SESSION_BYTES", 512)
+
+        with pytest.raises(ValueError, match="512-byte safety limit"):
+            SessionManager.serialize_session("too-large", {"payload": "x" * 512})
+
+    @pytest.mark.skipif(os.name != "posix", reason="POSIX permission contract")
+    def test_session_directory_and_file_are_private(self, tmp_path: Path):
+        session_dir = tmp_path / "sessions"
+        mgr = SessionManager(session_dir=session_dir)
+
+        filepath = mgr.save_session("private", {"ok": True})
+
+        assert stat.S_IMODE(session_dir.stat().st_mode) == 0o700
+        assert stat.S_IMODE(filepath.stat().st_mode) == 0o600
+
 
 EXPECTED_I2C_CODES = {
     "01": {"I2C_ADDR_NACK"},
@@ -279,6 +321,7 @@ class TestFaultArenaCasesParse:
 
         assert cfg.link_info is not None
         assert cfg.link_info.is_degraded is expect_degraded
+        assert cfg.aer_analysis is not None
         active = {
             e.short_code for e in cfg.aer_analysis.uncorr_errors if e.is_active and not e.is_masked
         }

@@ -20,7 +20,7 @@ def register_extra_commands(app: typer.Typer, i2c_app: typer.Typer, console: Con
     def diff_i2c_traces(
         golden: Path = typer.Argument(..., help="Golden trace CSV"),
         failing: Path = typer.Argument(..., help="Failing trace CSV"),
-    ):
+    ) -> None:
         """Compare Golden vs Failing I2C traces."""
         if not golden.exists() or not failing.exists():
             console.print("[bold red]Error: Both files must exist![/]")
@@ -49,7 +49,7 @@ def register_extra_commands(app: typer.Typer, i2c_app: typer.Typer, console: Con
     @app.command("fuzz")
     def run_fuzzing(
         seeds: int = typer.Option(50, "--seeds", "-s", help="Number of test cases"),
-    ):
+    ) -> None:
         """Run parser stress tests with randomly generated malformed inputs."""
         from fw_diag_tool.uart.parser import UARTCrashParser
 

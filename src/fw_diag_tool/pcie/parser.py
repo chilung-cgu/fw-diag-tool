@@ -42,17 +42,24 @@ class PCIeAnalyzer:
             current_lines.append(line)
         if current_lines:
             chunks.append("\n".join(current_lines))
-        results: list[PCIeConfigSpace] = []
+        decoded_results: list[PCIeConfigSpace] = []
         for chunk in chunks:
             if not chunk.strip():
                 continue
             try:
                 bdf, raw_bytes = cls.parse_lspci_text(chunk)
                 cfg = cls.decode_config_space(raw_bytes, bdf=bdf)
-                results.append(cfg)
-            except Exception:
-                continue
-        return results
+                decoded_results.append(cfg)
+            except Exception as exc:
+                bdf_label = bdf_pattern.search(chunk)
+                label = bdf_label.group(0).strip() if bdf_label else chunk.splitlines()[0].strip()
+                failed_cfg = PCIeConfigSpace(raw_data=b"", bdf=label or None)
+                failed_cfg.data_quality_issues.append(
+                    f"Device dump could not be decoded: {exc} "
+                    "The source bytes were not interpreted as a clean config space."
+                )
+                decoded_results.append(failed_cfg)
+        return decoded_results
 
     @staticmethod
     def parse_raw_hex(hex_input: str | bytes) -> bytes:

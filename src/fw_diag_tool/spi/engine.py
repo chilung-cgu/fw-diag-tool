@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from fw_diag_tool.errors import ResourceLimitError
+from fw_diag_tool.limits import AnalysisLimits, coerce_limits
+
 from .anomaly import SPIAnomalyDetector
 from .models import (
     SPIDataQualityIssue,
@@ -13,7 +16,8 @@ from .parser import SPIParser
 
 
 class SPIDiagnosticEngine:
-    def __init__(self, max_page_size: int = 256):
+    def __init__(self, max_page_size: int = 256, *, limits: AnalysisLimits | None = None):
+        self.limits = coerce_limits(limits)
         if (
             isinstance(max_page_size, bool)
             or not isinstance(max_page_size, int)
@@ -21,14 +25,23 @@ class SPIDiagnosticEngine:
         ):
             raise ValueError("max_page_size must be a positive integer")
         self.parser = SPIParser()
-        self.anomaly_detector = SPIAnomalyDetector(max_page_size=max_page_size)
+        self.anomaly_detector = SPIAnomalyDetector(max_page_size=max_page_size, limits=self.limits)
         self.max_page_size = max_page_size
 
     def analyze_csv_content(self, csv_text: str) -> SPIReport:
         if not isinstance(csv_text, str):
             raise TypeError("csv_text must be a string")
-        transactions = self.parser.parse_csv_content(csv_text, page_size=self.max_page_size)
+        transactions = self.parser.parse_csv_content(
+            csv_text, page_size=self.max_page_size, limits=self.limits
+        )
         anomalies = self.anomaly_detector.analyze(transactions)
+        if len(anomalies) > self.limits.max_findings:
+            raise ResourceLimitError(
+                f"SPI findings exceed the {self.limits.max_findings}-finding safety limit",
+                resource="findings",
+                limit=self.limits.max_findings,
+                observed=len(anomalies),
+            )
         meaningful_lines = [
             line
             for line in csv_text.splitlines()
@@ -162,5 +175,13 @@ class SPIDiagnosticEngine:
 
     def analyze_csv_file(self, file_path: str | Path) -> SPIReport:
         p = Path(file_path)
+        size = p.stat().st_size
+        if size > self.limits.max_upload_bytes:
+            raise ResourceLimitError(
+                f"SPI CSV input exceeds the {self.limits.max_upload_bytes}-byte safety limit",
+                resource="SPI CSV input",
+                limit=self.limits.max_upload_bytes,
+                observed=size,
+            )
         content = p.read_text(encoding="utf-8")
         return self.analyze_csv_content(content)

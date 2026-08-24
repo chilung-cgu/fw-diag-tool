@@ -25,8 +25,8 @@ def test_local_markdown_links_resolve() -> None:
     assert not broken, "Broken local Markdown links:\n" + "\n".join(broken)
 
 
-def test_junior_guide_indexes_all_gui_pages() -> None:
-    guide = (ROOT / "docs" / "JUNIOR_FW_GUIDE.md").read_text(encoding="utf-8")
+def test_canonical_guide_indexes_all_gui_pages() -> None:
+    guide = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
     page_rows = re.findall(r"^\|\s*(\d{1,2})\s*\|", guide, flags=re.MULTILINE)
     assert page_rows == [str(page_id) for page_id in range(1, 13)]
     assert "[ch12_sop.md](chapters/ch12_sop.md)" in guide

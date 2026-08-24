@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from fw_diag_tool.errors import ResourceLimitError
+from fw_diag_tool.limits import AnalysisLimits, coerce_limits
+
 from .models import (
     SPIDiagnosticIssue,
     SPIOpcode,
@@ -9,7 +12,8 @@ from .models import (
 
 
 class SPIAnomalyDetector:
-    def __init__(self, max_page_size: int = 256):
+    def __init__(self, max_page_size: int = 256, *, limits: AnalysisLimits | None = None):
+        self.limits = coerce_limits(limits)
         if (
             isinstance(max_page_size, bool)
             or not isinstance(max_page_size, int)
@@ -19,6 +23,13 @@ class SPIAnomalyDetector:
         self.max_page_size = max_page_size
 
     def analyze(self, transactions: list[SPITransaction]) -> list[SPIDiagnosticIssue]:
+        if len(transactions) > self.limits.max_transactions:
+            raise ResourceLimitError(
+                f"SPI capture exceeds the {self.limits.max_transactions}-transaction safety limit",
+                resource="transactions",
+                limit=self.limits.max_transactions,
+                observed=len(transactions),
+            )
         issues: list[SPIDiagnosticIssue] = []
         # A capture may begin after WREN.  ``None`` means the latch state was
         # not observed, not that the flash was proven to have WEL=0.
@@ -309,4 +320,11 @@ class SPIAnomalyDetector:
                     )
                 )
 
+        if len(issues) > self.limits.max_findings:
+            raise ResourceLimitError(
+                f"SPI findings exceed the {self.limits.max_findings}-finding safety limit",
+                resource="findings",
+                limit=self.limits.max_findings,
+                observed=len(issues),
+            )
         return issues

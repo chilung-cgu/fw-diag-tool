@@ -8,6 +8,9 @@ import math
 import re
 from typing import Any
 
+from fw_diag_tool.errors import InputFormatError, ResourceLimitError
+from fw_diag_tool.limits import AnalysisLimits, coerce_limits
+
 from .models import (
     OPCODE_NAMES,
     FlashStatusRegister1,
@@ -33,6 +36,19 @@ JEDEC_DATABASE: dict[tuple[int, int, int], str] = {
     (0xC8, 0x40, 0x18): "GigaDevice GD25Q128 (128 Mbit / 16 MB)",
     (0xC8, 0x40, 0x19): "GigaDevice GD25Q256 (256 Mbit / 32 MB)",
 }
+
+
+def _iter_noncomment_rows(reader: Any) -> Any:
+    try:
+        while True:
+            try:
+                row = next(reader)
+            except StopIteration:
+                return
+            if row and not row[0].strip().startswith("#"):
+                yield row
+    except csv.Error as exc:
+        raise InputFormatError(f"invalid SPI CSV input: {exc}") from exc
 
 
 class SPIParser:
@@ -85,19 +101,38 @@ class SPIParser:
         return parsed
 
     @classmethod
-    def parse_csv_content(cls, csv_text: str, page_size: int = 256) -> list[SPITransaction]:
+    def parse_csv_content(
+        cls,
+        csv_text: str,
+        page_size: int = 256,
+        *,
+        limits: AnalysisLimits | None = None,
+    ) -> list[SPITransaction]:
+        limits = coerce_limits(limits)
         if not isinstance(csv_text, str):
             raise TypeError("csv_text must be a string")
+        text_size = len(csv_text.encode("utf-8"))
+        if text_size > limits.max_upload_bytes:
+            raise ResourceLimitError(
+                f"SPI CSV input exceeds the {limits.max_upload_bytes}-byte safety limit",
+                resource="SPI CSV input",
+                limit=limits.max_upload_bytes,
+                observed=text_size,
+            )
         if isinstance(page_size, bool) or not isinstance(page_size, int) or page_size <= 0:
             raise ValueError("page_size must be a positive integer")
         # Strip a UTF-8 BOM before header alias matching.  Without this, a
         # normal Logic export can fail to find its timestamp column.
         reader = csv.reader(io.StringIO(csv_text.lstrip("\ufeff").strip()))
-        rows = [r for r in reader if r and not r[0].strip().startswith("#")]
-        if not rows:
+        rows = _iter_noncomment_rows(reader)
+        try:
+            header_row = next(rows, None)
+        except csv.Error as exc:
+            raise InputFormatError(f"invalid SPI CSV input: {exc}") from exc
+        if header_row is None:
             return []
 
-        header = [h.strip().lower() for h in rows[0]]
+        header = [h.strip().lower() for h in header_row]
         if len(header) != len(set(header)):
             raise ValueError("SPI CSV header contains duplicate column names")
         # Only accept explicit aliases.  Substring matching (for example
@@ -144,9 +179,16 @@ class SPIParser:
         t_end = 0.0
         in_tx = False
 
-        data_rows = rows[1:]
         previous_timestamp: float | None = None
-        for row_number, row in enumerate(data_rows, start=2):
+        for row_number, row in enumerate(rows, start=2):
+            record_count = row_number - 1
+            if record_count > limits.max_records:
+                raise ResourceLimitError(
+                    f"SPI CSV input exceeds the {limits.max_records}-record safety limit",
+                    resource="records",
+                    limit=limits.max_records,
+                    observed=record_count,
+                )
             if not row or len(row) != len(header):
                 raise ValueError(
                     f"CSV row {row_number} has {len(row)} fields; expected {len(header)}"
@@ -206,6 +248,13 @@ class SPIParser:
                             page_size=page_size,
                         )
                         transactions.append(tx)
+                        if len(transactions) > limits.max_transactions:
+                            raise ResourceLimitError(
+                                f"SPI capture exceeds the {limits.max_transactions}-transaction safety limit",
+                                resource="transactions",
+                                limit=limits.max_transactions,
+                                observed=len(transactions),
+                            )
                     cur_mosi = []
                     cur_miso = []
 
@@ -220,6 +269,14 @@ class SPIParser:
             )
             tx.decoded_details["capture_incomplete"] = True
             transactions.append(tx)
+
+            if len(transactions) > limits.max_transactions:
+                raise ResourceLimitError(
+                    f"SPI capture exceeds the {limits.max_transactions}-transaction safety limit",
+                    resource="transactions",
+                    limit=limits.max_transactions,
+                    observed=len(transactions),
+                )
 
         return transactions
 

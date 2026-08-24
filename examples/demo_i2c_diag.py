@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Demonstration script for fw_diag_tool I2C / SMBus / PMBus Diagnostic Engine."""
 
+import tempfile
 from pathlib import Path
 
 from rich.console import Console
@@ -11,7 +12,7 @@ from fw_diag_tool.i2c.reporter import I2CReporter
 console = Console()
 
 
-def run_demo():
+def run_demo(output_dir: Path | None = None) -> None:
     console.rule("[bold cyan]fw_diag_tool - I2C / SMBus / PMBus Diagnostic Engine Demo[/bold cyan]")
     engine = I2CDiagnosticEngine(default_eeprom_page_size=8, smbus_timeout_ms=25.0)
     data_dir = Path(__file__).parent.parent / "tests" / "data"
@@ -26,7 +27,10 @@ def run_demo():
         I2CReporter.render_terminal(report1, console=console)
 
         # Export Markdown
-        md_path = Path(__file__).parent / "demo_normal_report.md"
+        if output_dir is None:
+            output_dir = Path(tempfile.mkdtemp(prefix="fw-diag-tool-demo-"))
+        output_dir.mkdir(parents=True, exist_ok=True)
+        md_path = output_dir / "demo_normal_report.md"
         md_text = I2CReporter.generate_markdown(report1)
         md_path.write_text(md_text, encoding="utf-8")
         console.print(f"[dim]Exported sample markdown report to: {md_path}[/dim]\n")

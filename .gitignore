@@ -7,6 +7,7 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+site/
 downloads/
 eggs/
 .eggs/
@@ -29,8 +30,12 @@ ENV/
 # Testing & Linting
 .pytest_cache/
 .coverage
+coverage.xml
+junit.xml
 htmlcov/
 .ruff_cache/
+.mypy_cache/
+test-results/
 
 # IDE
 .vscode/

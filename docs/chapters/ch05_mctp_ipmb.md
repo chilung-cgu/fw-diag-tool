@@ -1,9 +1,10 @@
-# 第五章：MCTP / IPMB 伺服器管理協定解析
+# MCTP / IPMB 伺服器管理協定解析
 
 ## 這個頁面在做什麼？
 
 在伺服器與資料中心主機板中，BMC (Baseboard Management Controller) 需要與 GPU、NIC、SSD 等設備通訊。
 通訊協定有兩種：
+
 - **MCTP** (Management Component Transport Protocol, DMTF DSP0236)：新一代標準，支援 PLDM 感測器讀取與 SPDM 安全認證。
 - **IPMB** (Intelligent Platform Management Bus, IPMI v2.0)：傳統標準，BMC 與 Satellite Controller 間的 I2C 匯流排。
 

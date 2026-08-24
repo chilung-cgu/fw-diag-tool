@@ -10,7 +10,14 @@ from typer.testing import CliRunner
 
 from fw_diag_tool import __version__
 from fw_diag_tool.cli import app
-from fw_diag_tool.gui.uploads import MAX_UPLOAD_BYTES, decode_uploaded_text
+from fw_diag_tool.errors import ResourceLimitError
+from fw_diag_tool.gui.session_io import serialize_i2c_session
+from fw_diag_tool.gui.uploads import (
+    MAX_TEXT_BYTES,
+    MAX_UPLOAD_BYTES,
+    decode_uploaded_text,
+    validate_pasted_text,
+)
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.resources import load_i2c_sample
 
@@ -46,6 +53,54 @@ def test_launch_gui_propagates_streamlit_exit_code(monkeypatch):
     assert result.exit_code == 7
 
 
+def test_launch_gui_disables_telemetry_and_caps_streamlit_uploads(monkeypatch):
+    calls = []
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = CliRunner().invoke(app, ["gui"])
+
+    assert result.exit_code == 0
+    args, kwargs = calls[0]
+    assert "--browser.gatherUsageStats=false" in args
+    assert "--server.maxUploadSize=20" in args
+    assert "--server.maxMessageSize=20" in args
+    assert kwargs["check"] is False
+
+
+def test_launch_gui_rejects_remote_bind_without_explicit_opt_in(monkeypatch):
+    called = False
+
+    def fake_run(*args, **kwargs):
+        nonlocal called
+        called = True
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = CliRunner().invoke(app, ["gui", "--host", "0.0.0.0"])
+
+    assert result.exit_code == 2
+    assert "--allow-remote" in result.output
+    assert called is False
+
+
+def test_launch_gui_allows_remote_bind_with_explicit_opt_in(monkeypatch):
+    calls = []
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = CliRunner().invoke(app, ["gui", "--host", "0.0.0.0", "--allow-remote"])
+
+    assert result.exit_code == 0
+    assert "--server.address=0.0.0.0" in calls[0]
+    assert "authentication and TLS" in result.output
+
+
 def test_packaged_i2c_sample_is_analyzable():
     sample = load_i2c_sample()
     report = I2CDiagnosticEngine().analyze_csv_content(sample)
@@ -79,6 +134,16 @@ def test_upload_preflight_accepts_utf8_bom():
     assert decode_uploaded_text(upload, allowed_extensions={".csv"}).startswith("Time,Data")
 
 
+def test_pasted_text_limit_is_enforced_by_utf8_bytes():
+    assert validate_pasted_text("é", label="UART log") == "é"
+
+    with pytest.raises(ResourceLimitError) as error:
+        validate_pasted_text("é" * (MAX_TEXT_BYTES // 2 + 1), label="UART log")
+
+    assert error.value.resource == "UART log"
+    assert error.value.limit == MAX_TEXT_BYTES
+
+
 def test_gui_builtin_sample_runs_from_package_resource():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
 
@@ -86,6 +151,38 @@ def test_gui_builtin_sample_runs_from_package_resource():
 
     assert not at.exception
     assert any(info.value == "已載入內建範例 CSV！" for info in at.info)
+    assert any(metric.label == "總傳輸次數" and metric.value == "18" for metric in at.metric)
+
+
+def test_gui_builtin_sample_survives_configuration_rerun():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.button[0].click().run()
+
+    at.number_input[0].set_value(30.0).run()
+
+    assert not at.exception
+    assert any(metric.label == "總傳輸次數" and metric.value == "18" for metric in at.metric)
+
+
+def test_gui_loads_session_settings_and_replays_matching_capture():
+    sample = load_i2c_sample()
+    session = serialize_i2c_session(
+        {"total_transactions": 18},
+        input_name="capture.csv",
+        input_bytes=sample.encode("utf-8"),
+        input_mode="Saleae Analyzer table / text trace",
+        smbus_timeout_ms=30.0,
+    )
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+
+    at.file_uploader[0].upload(
+        "analysis.fwsession.json", session.encode("utf-8"), "application/json"
+    ).run()
+    at.file_uploader[1].upload("capture.csv", sample.encode("utf-8"), "text/csv").run()
+
+    assert not at.exception
+    assert at.number_input[0].value == 30.0
+    assert any("SHA-256 與 capture 相符" in item.value for item in at.success)
     assert any(metric.label == "總傳輸次數" and metric.value == "18" for metric in at.metric)
 
 

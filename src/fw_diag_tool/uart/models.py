@@ -28,6 +28,7 @@ class KernelPanicReport:
     faulting_ip: str | None = None  # RIP / PC
     faulting_func: str | None = None
     faulting_address: str | None = None  # CR2 / FAR
+    symbolicated_ip: str | None = None
     registers: dict[str, str] = field(default_factory=dict)
     call_trace: list[CallTraceFrame] = field(default_factory=list)
     modules_linked: list[str] = field(default_factory=list)
@@ -52,6 +53,8 @@ class ARMHardFaultReport:
     r12: int | None = None
     lr_exc_return: int | None = None
     pc_faulting: int | None = None
+    symbolicated_pc: str | None = None
+    symbolicated_lr: str | None = None
     xpsr: int | None = None
     # Fault breakdown flags
     fault_flags: list[str] = field(default_factory=list)

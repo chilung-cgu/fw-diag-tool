@@ -3,8 +3,10 @@
 專為 **Junior 韌體 / 嵌入式 / 硬體工程師** 設計的本機診斷與學習工具，目標平台為 macOS 與 Linux。
 目前提供 I2C/PMBus、PCIe AER、SPI Flash、UART Crash Dump、MCTP/IPMB 的檔案分析，以及協定示意圖、差分比較、程式碼產生器與 20 個 synthetic 練習情境。各模組的輸入能力與限制請先閱讀 [能力與限制](docs/LIMITATIONS.md)。
 
-👉 **完整新人圖文教學指南**：請參閱 [docs/JUNIOR_FW_GUIDE.md](docs/JUNIOR_FW_GUIDE.md)；若不知道某個 GUI 頁面或圖表怎麼讀，先看 [12 個 GUI 頁面的閱讀地圖](docs/chapters/appendix_gui_reading_guide.md)。
+👉 **完整新人圖文教學指南**：請參閱 [docs/index.md](docs/index.md)；若不知道某個 GUI 頁面或圖表怎麼讀，先看 [12 個 GUI 頁面的閱讀地圖](docs/chapters/appendix_gui_reading_guide.md)。
 > 📂 **各章節詳細文件**：[ch01 I2C波形](docs/chapters/ch01_i2c_pmbus.md) | [ch02 封包/驅動產生](docs/chapters/ch02_packet_builder.md) | [ch03 Waveform Diff](docs/chapters/ch03_waveform_diff.md) | [ch04 UART Crash](docs/chapters/ch04_uart_crash.md) | [ch05 MCTP/IPMB](docs/chapters/ch05_mctp_ipmb.md) | [ch06 Device Tree](docs/chapters/ch06_dts_generator.md) | [ch07 PCIe AER](docs/chapters/ch07_pcie_aer.md) | [ch08 SPI Flash](docs/chapters/ch08_spi_flash.md) | [ch09 Register/Codegen](docs/chapters/ch09_register_codegen.md) | [ch10 Fault Arena](docs/chapters/ch10_fault_arena.md) | [ch12 SOP](docs/chapters/ch12_sop.md) | [附錄A 圖表判讀](docs/chapters/appendix_chart_guide.md)
+
+**專案連結**：[Source](https://github.com/chilung-cgu/fw-diag-tool) | [Documentation](https://github.com/chilung-cgu/fw-diag-tool#readme) | [Issues](https://github.com/chilung-cgu/fw-diag-tool/issues) | [Changelog](https://github.com/chilung-cgu/fw-diag-tool/blob/main/CHANGELOG.md)
 
 ---
 
@@ -19,6 +21,16 @@ uv sync --all-extras
 uv run fw-diag gui
 ```
 *(瀏覽器將自動開啟 `http://127.0.0.1:8501`，支援滑鼠滾輪縮放波形、檔案拖放與互動分析)*
+
+若環境沒有 `uv`，可改用 Python 3.10+ 的內建虛擬環境與 pip：
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev]"
+fw-diag gui
+```
 
 ---
 

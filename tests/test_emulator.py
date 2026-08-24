@@ -128,7 +128,7 @@ def test_eeprom_rejects_boolean_or_float_address_width():
     eeprom = VirtualEEPROM24C64()
     for address_width in (True, 1.0, 2.0):
         with pytest.raises(ValueError, match="preferred_address_bytes"):
-            eeprom.write([0x00, 0x01], preferred_address_bytes=address_width)
+            eeprom.write([0x00, 0x01], preferred_address_bytes=address_width)  # type: ignore[arg-type]
 
 
 def test_eeprom_busy_cycle_requires_ack_polling_and_idle_poll_is_false():

@@ -1,4 +1,4 @@
-# 第八章：SPI NOR Flash 協定診斷
+# SPI NOR Flash 協定診斷
 
 ## 這個頁面在做什麼？
 
@@ -58,7 +58,8 @@ SPI NOR Flash 是伺服器與嵌入式系統中儲存 BIOS/UEFI 韌體的核心�
 
 `SPI_RESPONSE_TRUNCATED` 或 `SPI_RESPONSE_OVERLONG` 出現時，相關 command 的語意應視為證據不足；不要只因報告仍列出 opcode 就當成完整硬體操作。
 
-> [!IMPORTANT]
+> **重要：**
+>
 > 目前輸入是 analyzer 已解碼的 SPI CSV；沒有 raw SCLK/MOSI/MISO/CS edge 時，工具不能驗證實際 CPOL/CPHA timing 或 signal integrity。
 
 ## 測試資料

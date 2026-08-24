@@ -12,12 +12,39 @@ import math
 import re
 from typing import Any, TextIO
 
+from fw_diag_tool.errors import InputFormatError, ResourceLimitError
 from fw_diag_tool.i2c.models import (
     AckType,
     I2CDirection,
     RawEventType,
     RawI2CEvent,
 )
+from fw_diag_tool.limits import AnalysisLimits, coerce_limits
+
+
+def _iter_csv_rows(reader: Any) -> Any:
+    try:
+        while True:
+            try:
+                yield next(reader)
+            except StopIteration:
+                return
+    except csv.Error as exc:
+        raise InputFormatError(f"invalid CSV input: {exc}") from exc
+
+
+def _check_text_size(text: str, limits: AnalysisLimits, *, label: str = "text input") -> None:
+    try:
+        size = len(text.encode("utf-8"))
+    except UnicodeEncodeError as exc:
+        raise InputFormatError(f"{label} must be valid UTF-8 text") from exc
+    if size > limits.max_upload_bytes:
+        raise ResourceLimitError(
+            f"{label} exceeds the {limits.max_upload_bytes}-byte safety limit",
+            resource=label,
+            limit=limits.max_upload_bytes,
+            observed=size,
+        )
 
 
 def parse_hex_or_int(val: Any) -> int | None:
@@ -110,11 +137,29 @@ class I2CParser:
     """Universal I2C trace parser."""
 
     @classmethod
-    def parse_csv_stream(cls, f: TextIO) -> list[RawI2CEvent]:
+    def parse_csv_stream(
+        cls, f: TextIO, *, limits: AnalysisLimits | None = None
+    ) -> list[RawI2CEvent]:
         """Parse CSV data from an open text stream (e.g. Saleae Logic 2 or Generic CSV)."""
+        limits = coerce_limits(limits)
         if not hasattr(f, "read") or not hasattr(f, "seek"):
             raise TypeError("CSV input must be a seekable text stream")
+        try:
+            current_position = f.tell()
+            f.seek(0, 2)
+            stream_size = f.tell()
+            f.seek(current_position)
+        except (OSError, ValueError):
+            stream_size = None
+        if stream_size is not None and stream_size > limits.max_upload_bytes:
+            raise ResourceLimitError(
+                f"CSV input exceeds the {limits.max_upload_bytes}-byte safety limit",
+                resource="CSV input",
+                limit=limits.max_upload_bytes,
+                observed=stream_size,
+            )
         events: list[RawI2CEvent] = []
+        record_count = 0
 
         # Read header and detect delimiter
         sample = f.read(4096)
@@ -126,7 +171,10 @@ class I2CParser:
             delimiter = "\t"
 
         reader = csv.reader(f, delimiter=delimiter)
-        header = next(reader, None)
+        try:
+            header = next(reader, None)
+        except (csv.Error, StopIteration) as exc:
+            raise InputFormatError(f"invalid CSV input: {exc}") from exc
         if not header:
             return []
         # Logic 2 and spreadsheet exports may include a UTF-8 BOM on the
@@ -140,7 +188,9 @@ class I2CParser:
         for idx, col in enumerate(header):
             c = col.strip().lower().replace(" ", "_").replace("[s]", "").replace('"', "").strip("_")
             if c in col_map:
-                raise ValueError(f"duplicate CSV column name after normalization: {col!r}")
+                raise InputFormatError(
+                    f"duplicate CSV column name after normalization: {col!r}"
+                )
             col_map[c] = idx
 
         def first_column(*names: str) -> int | None:
@@ -157,9 +207,17 @@ class I2CParser:
         duration_idx = first_column("duration", "duration_s")
         bitrate_idx = first_column("bit_rate", "bitrate", "frequency")
 
-        for row in reader:
+        for row in _iter_csv_rows(reader):
             if not row or not any(cell.strip() for cell in row):
                 continue
+            record_count += 1
+            if record_count > limits.max_records:
+                raise ResourceLimitError(
+                    f"CSV input exceeds the {limits.max_records}-record safety limit",
+                    resource="records",
+                    limit=limits.max_records,
+                    observed=record_count,
+                )
 
             source_error: str | None = None
             structural_source_error = len(row) != len(header)
@@ -462,26 +520,48 @@ class I2CParser:
                     )
                 )
 
+        if len(events) > limits.max_records:
+            raise ResourceLimitError(
+                f"parsed I2C events exceed the {limits.max_records}-record safety limit",
+                resource="records",
+                limit=limits.max_records,
+                observed=len(events),
+            )
         return events
 
     @classmethod
-    def parse_csv_string(cls, csv_text: str) -> list[RawI2CEvent]:
+    def parse_csv_string(
+        cls, csv_text: str, *, limits: AnalysisLimits | None = None
+    ) -> list[RawI2CEvent]:
         """Parse CSV formatted string into RawI2CEvents."""
+        limits = coerce_limits(limits)
         if not isinstance(csv_text, str):
             raise TypeError("CSV input must be text")
-        return cls.parse_csv_stream(io.StringIO(csv_text.strip()))
+        _check_text_size(csv_text, limits, label="CSV input")
+        return cls.parse_csv_stream(io.StringIO(csv_text.strip()), limits=limits)
 
     @classmethod
-    def parse_text_trace(cls, text: str) -> list[RawI2CEvent]:
+    def parse_text_trace(
+        cls, text: str, *, limits: AnalysisLimits | None = None
+    ) -> list[RawI2CEvent]:
         """Parse simple text trace logs (e.g. '[0.001] S 0x50 W 0x00 A Sr 0x50 R 0x12 A P')."""
+        limits = coerce_limits(limits)
         if not isinstance(text, str):
             raise TypeError("text trace input must be text")
+        _check_text_size(text, limits, label="text trace")
         events: list[RawI2CEvent] = []
         lines = [
             line.strip()
             for line in text.strip().splitlines()
             if line.strip() and not line.strip().startswith("#")
         ]
+        if len(lines) > limits.max_records:
+            raise ResourceLimitError(
+                f"text trace exceeds the {limits.max_records}-record safety limit",
+                resource="records",
+                limit=limits.max_records,
+                observed=len(lines),
+            )
 
         packet_id = 0
 
@@ -642,13 +722,30 @@ class I2CParser:
                             )
                 idx += 1
 
+        if len(events) > limits.max_records:
+            raise ResourceLimitError(
+                f"parsed I2C events exceed the {limits.max_records}-record safety limit",
+                resource="records",
+                limit=limits.max_records,
+                observed=len(events),
+            )
         return events
 
     @classmethod
-    def parse_raw_records(cls, records: list[dict[str, Any]]) -> list[RawI2CEvent]:
+    def parse_raw_records(
+        cls, records: list[dict[str, Any]], *, limits: AnalysisLimits | None = None
+    ) -> list[RawI2CEvent]:
         """Convert raw Python dictionary list into normalized RawI2CEvents."""
+        limits = coerce_limits(limits)
         if not isinstance(records, list):
             raise TypeError("raw I2C records must be provided as a list")
+        if len(records) > limits.max_records:
+            raise ResourceLimitError(
+                f"raw I2C records exceed the {limits.max_records}-record safety limit",
+                resource="records",
+                limit=limits.max_records,
+                observed=len(records),
+            )
 
         events: list[RawI2CEvent] = []
         for index, rec in enumerate(records):
@@ -747,5 +844,12 @@ class I2CParser:
                     bit_rate_khz=bit_rate_khz,
                     extra=extra,
                 )
+            )
+        if len(events) > limits.max_records:
+            raise ResourceLimitError(
+                f"parsed I2C events exceed the {limits.max_records}-record safety limit",
+                resource="records",
+                limit=limits.max_records,
+                observed=len(events),
             )
         return events

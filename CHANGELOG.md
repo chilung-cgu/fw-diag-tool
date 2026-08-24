@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2026-08-24
+
+### Security & Privacy
+- GUI remote bind now requires explicit --allow-remote flag
+- Streamlit telemetry disabled by default (browser.gatherUsageStats=false)
+- Session files use POSIX 0700/0600 permissions
+
+### Fixed
+- MCTP/IPMB demux no longer uses address-only fallback for IPMB classification
+- PCIe multi-device parser preserves undecodable chunks as data-quality issues
+- Raw I2C waveform downsampling replaces hard rejection above render limit
+- CSV parser normalizes csv.Error to InputFormatError (no traceback)
+
+### Added
+- ProtocolMode enum (auto/mctp/ipmb) with CLI --protocol flag and GUI selectbox
+- AmbiguousProtocolError for frames that fail both protocol structural checks
+- EvidenceMetric dataclass with measured/unavailable factory methods
+- MCTP multi-packet message reassembly with sequence/tag tracking
+- UART SymbolTable for offline crash symbolication from System.map/nm output
+- Raw SPI digital transition parser supporting CPOL/CPHA modes 0-3
+- DiagnosticReportEnvelope standard JSON format for CI pipelines
+- SARIF 2.1.0 report builder for security scanning integration
+- Batch manifest builder with pass/fail statistics
+- Diagnostic bundle (.fw-diag-bundle.zip) with privacy manifest
+- Board Profile YAML upload in I2C GUI page
+- Hypothesis property-based tests for parser robustness
+- Deterministic stride downsampling for large waveform captures
+
+### Changed
+- Coverage gates: branch=true, fail_under=80 in CI
+- mypy: disallow_untyped_defs enabled for fw_diag_tool.*
+- CI adds mkdocs build --strict gate and nightly cron schedule
+- Version source unified: pyproject.toml is the single authority
+- Wheel includes docs/ via force-include; sdist excludes build artifacts
+
 ## [1.1.0] - 2026-08-23
 
 ### Added

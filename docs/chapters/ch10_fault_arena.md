@@ -1,4 +1,4 @@
-# 第十章：Junior FW 20 大實戰故障演練場 (Fault Arena)
+# Junior FW 20 大實戰故障演練場 (Fault Arena)
 
 ## 這個頁面在做什麼？
 
@@ -58,5 +58,6 @@
 | Case 19 | PLDM 封包順序錯亂 | PktSeq 未正確管理 | 檢查 SOM/EOM/Seq |
 | Case 20 | IPMB Checksum FAIL | 資料損毀或位址錯誤 | 檢查 (sum+chk)&0xFF==0 |
 
-> [!NOTE]
+> **說明：**
+>
 > 表中的「練習假設」只是第一個要驗證的方向。實際工作應保留替代假設，並以 schematic、datasheet、register、log 與量測結果逐一排除。

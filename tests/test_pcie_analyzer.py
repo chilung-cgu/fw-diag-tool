@@ -87,6 +87,7 @@ class TestPCIeAnalyzer(unittest.TestCase):
         cfg = PCIeAnalyzer.decode_config_space(self.raw_bytes)
         aer = cfg.aer_analysis
         self.assertIsNotNone(aer)
+        assert aer is not None
         self.assertEqual(aer.active_uncorr_fatal_count, 1)  # Malformed TLP
         self.assertEqual(aer.active_uncorr_nonfatal_count, 1)  # CompTimeout
         self.assertEqual(aer.active_corr_count, 1)  # Bad TLP
@@ -94,6 +95,7 @@ class TestPCIeAnalyzer(unittest.TestCase):
         # Check Decoded TLP Header
         tlp = aer.decoded_tlp
         self.assertIsNotNone(tlp)
+        assert tlp is not None
         self.assertEqual(tlp.type_name, "MRd (Memory Read 3DW)")
         self.assertEqual(tlp.length, 1)
         self.assertEqual(tlp.address, 0xFE000000)

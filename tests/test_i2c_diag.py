@@ -167,6 +167,7 @@ def test_text_trace_parser():
     assert report.transactions[0].direction == I2CDirection.WRITE
     assert report.transactions[1].direction == I2CDirection.READ
     assert len(report.transactions[1].data_bytes) == 2
+    assert report.transactions[1].semantic_summary is not None
     assert "Temperature" in report.transactions[1].semantic_summary
 
 

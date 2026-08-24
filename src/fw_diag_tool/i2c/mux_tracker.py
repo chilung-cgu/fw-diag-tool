@@ -6,7 +6,7 @@ MUX_ADDRESSES = {0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77}
 
 
 class I2CMuxTracker:
-    def __init__(self):
+    def __init__(self) -> None:
         self.mux_states: dict[int, int] = {}
         self.last_active_mux: int | None = None
 

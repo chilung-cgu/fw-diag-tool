@@ -90,7 +90,7 @@ class I2CWaveformReconstructor:
 
         cur_t = t_offset_us
 
-        def add_point(t: float, scl_v: int, sda_v: int):
+        def add_point(t: float, scl_v: int, sda_v: int) -> None:
             time_us.append(round(t, 4))
             scl.append(scl_v)
             sda.append(sda_v)
@@ -124,7 +124,7 @@ class I2CWaveformReconstructor:
             ack: AckType,
             stretch_ms: float = 0.0,
             label_override: str | None = None,
-        ):
+        ) -> None:
             nonlocal cur_t
             byte_begin_t = cur_t
 

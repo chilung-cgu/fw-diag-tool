@@ -1,4 +1,4 @@
-# 第七章：PCIe Config Space、AER 嚴重錯誤與 Link 降級排查
+# PCIe Config Space、AER 嚴重錯誤與 Link 降級排查
 
 ## 這個頁面在做什麼？
 
@@ -69,5 +69,6 @@ Link capability 與 negotiated status 的差異可指出「目前沒有跑到最
 | **Poisoned TLP** | TLP 帶有 poisoned indication | 追蹤 poison 產生端與資料路徑；不一定是主記憶體 ECC |
 | **Surprise Down** | Link 非預期離開正常運作狀態 | 檢查 power、reset、hot-plug、link log 與實體連接等多種可能原因 |
 
-> [!NOTE]
+> **說明：**
+>
 > 本頁分析 Config Space、`lspci` 與 AER log，不是 PCIe protocol analyzer、LTSSM trace 或高速差分電氣量測工具。

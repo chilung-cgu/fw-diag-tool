@@ -33,7 +33,9 @@
 - SPI decoded CSV 可用於 opcode/sequence 分析；沒有 SCLK/MOSI/MISO/CS raw edge 時，不代表工具量到實際 SPI waveform 或 CPOL/CPHA timing。
 - UART crash log 的 fault address 與 status bit 可縮小範圍，但通常不能單獨證明 root cause；可靠 symbolication 需要匹配的 ELF、map file 或 symbols。
 - MCTP、PLDM、SPDM 與 IPMB 目前只支援已實作的 header/message 欄位；未知 message type 應保留原始 bytes，而不是猜測內容。
+- MCTP/IPMB 的註解、空白與無法組成完整 byte token 的輸入會被略過或列為未解碼來源行；報告未列出錯誤前，不應把「沒有 frame」解讀成協定正常。
 - 一般低速 logic analyzer 不適合直接量測 PCIe 高速 differential link。此工具的 PCIe 功能以 Config Space、`lspci` 與 AER log 為主，不代表 protocol analyzer 或示波器能力。
+- 多裝置 `lspci` 輸入中，無法湊足 64 bytes 或無法乾淨解碼的裝置會保留 BDF 並標記 data-quality issue；該項目的其餘欄位不是有效 config-space 證據。
 
 ## 產生器與硬體安全
 

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import ipaddress
+import json
+from dataclasses import replace
 from pathlib import Path
 
 import typer
@@ -18,6 +21,7 @@ from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.raw_adapter import raw_decode_to_events
 from fw_diag_tool.i2c.raw_capture import analyze_raw_i2c_csv
 from fw_diag_tool.i2c.reporter import I2CReporter
+from fw_diag_tool.limits import DEFAULT_ANALYSIS_LIMITS, AnalysisLimits
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
@@ -52,6 +56,17 @@ app.add_typer(gen_app)
 
 console = Console()
 register_extra_commands(app, i2c_app, console)
+MAX_CLI_RECORDS = 250_000
+
+
+def _analysis_limits(max_records: int) -> AnalysisLimits:
+    if isinstance(max_records, bool) or not 1 <= max_records <= MAX_CLI_RECORDS:
+        raise ValueError(f"--max-records must be between 1 and {MAX_CLI_RECORDS}")
+    return replace(
+        DEFAULT_ANALYSIS_LIMITS,
+        max_records=max_records,
+        max_transitions=max_records,
+    )
 
 
 def _version_callback(value: bool) -> None:
@@ -109,22 +124,31 @@ def analyze_i2c_trace(
     fail_on: str | None = typer.Option(
         None, "--fail-on", help="Exit with code 1 if issues meet threshold (warning|error|critical)."
     ),
-):
+    max_records: int = typer.Option(
+        DEFAULT_ANALYSIS_LIMITS.max_records,
+        "--max-records",
+        help=f"Maximum source rows/transitions (1..{MAX_CLI_RECORDS}).",
+    ),
+) -> None:
     """Analyze an I2C / SMBus / PMBus trace, decode transactions, check timing, and diagnose faults."""
     if not file_path.exists():
         console.print(f"[bold red]Error: File {file_path} not found![/]")
         raise typer.Exit(code=1)
     try:
+        limits = _analysis_limits(max_records)
         profile = load_board_profile(board_profile) if board_profile else None
-        engine = I2CDiagnosticEngine(smbus_timeout_ms=smbus_timeout, board_profile=profile)
+        engine = I2CDiagnosticEngine(
+            smbus_timeout_ms=smbus_timeout, board_profile=profile, limits=limits
+        )
         if raw_digital:
             result = analyze_raw_i2c_csv(
                 file_path.read_bytes(),
                 time_column=time_column,
                 scl_column=scl_column,
                 sda_column=sda_column,
+                limits=limits,
             )
-            report = engine.analyze(raw_decode_to_events(result))
+            report = engine.analyze(raw_decode_to_events(result, limits=limits))
         else:
             report = engine.analyze_csv_file(str(file_path))
         I2CReporter.render_terminal(report, console=console)
@@ -161,7 +185,7 @@ def analyze_pcie(
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
     ),
-):
+) -> None:
     """Analyze PCIe Config Space, Capability list, AER errors, and decode faulting TLP Headers."""
     try:
         content = file_or_dump
@@ -182,6 +206,9 @@ def analyze_pcie(
                 )
             )
             console.print(report_md)
+            if markdown_out:
+                markdown_out.write_text(report_md, encoding="utf-8")
+                console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
         else:
             devices = PCIeAnalyzer.parse_multi_lspci_text(content)
             if not devices:
@@ -242,13 +269,20 @@ def analyze_spi_trace(
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
     ),
-):
+    max_records: int = typer.Option(
+        DEFAULT_ANALYSIS_LIMITS.max_records,
+        "--max-records",
+        help=f"Maximum source rows (1..{MAX_CLI_RECORDS}).",
+    ),
+) -> None:
     """Analyze SPI / QSPI NOR Flash trace, decode JEDEC opcodes, and detect write/erase hazards."""
     if not file_path.exists():
         console.print(f"[bold red]Error: File {file_path} not found![/]")
         raise typer.Exit(code=1)
     try:
-        report = SPIDiagnosticEngine().analyze_csv_file(file_path)
+        report = SPIDiagnosticEngine(limits=_analysis_limits(max_records)).analyze_csv_file(
+            file_path
+        )
         SPIReporter.render_terminal(report, console=console)
         if markdown_out:
             markdown_out.write_text(SPIReporter.to_markdown(report), encoding="utf-8")
@@ -266,7 +300,7 @@ def analyze_uart_crash(
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
     ),
-):
+) -> None:
     """Analyze Linux Kernel Panic or ARM Cortex-M HardFault crash dumps."""
     try:
         content = file_or_text
@@ -290,7 +324,16 @@ def analyze_mctp(
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
     ),
-):
+    json_out: Path | None = typer.Option(
+        None, "--json", "-j", help="Export JSON structured report to file"
+    ),
+    protocol_mode: str = typer.Option(
+        "auto",
+        "--protocol",
+        "-p",
+        help="Protocol demultiplexing mode (auto, mctp, ipmb).",
+    ),
+) -> None:
     """Decode MCTP (DSP0236/PLDM/SPDM) packets and IPMB server management frames."""
     try:
         content = file_or_dump
@@ -298,11 +341,18 @@ def analyze_mctp(
             p = Path(file_or_dump)
             if p.exists():
                 content = p.read_text(encoding="utf-8")
-        report = ServerMgmtParser.parse_text_dump(content)
+        report = ServerMgmtParser.parse_text_dump(content, protocol_mode=protocol_mode)
         ServerMgmtReporter.render_terminal(report, console=console)
         if markdown_out:
             markdown_out.write_text(ServerMgmtReporter.to_markdown(report), encoding="utf-8")
             console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
+        if json_out:
+            json_out.write_text(json.dumps({
+                "mctp_packets": [p.__dict__ for p in report.mctp_packets],
+                "ipmb_frames": [f.__dict__ for f in report.ipmb_frames],
+                "unparsed_lines": report.unparsed_lines,
+                "source_errors": report.source_errors,
+            }, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
         console.print(f"[bold red]Error: MCTP/IPMB input or report export is invalid: {exc}[/]")
         raise typer.Exit(code=2) from exc
@@ -313,7 +363,7 @@ def decode_register(
     yaml_file: Path = typer.Argument(..., help="Path to register definition YAML file"),
     reg_name_or_offset: str = typer.Argument(..., help="Register name or offset (e.g. CTRL, 0x10)"),
     raw_value: str = typer.Argument(..., help="Hex raw register value (e.g. 0x00040000)"),
-):
+) -> None:
     """Decode a hardware register value based on YAML bitfield definitions."""
     if not yaml_file.exists():
         console.print(f"[bold red]Error: YAML file {yaml_file} not found![/]")
@@ -366,7 +416,7 @@ def generate_c_header(
     module_name: str = typer.Option(
         "CHIP_REGS", "--name", "-n", help="C header module name / guard prefix"
     ),
-):
+) -> None:
     """Generate MISRA-compliant C header definitions and RMW bitfield macros from YAML."""
     if not yaml_file.exists():
         console.print(f"[bold red]Error: YAML file {yaml_file} not found![/]")
@@ -401,7 +451,7 @@ def generate_dts(
     bus_num: int = typer.Option(1, "--bus", "-b", help="I2C Bus index"),
     mux_addr: str = typer.Option("0x70", "--mux", "-m", help="PCA9548A MUX I2C address"),
     output_dts: Path | None = typer.Option(None, "--out", "-o", help="Output .dts file path"),
-):
+) -> None:
     """Generate Linux Kernel & OpenBMC compliant Device Tree Source (.dts) from topology."""
     try:
         m_addr = int(mux_addr, 0)
@@ -430,10 +480,32 @@ def generate_dts(
 def launch_gui(
     port: int = typer.Option(8501, "--port", "-p"),
     host: str = typer.Option("127.0.0.1", "--host", "-h"),
-):
+    allow_remote: bool = typer.Option(
+        False,
+        "--allow-remote",
+        help="Allow a non-loopback bind. The dashboard has no built-in authentication or TLS.",
+    ),
+) -> None:
     """Launch the interactive Web GUI dashboard."""
     import subprocess
     import sys
+
+    normalized_host = host.strip("[]")
+    try:
+        is_loopback = ipaddress.ip_address(normalized_host).is_loopback
+    except ValueError:
+        is_loopback = normalized_host.lower() == "localhost"
+    if not is_loopback and not allow_remote:
+        console.print(
+            "[bold red]Error: non-loopback GUI binds require --allow-remote. "
+            "Use a trusted reverse proxy for authentication and TLS.[/]"
+        )
+        raise typer.Exit(code=2)
+    if not is_loopback:
+        console.print(
+            "[bold yellow]Warning: remote mode has no built-in authentication and TLS; "
+            "protect it with a trusted reverse proxy.[/]"
+        )
 
     app_path = Path(__file__).parent / "gui" / "app.py"
     console.print(f"[bold green]🚀 Launching Web GUI on http://{host}:{port}...[/]")
@@ -446,6 +518,9 @@ def launch_gui(
             str(app_path),
             f"--server.port={port}",
             f"--server.address={host}",
+            "--server.maxUploadSize=20",
+            "--server.maxMessageSize=20",
+            "--browser.gatherUsageStats=false",
         ],
         check=False,
     )
@@ -453,7 +528,7 @@ def launch_gui(
         raise typer.Exit(code=result.returncode)
 
 
-def main():
+def main() -> None:
     app()
 
 

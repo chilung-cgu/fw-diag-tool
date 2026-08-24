@@ -8,8 +8,11 @@ from dataclasses import dataclass, replace
 from enum import Enum
 from itertools import pairwise
 
+from fw_diag_tool.errors import InputFormatError, ResourceLimitError
+from fw_diag_tool.limits import AnalysisLimits, coerce_limits
 
-class RawCaptureError(ValueError):
+
+class RawCaptureError(InputFormatError):
     pass
 
 
@@ -172,22 +175,41 @@ def parse_transition_csv(
     scl_column: str | None = None,
     sda_column: str | None = None,
     delimiter: str = ",",
+    limits: AnalysisLimits | None = None,
 ) -> RawDigitalCapture:
+    limits = coerce_limits(limits)
     if not isinstance(content, (str, bytes)):
         raise RawCaptureValidationError("raw capture must be provided as UTF-8 text or bytes")
     if not isinstance(delimiter, str) or len(delimiter) != 1:
         raise RawCaptureValidationError("CSV delimiter must be exactly one character")
     if isinstance(content, bytes):
+        if len(content) > limits.max_upload_bytes:
+            raise ResourceLimitError(
+                f"raw capture exceeds the {limits.max_upload_bytes}-byte safety limit",
+                resource="raw capture",
+                limit=limits.max_upload_bytes,
+                observed=len(content),
+            )
         try:
             text = content.decode("utf-8-sig")
         except UnicodeDecodeError as exc:
             raise RawCaptureValidationError("raw capture must be UTF-8 CSV") from exc
     else:
         text = content.lstrip("\ufeff")
+        text_size = len(text.encode("utf-8"))
+        if text_size > limits.max_upload_bytes:
+            raise ResourceLimitError(
+                f"raw capture exceeds the {limits.max_upload_bytes}-byte safety limit",
+                resource="raw capture",
+                limit=limits.max_upload_bytes,
+                observed=text_size,
+            )
 
     reader = csv.reader(io.StringIO(text, newline=""), delimiter=delimiter)
     try:
         header = next(reader)
+    except csv.Error as exc:
+        raise RawCaptureValidationError(f"invalid CSV input: {exc}") from exc
     except StopIteration as exc:
         raise RawCaptureValidationError("raw capture CSV is empty") from exc
 
@@ -201,33 +223,56 @@ def parse_transition_csv(
     indexes = {name: header.index(name) for name in (columns.time, columns.scl, columns.sda)}
     transitions: list[RawDigitalTransition] = []
 
-    for source_row, row in enumerate(reader, start=2):
-        if not row or all(not value.strip() for value in row):
-            continue
-        if len(row) != len(header):
-            raise RawCaptureValidationError(
-                f"row {source_row} has {len(row)} fields; expected {len(header)}"
-            )
+    transition_count = 0
+    try:
+        rows = iter(reader)
+        for source_row, row in enumerate(rows, start=2):
+            if not row or all(not value.strip() for value in row):
+                continue
+            transition_count += 1
+            if transition_count > limits.max_transitions:
+                raise ResourceLimitError(
+                    f"raw capture exceeds the {limits.max_transitions}-transition safety limit",
+                    resource="transitions",
+                    limit=limits.max_transitions,
+                    observed=transition_count,
+                )
+            if len(row) != len(header):
+                raise RawCaptureValidationError(
+                    f"row {source_row} has {len(row)} fields; expected {len(header)}"
+                )
 
-        timestamp = _parse_timestamp(row[indexes[columns.time]], source_row)
-        scl = _parse_digital(row[indexes[columns.scl]], columns.scl, source_row)
-        sda = _parse_digital(row[indexes[columns.sda]], columns.sda, source_row)
+            timestamp = _parse_timestamp(row[indexes[columns.time]], source_row)
+            scl = _parse_digital(row[indexes[columns.scl]], columns.scl, source_row)
+            sda = _parse_digital(row[indexes[columns.sda]], columns.sda, source_row)
 
-        if transitions and timestamp <= transitions[-1].timestamp_s:
-            raise RawCaptureValidationError(
-                f"row {source_row} timestamp must be strictly greater than the previous row"
-            )
-        transitions.append(RawDigitalTransition(timestamp, scl, sda, source_row))
+            if transitions and timestamp <= transitions[-1].timestamp_s:
+                raise RawCaptureValidationError(
+                    f"row {source_row} timestamp must be strictly greater than the previous row"
+                )
+            transitions.append(RawDigitalTransition(timestamp, scl, sda, source_row))
+    except csv.Error as exc:
+        raise RawCaptureValidationError(f"invalid CSV input: {exc}") from exc
 
     if not transitions:
         raise RawCaptureValidationError("raw capture CSV contains no transition rows")
     return RawDigitalCapture(columns, tuple(transitions))
 
 
-def decode_i2c_capture(capture: RawDigitalCapture) -> RawI2CDecodeResult:
+def decode_i2c_capture(
+    capture: RawDigitalCapture, *, limits: AnalysisLimits | None = None
+) -> RawI2CDecodeResult:
+    limits = coerce_limits(limits)
     if not isinstance(capture, RawDigitalCapture):
         raise TypeError("capture must be a RawDigitalCapture")
     _validate_capture(capture)
+    if len(capture.transitions) > limits.max_transitions:
+        raise ResourceLimitError(
+            f"raw capture exceeds the {limits.max_transitions}-transition safety limit",
+            resource="transitions",
+            limit=limits.max_transitions,
+            observed=len(capture.transitions),
+        )
     if len(capture.transitions) < 2:
         raise RawI2CDecodeError("raw capture needs at least two rows to contain an edge")
 
@@ -235,6 +280,7 @@ def decode_i2c_capture(capture: RawDigitalCapture) -> RawI2CDecodeResult:
     transactions: list[RawI2CTransaction] = []
     active: _TransactionBuilder | None = None
 
+    next_different = _next_different_transitions(capture.transitions)
     for transition_index, (previous, current) in enumerate(pairwise(capture.transitions)):
         scl_changed = previous.scl != current.scl
         sda_changed = previous.sda != current.sda
@@ -271,14 +317,7 @@ def decode_i2c_capture(capture: RawDigitalCapture) -> RawI2CDecodeResult:
             continue
 
         if active and previous.scl == 0 and current.scl == 1:
-            next_transition = next(
-                (
-                    candidate
-                    for candidate in capture.transitions[transition_index + 2 :]
-                    if candidate.scl != current.scl or candidate.sda != current.sda
-                ),
-                None,
-            )
+            next_transition = next_different[transition_index + 1]
             is_stop_setup = bool(
                 next_transition
                 and current.scl == 1
@@ -295,9 +334,32 @@ def decode_i2c_capture(capture: RawDigitalCapture) -> RawI2CDecodeResult:
         )
     if not transactions:
         raise RawI2CDecodeError("capture contains no complete I2C transaction")
+    if len(transactions) > limits.max_transactions:
+        raise ResourceLimitError(
+            f"raw capture exceeds the {limits.max_transactions}-transaction safety limit",
+            resource="transactions",
+            limit=limits.max_transactions,
+            observed=len(transactions),
+        )
 
     timing = _calculate_timing(capture.transitions, transactions)
     return RawI2CDecodeResult(capture, tuple(conditions), tuple(transactions), timing)
+
+
+def _next_different_transitions(
+    transitions: tuple[RawDigitalTransition, ...]
+) -> list[RawDigitalTransition | None]:
+    """Return the next edge after each transition without repeated suffix scans."""
+    result: list[RawDigitalTransition | None] = [None] * len(transitions)
+    next_transition: RawDigitalTransition | None = None
+    for index in range(len(transitions) - 1, -1, -1):
+        result[index] = next_transition
+        if index:
+            previous = transitions[index - 1]
+            current = transitions[index]
+            if previous.scl != current.scl or previous.sda != current.sda:
+                next_transition = current
+    return result
 
 
 def _validate_capture(capture: RawDigitalCapture) -> None:
@@ -355,15 +417,18 @@ def analyze_raw_i2c_csv(
     scl_column: str | None = None,
     sda_column: str | None = None,
     delimiter: str = ",",
+    limits: AnalysisLimits | None = None,
 ) -> RawI2CDecodeResult:
+    limits = coerce_limits(limits)
     capture = parse_transition_csv(
         content,
         time_column=time_column,
         scl_column=scl_column,
         sda_column=sda_column,
         delimiter=delimiter,
+        limits=limits,
     )
-    return decode_i2c_capture(capture)
+    return decode_i2c_capture(capture, limits=limits)
 
 
 def _resolve_columns(

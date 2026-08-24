@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
-from .models import IPMBFrame, MCTPPacket, ServerMgmtReport
+from fw_diag_tool.errors import AmbiguousProtocolError
+
+from .models import IPMBFrame, MCTPMessage, MCTPPacket, ProtocolMode, ServerMgmtReport
 
 MCTP_MSG_TYPES = {
     0x00: "MCTP Control Message (DSP0236)",
@@ -53,6 +56,127 @@ class ServerMgmtParser:
     # Parses MCTP transport packets and IPMB frame hex dumps
 
     @classmethod
+    def reassemble_mctp_messages(cls, packets: list[MCTPPacket]) -> list[MCTPMessage]:
+        """Reassemble multi-packet MCTP messages (DSP0236 Section 8)."""
+        messages: list[MCTPMessage] = []
+        contexts: dict[tuple[int, int, int], dict[str, Any]] = {}
+
+        for pkt in packets:
+            key = (pkt.src_eid, pkt.dest_eid, pkt.msg_tag)
+            if pkt.som and pkt.eom:
+                # Single-packet message
+                messages.append(
+                    MCTPMessage(
+                        src_eid=pkt.src_eid,
+                        dest_eid=pkt.dest_eid,
+                        msg_tag=pkt.msg_tag,
+                        msg_type=pkt.msg_type,
+                        msg_type_name=pkt.msg_type_name,
+                        packets_count=1,
+                        payload=list(pkt.payload),
+                        payload_hex=pkt.payload_hex,
+                        is_complete=True,
+                        pldm_command=pkt.pldm_command,
+                        summary=pkt.summary,
+                    )
+                )
+            elif pkt.som and not pkt.eom:
+                # Start of multi-packet message
+                contexts[key] = {
+                    "msg_type": pkt.msg_type,
+                    "msg_type_name": pkt.msg_type_name,
+                    "payload": list(pkt.payload),
+                    "packets_count": 1,
+                    "expected_seq": (pkt.pkt_seq + 1) % 4,
+                    "error": None,
+                }
+            elif not pkt.som and key in contexts:
+                ctx = contexts[key]
+                ctx["packets_count"] += 1
+                if pkt.pkt_seq != ctx["expected_seq"]:
+                    ctx["error"] = f"sequence mismatch: expected {ctx['expected_seq']}, got {pkt.pkt_seq}"
+                ctx["payload"].extend(pkt.payload)
+                ctx["expected_seq"] = (pkt.pkt_seq + 1) % 4
+
+                if pkt.eom:
+                    # End of message
+                    full_payload = ctx["payload"]
+                    pldm_info = None
+                    if ctx["msg_type"] == 0x01 and len(full_payload) >= 3:
+                        is_rq = bool(full_payload[0] & 0x80)
+                        inst_id = full_payload[0] & 0x1F
+                        pldm_type = full_payload[1] & 0x3F
+                        pldm_cmd = full_payload[2]
+                        pldm_t_name = PLDM_TYPES.get(pldm_type, f"Type 0x{pldm_type:02X}")
+                        rq_str = "Request" if is_rq else "Response"
+                        pldm_info = f"PLDM {pldm_t_name} {rq_str}: Cmd 0x{pldm_cmd:02X} (Instance {inst_id})"
+                        if not is_rq and len(full_payload) >= 4:
+                            pldm_info += f" [CC: 0x{full_payload[3]:02X}]"
+
+                    summary = (
+                        f"MCTP Message: EID 0x{pkt.src_eid:02X} -> 0x{pkt.dest_eid:02X} "
+                        f"[{ctx['msg_type_name']}] ({ctx['packets_count']} pkts, {len(full_payload)} bytes)"
+                    )
+                    if pldm_info:
+                        summary += f" ({pldm_info})"
+                    if ctx["error"]:
+                        summary += f" [Error: {ctx['error']}]"
+
+                    messages.append(
+                        MCTPMessage(
+                            src_eid=pkt.src_eid,
+                            dest_eid=pkt.dest_eid,
+                            msg_tag=pkt.msg_tag,
+                            msg_type=ctx["msg_type"],
+                            msg_type_name=ctx["msg_type_name"],
+                            packets_count=ctx["packets_count"],
+                            payload=full_payload,
+                            payload_hex=" ".join(f"{b:02X}" for b in full_payload),
+                            is_complete=ctx["error"] is None,
+                            error=ctx["error"],
+                            pldm_command=pldm_info,
+                            summary=summary,
+                        )
+                    )
+                    del contexts[key]
+            else:
+                # Orphan continuation segment without SOM
+                messages.append(
+                    MCTPMessage(
+                        src_eid=pkt.src_eid,
+                        dest_eid=pkt.dest_eid,
+                        msg_tag=pkt.msg_tag,
+                        msg_type=pkt.msg_type,
+                        msg_type_name="Orphan Continuation (no SOM)",
+                        packets_count=1,
+                        payload=list(pkt.payload),
+                        payload_hex=pkt.payload_hex,
+                        is_complete=False,
+                        error="Orphan packet received without preceding SOM",
+                        summary=f"MCTP: Orphan packet without SOM (Tag: 0x{pkt.msg_tag:X})",
+                    )
+                )
+
+        # Any unfinished streams
+        for (src_eid, dest_eid, msg_tag), ctx in contexts.items():
+            messages.append(
+                MCTPMessage(
+                    src_eid=src_eid,
+                    dest_eid=dest_eid,
+                    msg_tag=msg_tag,
+                    msg_type=ctx["msg_type"],
+                    msg_type_name=ctx["msg_type_name"],
+                    packets_count=ctx["packets_count"],
+                    payload=ctx["payload"],
+                    payload_hex=" ".join(f"{b:02X}" for b in ctx["payload"]),
+                    is_complete=False,
+                    error="Incomplete message stream: missing EOM",
+                    summary=f"MCTP: Incomplete message from EID 0x{src_eid:02X} (missing EOM)",
+                )
+            )
+        return messages
+
+    @classmethod
     def parse_hex_tokens(cls, text: str) -> list[int]:
         """Extract complete byte tokens without harvesting hex-looking text.
 
@@ -75,6 +199,18 @@ class ServerMgmtParser:
                 continue
             values.extend(int(digits[idx : idx + 2], 16) for idx in range(0, len(digits), 2))
         return values
+
+    @classmethod
+    def _malformed_byte_token(cls, text: str) -> str | None:
+        """Return the first byte-like token that cannot represent whole bytes."""
+        for raw_token in re.split(r"[\s,;]+", text):
+            token = raw_token.strip("[](){}")
+            if not token or (raw_token.endswith(":") and not token.lower().startswith("0x")):
+                continue
+            digits = token[2:] if token.lower().startswith("0x") else token
+            if re.fullmatch(r"[0-9a-fA-F]+", digits or "") and len(digits) % 2:
+                return token
+        return None
 
     @classmethod
     def decode_mctp_packet(cls, raw_bytes: list[int]) -> MCTPPacket | None:
@@ -198,53 +334,134 @@ class ServerMgmtParser:
         )
 
     @classmethod
-    def parse_text_dump(cls, text: str) -> ServerMgmtReport:
+    def parse_text_dump(
+        cls,
+        text: str,
+        *,
+        protocol_mode: ProtocolMode | str = ProtocolMode.AUTO,
+    ) -> ServerMgmtReport:
+        if isinstance(protocol_mode, str):
+            protocol_mode = ProtocolMode(protocol_mode.lower())
         lines = text.strip().splitlines()
         mctp_list = []
         ipmb_list = []
+        unparsed_lines: list[str] = []
+        source_errors: list[str] = []
+        ambiguous_lines: list[str] = []
 
-        for line in lines:
+        for line_number, line in enumerate(lines, 1):
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            malformed_token = cls._malformed_byte_token(line)
+            if malformed_token:
+                unparsed_lines.append(line)
+                source_errors.append(
+                    f"line {line_number}: incomplete byte token {malformed_token}"
+                )
+                continue
             raw = cls.parse_hex_tokens(line)
             if len(raw) < 4:
+                if line.strip():
+                    unparsed_lines.append(line)
+                    source_errors.append(
+                        f"line {line_number}: no recognizable MCTP packet or IPMB frame"
+                    )
                 continue
-            # Demultiplex protocol families before applying permissive IPMB
-            # recovery heuristics.  A 3-byte MCTP transport header (without
-            # the optional version byte) can begin with an even EID, which
-            # otherwise looked like an IPMB slave address and was silently
-            # decoded as the wrong protocol.
             mctp_versioned = len(raw) >= 5 and raw[0] == 0x01
             chk1_calc = ((raw[0] + raw[1] + raw[2]) & 0xFF) == 0 if len(raw) >= 3 else False
             chk2_calc = ((sum(raw[3:-1]) + raw[-1]) & 0xFF) == 0 if len(raw) >= 7 else False
-            known_ipmb_slave_addresses = {
-                0x20,
-                0x24,
-                0x28,
-                0x2C,
-                0x2E,
-                0x30,
-                0x40,
-                0x81,
-                0x82,
-            }
-            is_ipmb_candidate = len(raw) >= 7 and (
-                chk1_calc or chk2_calc or raw[0] in known_ipmb_slave_addresses
-            )
-            if not mctp_versioned and is_ipmb_candidate:
+            ipmb_both_checksums_pass = chk1_calc and chk2_calc
+
+            # In AUTO mode, MCTP without a version byte is structurally valid
+            # if not both IPMB checksums pass (so it cannot be a valid IPMB).
+            # If both IPMB checksums pass but there is no version byte, the
+            # frame is classified as IPMB below.
+            if protocol_mode == ProtocolMode.MCTP:
+                mctp_structurally_valid = True
+            else:
+                mctp_structurally_valid = mctp_versioned
+                if not mctp_versioned and not ipmb_both_checksums_pass:
+                    mctp_structurally_valid = True
+
+            if protocol_mode == ProtocolMode.IPMB:
                 ipmb = cls.decode_ipmb_frame(raw)
                 if ipmb:
                     ipmb_list.append(ipmb)
                     continue
 
-            mctp = cls.decode_mctp_packet(raw)
-            if mctp:
-                mctp_list.append(mctp)
+            if protocol_mode == ProtocolMode.MCTP:
+                mctp = cls.decode_mctp_packet(raw)
+                if mctp:
+                    mctp_list.append(mctp)
+                    continue
 
-        summary_str = (
-            f"Decoded {len(mctp_list)} MCTP packet(s) and {len(ipmb_list)} IPMB frame(s). "
-        )
+            # AUTO mode: require checksum evidence for IPMB classification.
+            # Address alone is never sufficient; a valid slave address such as
+            # 0x20 can also be a legitimate MCTP destination EID. If at least
+            # one checksum passes, classify as IPMB (partial evidence).
+            if len(raw) >= 7 and not mctp_versioned and (chk1_calc or chk2_calc):
+                ipmb = cls.decode_ipmb_frame(raw)
+                if ipmb:
+                    ipmb_list.append(ipmb)
+                    continue
+
+            # Neither IPMB checksum passes: the frame could be a corrupted
+            # IPMB or an unversioned MCTP. Prefer MCTP because unversioned
+            # MCTP with even EIDs would otherwise be consumed by permissive
+            # IPMB recovery. If neither checksum passes AND the first byte is
+            # not an even EID (i.e., it looks like an odd IPMB slave address),
+            # decode as corrupted IPMB to preserve evidence. Otherwise prefer
+            # MCTP.
+            if len(raw) >= 7 and not mctp_versioned:
+                first_byte_is_ipmb_address = bool(raw[0] & 1) or raw[0] in {
+                    0x20, 0x24, 0x28, 0x2C, 0x2E, 0x30,
+                    0x40, 0x81, 0x82, 0x83, 0x91,
+                }
+                if mctp_structurally_valid and not first_byte_is_ipmb_address:
+                    mctp = cls.decode_mctp_packet(raw)
+                    if mctp:
+                        mctp_list.append(mctp)
+                        continue
+
+                if first_byte_is_ipmb_address:
+                    ipmb = cls.decode_ipmb_frame(raw)
+                    if ipmb:
+                        ipmb_list.append(ipmb)
+                        continue
+
+            if mctp_structurally_valid:
+                mctp = cls.decode_mctp_packet(raw)
+                if mctp:
+                    mctp_list.append(mctp)
+                    continue
+
+
+            # Neither protocol can be confirmed by structural evidence.
+            hex_str = " ".join(f"{b:02X}" for b in raw)
+            candidates = ["mctp"] if len(raw) < 7 else ["mctp", "ipmb"]
+            ambiguous_lines.append(f"line {line_number}: {hex_str}")
+            raise AmbiguousProtocolError(
+                f"line {line_number}: cannot determine protocol from structural evidence "
+                f"(checksums={chk1_calc},{chk2_calc}, versioned_mctp={mctp_versioned})",
+                candidates=candidates,
+                line_number=line_number,
+                raw_hex=hex_str,
+            )
+
+        summary_parts = [
+            f"Decoded {len(mctp_list)} MCTP packet(s) and {len(ipmb_list)} IPMB frame(s)."
+        ]
+        summary_str = summary_parts[0]
+        if unparsed_lines:
+            summary_str += f" {len(unparsed_lines)} input line(s) were not decoded."
+        messages = cls.reassemble_mctp_messages(mctp_list)
         return ServerMgmtReport(
             mctp_packets=mctp_list,
+            mctp_messages=messages,
             ipmb_frames=ipmb_list,
+            ambiguous_lines=ambiguous_lines,
             total_frames=len(mctp_list) + len(ipmb_list),
             summary_text=summary_str,
+            unparsed_lines=unparsed_lines,
+            source_errors=source_errors,
         )

@@ -14,9 +14,11 @@
 ### A.1 SCL Clock Frequency Distribution（時脈頻率分佈直方圖）
 
 **這張圖在做什麼？**
+
 統計具有可靠 timing 的 I2C byte frequency（kHz）。若輸入沒有 raw edge、duration 或 analyzer 提供的 bitrate，這張圖應顯示 unavailable，而不是套用預設頻率。
 
 **X 軸（SCL Clock Frequency in kHz）**：
+
 - 100 kHz = Standard-mode（標準模式）
 - 400 kHz = Fast-mode（快速模式）
 - 1000 kHz = Fast-mode Plus
@@ -39,12 +41,17 @@
 ### A.2 Bus Transaction Timeline & Active Device Map（匯流排交易時間軸與設備地圖）
 
 **這張圖在做什麼？**
+
 以時間軸（X 軸）為基準，將每一筆 I2C 交易按「哪個 Slave 被存取（Y 軸）」與「成功/失敗（顏色）」繪製成散點圖。
 
 **X 軸（Start Time in seconds）**：交易的起始時間。
+
 **Y 軸（Device）**：被存取的 Slave 設備名稱。
+
 **圓點大小**：交易持續時間（Duration in ms），越大表示該筆交易佔用匯流排越久。
+
 **圓點顏色**：
+
 - 綠色 **ACK**：交易成功完成，Slave 正常回應。
 - 橘色 **DATA NAK**：Address 有 ACK，但後續出現非預期 data NACK。Controller 在 read 最後一個 byte 用 NACK 結束讀取屬於正常流程，應另行分類。
 - 紅色 **ADDR NAK**：Slave 沒有回應 Address（完全沒有 ACK）。

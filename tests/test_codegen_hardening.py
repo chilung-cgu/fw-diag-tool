@@ -108,11 +108,11 @@ def test_driver_rejects_invalid_lengths_and_register_width():
 
 def test_driver_rejects_wrong_input_types_and_write_read_length():
     with pytest.raises(TypeError, match="addr_7bit"):
-        I2CDriverCodeGenerator.generate_all_snippets(addr_7bit=True, data_bytes=[0x00])
+        I2CDriverCodeGenerator.generate_all_snippets(addr_7bit=True, data_bytes=[0x00])  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="data_bytes"):
-        I2CDriverCodeGenerator.generate_all_snippets(addr_7bit=0x50, data_bytes=(0x00,))
+        I2CDriverCodeGenerator.generate_all_snippets(addr_7bit=0x50, data_bytes=(0x00,))  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="is_read"):
-        I2CDriverCodeGenerator.generate_all_snippets(addr_7bit=0x50, data_bytes=[0x00], is_read=1)
+        I2CDriverCodeGenerator.generate_all_snippets(addr_7bit=0x50, data_bytes=[0x00], is_read=1)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="only valid for read"):
         I2CDriverCodeGenerator.generate_all_snippets(
             addr_7bit=0x50, data_bytes=[0x00], read_length=1
@@ -139,18 +139,18 @@ def test_dts_requires_explicit_device_compatible():
 
 def test_dts_rejects_invalid_devices_container_and_mapping():
     with pytest.raises(TypeError, match="devices must be a list"):
-        DeviceTreeGenerator.generate_dts_from_topology(devices={})
+        DeviceTreeGenerator.generate_dts_from_topology(devices={})  # type: ignore[arg-type]
     with pytest.raises(TypeError, match=r"devices\[0\]"):
-        DeviceTreeGenerator.generate_dts_from_topology(devices=["not-a-mapping"])
+        DeviceTreeGenerator.generate_dts_from_topology(devices=["not-a-mapping"])  # type: ignore[list-item]
     with pytest.raises(ValueError, match="missing addr"):
         DeviceTreeGenerator.generate_dts_from_topology(devices=[{}])
 
 
 def test_dts_accepts_explicit_devices_and_string_numbers():
     dts = DeviceTreeGenerator.generate_dts_from_topology(
-        bus_num="2",
+        bus_num="2",  # type: ignore[arg-type]
         mux_addr="0x70",
-        clock_frequency="0x61A80",
+        clock_frequency="0x61A80",  # type: ignore[arg-type]
         devices=[
             {
                 "addr": "0x50",
