@@ -223,8 +223,10 @@ class I2CWaveformReconstructor:
                 pkt_ack = data_pkts[idx].ack if idx < len(data_pkts) else AckType.ACK
                 # Label detail
                 lbl = f"0x{data_b:02X}"
-                if idx == 0 and tx.command_code is not None:
-                    lbl = f"Cmd:0x{data_b:02X}"
+                if idx == 0 and tx.command_code is not None and (
+                    data_b == tx.command_code or tx.command_code > 0xFF
+                ):
+                    lbl = f"Reg:0x{data_b:02X}"
                 emit_byte(data_b, is_addr=False, ack=pkt_ack, label_override=lbl)
 
         # 5. STOP Condition (SDA goes 0->1 while SCL is 1)
@@ -325,10 +327,10 @@ class I2CWaveformReconstructor:
         )
 
         fig.update_yaxes(
-            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["LOW (0V)", "HIGH (3.3V)"], row=2, col=1
+            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["LOW (0)", "HIGH (1)"], row=2, col=1
         )
         fig.update_yaxes(
-            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["LOW (0V)", "HIGH (3.3V)"], row=3, col=1
+            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["LOW (0)", "HIGH (1)"], row=3, col=1
         )
         fig.update_yaxes(showticklabels=False, showgrid=False, range=[0.0, 1.0], row=1, col=1)
         fig.update_xaxes(title_text="Time (µs)", row=3, col=1)

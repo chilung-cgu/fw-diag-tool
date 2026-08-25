@@ -20,12 +20,12 @@ from fw_diag_tool.gui.uploads import (
     validate_pasted_text,
 )
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
-from fw_diag_tool.i2c.models import I2CDirection
+from fw_diag_tool.i2c.models import AckType, I2CBytePacket, I2CDirection, I2CTransaction
 from fw_diag_tool.i2c.raw_adapter import raw_decode_to_events, raw_decode_to_waveform
 from fw_diag_tool.i2c.raw_capture import analyze_raw_i2c_csv
 from fw_diag_tool.i2c.reporter import I2CReporter
 from fw_diag_tool.i2c.timing_charts import I2CTimingCharts
-from fw_diag_tool.i2c.waveform import I2CWaveformReconstructor
+from fw_diag_tool.i2c.waveform import I2CWaveformData, I2CWaveformReconstructor
 from fw_diag_tool.i2c.waveform_diff import WaveformDiffEngine
 from fw_diag_tool.limits import AnalysisLimits
 from fw_diag_tool.mctp.parser import ServerMgmtParser
@@ -435,40 +435,114 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         builder_read_length = st.number_input(
             "Read Length (bytes)", min_value=1, max_value=255, value=2, step=1
         )
+    b_col6, b_col7 = st.columns(2)
+    with b_col6:
+        builder_bus_num = st.number_input(
+            "I2C Bus Number", min_value=0, max_value=0xFFFF, value=1, step=1
+        )
+    with b_col7:
+        builder_register_width = st.selectbox("Register Width (bits)", [8, 16], index=0)
     try:
         b_addr = int(builder_addr_str, 16)
         b_reg = int(builder_reg_str, 16)
         b_data = [int(tok, 16) for tok in builder_data_str.split() if tok]
         is_read_op = builder_op == "Read"
-        from fw_diag_tool.i2c.models import AckType, I2CDirection, I2CTransaction
+        register_width = int(builder_register_width)
+        if register_width == 8:
+            register_bytes = [b_reg]
+        else:
+            register_bytes = [(b_reg >> 8) & 0xFF, b_reg & 0xFF]
 
-        mock_tx = I2CTransaction(
-            id=1,
-            start_time=0.0,
-            end_time=0.0001,
-            address_7bit=b_addr,
-            address_8bit=(b_addr << 1) | (1 if is_read_op else 0),
-            direction=I2CDirection.READ if is_read_op else I2CDirection.WRITE,
-            data_bytes=[] if is_read_op else b_data,
-            address_ack=AckType.ACK,
-            has_stop=True,
-            command_code=b_reg,
-        )
         reconstructor = I2CWaveformReconstructor(default_clock_khz=100.0)
-        wave_data = reconstructor.reconstruct_transaction_waveform(mock_tx)
+        if is_read_op:
+            register_write = I2CTransaction(
+                id=1,
+                start_time=0.0,
+                end_time=0.0001,
+                address_7bit=b_addr,
+                address_8bit=b_addr << 1,
+                direction=I2CDirection.WRITE,
+                data_bytes=register_bytes,
+                address_ack=AckType.ACK,
+                has_stop=False,
+                command_code=b_reg,
+            )
+            read_data = [0x00] * int(builder_read_length)
+            read_byte_packets = [
+                I2CBytePacket(
+                    timestamp=0.0,
+                    byte_val=byte,
+                    is_address=False,
+                    direction=I2CDirection.READ,
+                    ack=AckType.NACK if idx == len(read_data) - 1 else AckType.ACK,
+                )
+                for idx, byte in enumerate(read_data)
+            ]
+            register_read = I2CTransaction(
+                id=2,
+                start_time=0.0,
+                end_time=0.0001,
+                address_7bit=b_addr,
+                address_8bit=(b_addr << 1) | 1,
+                direction=I2CDirection.READ,
+                data_bytes=read_data,
+                byte_packets=read_byte_packets,
+                address_ack=AckType.ACK,
+                is_repeated_start=True,
+                has_stop=True,
+            )
+            write_wave = reconstructor.reconstruct_transaction_waveform(register_write)
+            read_wave = reconstructor.reconstruct_transaction_waveform(
+                register_read, t_offset_us=write_wave.time_us[-1]
+            )
+            wave_data = I2CWaveformData(
+                time_us=write_wave.time_us + read_wave.time_us,
+                scl=write_wave.scl + read_wave.scl,
+                sda=write_wave.sda + read_wave.sda,
+                annotations=write_wave.annotations + read_wave.annotations,
+            )
+            waveform_title = (
+                f"Ideal Combined Read: 0x{b_addr:02X} Reg: 0x{b_reg:02X} "
+                "(Repeated START)"
+            )
+            st.caption(
+                "Read 波形中的 0x00 data bytes 僅為長度佔位，不代表裝置實際回傳值。"
+            )
+        else:
+            mock_tx = I2CTransaction(
+                id=1,
+                start_time=0.0,
+                end_time=0.0001,
+                address_7bit=b_addr,
+                address_8bit=b_addr << 1,
+                direction=I2CDirection.WRITE,
+                data_bytes=register_bytes + b_data,
+                address_ack=AckType.ACK,
+                has_stop=True,
+                command_code=b_reg,
+            )
+            wave_data = reconstructor.reconstruct_transaction_waveform(mock_tx)
+            waveform_title = f"Ideal Waveform: Write 0x{b_addr:02X} Reg: 0x{b_reg:02X}"
         st.plotly_chart(
             reconstructor.create_plotly_figure(
-                wave_data, title=f"Ideal Waveform: {builder_op} 0x{b_addr:02X} Reg: 0x{b_reg:02X}"
+                wave_data, title=waveform_title
             ),
             width="stretch",
         )
         st.subheader("一鍵生成多平台 C 語言驅動代碼")
+        if not is_read_op:
+            st.warning(
+                "Write 會產生可直接修改硬體狀態的 i2ctransfer -y 指令；執行前請再次確認 bus、"
+                "address、register 與 data，避免誤寫。"
+            )
         snippets = I2CDriverCodeGenerator.generate_all_snippets(
             addr_7bit=b_addr,
             reg_offset=b_reg,
             data_bytes=[] if is_read_op else b_data,
             is_read=is_read_op,
+            bus_num=int(builder_bus_num),
             read_length=int(builder_read_length) if is_read_op else None,
+            register_width=register_width,
         )
         for plat, code_txt in snippets.items():
             with st.expander(f"💻 {plat}", expanded=True):
