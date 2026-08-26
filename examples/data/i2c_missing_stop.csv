@@ -1,0 +1,4 @@
+Time [s],Type,Address,Data,Read/Write,Ack
+0.001000,START,,,,
+0.001025,ADDRESS,0x50,,Write,ACK
+0.001050,DATA,,0x00,Write,ACK

@@ -14,7 +14,7 @@
 
 ```bash
 # macOS / Linux，需 Python 3.10+ 與 uv
-cd ~/fw-diag-tool
+# 先在 clone 出來的 fw-diag-tool 專案根目錄執行
 uv sync --all-extras
 uv run fw-diag gui
 ```
@@ -30,7 +30,7 @@ uv run fw-diag gui
 
 | # | GUI 頁面 | 對應章節文件 | 測試資料 |
 |---|---|---|---|
-| 1 | 📊 I2C / PMBus 診斷與波形檢視 | [ch01_i2c_pmbus.md](chapters/ch01_i2c_pmbus.md) + [附錄A 圖表判讀](chapters/appendix_chart_guide.md) | `examples/data/i2c_golden.csv` |
+| 1 | 📊 I2C / PMBus 診斷與波形檢視 | [ch01_i2c_pmbus.md](chapters/ch01_i2c_pmbus.md) + [附錄A 圖表判讀](chapters/appendix_chart_guide.md) | `i2c_split_decoded.csv`、`i2c_raw_100khz.csv`、`i2c_text_trace.log`、aggregate `i2c_golden.csv` |
 | 2 | 🎨 I2C 封包模擬器與驅動產生 | [ch02_packet_builder.md](chapters/ch02_packet_builder.md) | 無需檔案 |
 | 3 | ⚖️ 雙波形對比檢視 (Waveform Diff) | [ch03_waveform_diff.md](chapters/ch03_waveform_diff.md) | `i2c_golden.csv` + `i2c_failing_nack.csv` |
 | 4 | 📟 UART Crash & HardFault 分析 | [ch04_uart_crash.md](chapters/ch04_uart_crash.md) | `kernel_panic_nvme.log` / `arm_hardfault_stm32.log` |

@@ -38,12 +38,14 @@
 ### 輸出範例解讀
 
 ```text
-🚨 Found 1 divergence point(s). First mismatch at Transaction #3.
-現象描述: ACK mismatch on 0x50: Golden NACK=False, Failing NACK=True
-排查建議: Slave 晶片在故障板卡上返回 NACK (可能未上電、被 Reset 或內部忙碌)。
+Found 1 divergence point(s). First mismatch at Transaction #3.
+Divergence at Tx #3
+Type: NACK_MISMATCH
+Description: ACK outcome mismatch on 0x50: Golden=aggregate_ack, Failing=aggregate_nack. A final controller NACK on a read is treated as normal termination.
+Hint: 先確認 NACK 是 address、write-data、read 終止，還是來源欄位缺失；只有 address/data NACK 才進一步檢查供電、reset、busy 與 command。
 ```
 
-**白話翻譯**：工具在第 3 筆已解碼交易找到 ACK/NACK 差異。
+**白話翻譯**：工具在第 3 筆已解碼交易找到 aggregate ACK/NACK 差異；讀取交易結尾由 controller 發出的 NACK 會視為正常終止。
 
 **下一步行動**：先確認兩份 capture 的 transaction alignment 與 NACK 發送端，再檢查供電、reset、MUX channel 和裝置 busy 狀態。
 

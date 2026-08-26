@@ -1,242 +1,196 @@
-# I2C / SMBus / PMBus 協定分析與數位波形檢視
+# I2C / SMBus / PMBus：第 1 頁任務導向實驗室
 
-## 1. 本章導讀與學習目標
+本章只處理 GUI 第 1 頁 **「📊 I2C / PMBus 診斷與波形檢視」**。目標是把一份 capture 變成可追溯的觀察：先確認輸入契約，再看五個 tabs，最後保存報告與 session。圖表軸、顏色、threshold 與 issue code 的完整定義集中在[附錄 A：圖表與證據判讀](appendix_chart_guide.md)。
 
-I2C（Inter-Integrated Circuit）及其衍生協定 SMBus、PMBus 是現代伺服器、BMC（Baseboard Management Controller）與嵌入式主機板上最重要的通訊匯流排，負責連接 EEPROM、溫度感測器、電壓監控 IC、電源供應器（PSU）與 GPIO 擴充晶片。
+## 1. 兩分鐘完成第一次分析
 
-當通訊發生錯誤時，軟體層往往只能拿到模糊的作業系統錯誤碼（如 Linux 的 `-EIO` 或 `-ETIMEDOUT`），無法直接得知問題發生在 Master 發送位址、Slave 內部忙碌回傳 NACK、SCL 被拉低延展（Clock Stretching）、抑或是匯流排被未知的雜訊鎖死。
+先在專案根目錄啟動 GUI：
 
-本頁面 **「📊 I2C / SMBus / PMBus 診斷與波形檢視」** 是專為軟韌體工程師打造的協定分析工作站：
-- **新手工程師**：可透過互動式數位波形與協定軌道，直觀建立 START、7-bit Address、R/W 方向、ACK/NACK、Data Byte、STOP 條件在微秒（µs）時間軸上的心智模型。
-- **資深工程師**：可匯入邏輯分析儀（Logic Analyzer）或文字 trace，一鍵進行異常診斷（NACK 判別、SMBus 25ms 逾時、EEPROM 跨頁覆蓋、MUX 通道衝突）、設備健康評等與產生標準化 Markdown 診斷報告。
-
-> **核心證據原則（重要）：**
-> 
-> 分析前請先分清資料來源：
-> 1. **Decoded Table（解碼表格）**：包含已由 Analyzer 解出的 Address/Data/ACK，用於重建「協定示意波形」與執行語意分析；**不能**用來證明實測類比電壓、訊號上升時間（Rise Time）或線路雜訊。
-> 2. **Raw Digital Transition（實測數位邊緣）**：每列包含精確微秒時間與 SCL/SDA 的 0/1 狀態，工具會自行解碼並計算「實測時脈頻率（kHz）」與「時鐘延展時間」。
-> 完整邊界說明請參閱 [能力與限制](../LIMITATIONS.md)。
-
----
-
-## 2. 支援的輸入資料格式與範例檔案
-
-為方便快速上手與工作比對，專案在 `examples/data/` 目錄下提供了多種格式的標準範例檔案：
-
-### 格式 1：Analyzer Decoded CSV (Aggregate / Per-Byte)
-邏輯分析儀（如 Saleae Logic）匯出的解碼表格。
-
-- **檔案 1：`examples/data/i2c_golden.csv`（Aggregate Decoded 範例）**
-  每列為一筆完整交易，包含單一總結 ACK/NACK：
-  ```csv
-  Time,Packet ID,Address,Read/Write,Data,ACK/NACK
-  0.001000,0,0x70,Write,0x04,ACK
-  0.002000,1,0x50,Write,0x00 0x10,ACK
-  0.003000,2,0x50,Read,0xAA 0xBB 0xCC 0xDD,ACK
-  0.004000,3,0x48,Write,0x00,ACK
-  0.005000,4,0x48,Read,0x19 0x00,ACK
-  ```
-
-- **檔案 2：`examples/data/i2c_split_decoded.csv`（Per-Byte Decoded 範例）**
-  每列為單一 Byte（Address Byte 或 Data Byte），包含各 Byte 獨立的 ACK/NACK：
-  ```csv
-  Time,Packet ID,Address,Read/Write,Data,ACK/NACK
-  0.001000,0,0x70,Write,,ACK
-  0.002000,0,,Write,0x02,ACK
-  0.003000,1,0x48,Write,,ACK
-  0.004000,1,,Write,0x00,ACK
-  0.005000,2,0x48,Read,,ACK
-  0.006000,2,,Read,0x19,ACK
-  0.007000,2,,Read,0x80,NACK
-  ```
-
-### 格式 2：Raw Digital Transition CSV (Time, SCL, SDA)
-邏輯分析儀擷取的原始數位方波邊緣（0 與 1 切換）。
-
-- **檔案 3：`examples/data/i2c_raw_100khz.csv`（100 kHz 實測數位波形）**
-  ```csv
-  Time [s],SCL,SDA
-  0.000000,1,1
-  0.000005,1,0
-  0.000010,0,0
-  0.000011,0,1
-  0.000015,1,1
-  ```
-  - 時間單位為秒（嚴格遞增）。
-  - SCL 與 SDA 僅能為 `0` 或 `1`。
-  - 同一微秒時間點不可同時切換 SCL 與 SDA（符合物理取樣原則）。
-
-### 格式 3：Saleae Text Trace
-- **檔案 4：`examples/data/i2c_text_trace.log`**
-  ```text
-  [0.001000] S 0x48 W A 0x00 A P
-  [0.002000] S 0x48 R A 0x19 A 0x80 N P
-  ```
-
-### 選填擴充：Board Profile (YAML)
-- **檔案 5：`examples/data/board_yv4.yaml`**
-  包含硬體主機板的 I2C 拓撲定義（如 PCA9548A MUX 通道、PMBus 電壓調節器位址），貼入頁面的 Board Profile 展開區即可啟用自訂裝置名稱與 PMBus 語意解析。
-
----
-
-## 3. Step-by-Step 實戰導引：匯入 `i2c_golden.csv`
-
-請跟著以下步驟在 GUI 進行第一次操作與觀察：
-
-```
-[步驟 1] 進入第 1 頁 -> [步驟 2] 點擊「載入內建測試波形」 -> [步驟 3] 檢視頂部 KPI 與資料限制 -> [步驟 4] 依序瀏覽 5 大分頁
+```bash
+uv run fw-diag gui
 ```
 
-### 步驟 1：確認輸入模式
-1. 開啟 GUI，在左側選單選擇 **「📊 I2C / PMBus 診斷與波形檢視」**。
-2. 確認 **輸入資料型態** 單選按鈕為 `Saleae Analyzer table / text trace`。
+1. 選左側第 1 頁，在「教學範例」先選 `Packaged decoded analyzer（18 筆）`，輸入模式會是 `Decoded Analyzer CSV`。
+2. 按 **載入內建測試波形**；要練習 raw 或 text，改選對應範例後再按同一按鈕。
+3. 先讀「資料證據與限制」，再看 KPI；不要把綠色狀態當成硬體已驗證。
+4. 依序開啟封包交易列表、Waveform、Anomalies、匯流排時序與健康圖表、Markdown 診斷報告五個 tabs；先選交易，Waveform 才會聚焦同一筆。
+5. 另用本章的 raw digital fixture 重跑一次，確認哪些數字是 measured、哪些仍是 unavailable。
 
-### 步驟 2：載入資料
-點擊右側按鈕 **「載入內建測試波形」**（或上傳 `examples/data/i2c_golden.csv`）。
+內建按鈕載入的是套件資源 `builtin:saleae_normal_pmbus_eeprom.csv`，不是 `examples/data/i2c_golden.csv`。目前可驗證的結果是 **18 transactions、53 physical events、0 protocol issues**。資料品質仍會列出：
 
-### 步驟 3：觀察頂部 4 大 KPI 卡片
+- `I2C_EEPROM_PROFILE_UNAVAILABLE`：0x50 的 EEPROM 寬度/page profile 未指定。
+- `I2C_PMBUS_PAYLOAD_TRUNCATED`：一個 PMBus command 缺少規格所需 response bytes，該語意不完整。
+- `I2C_TIMING_UNAVAILABLE`：沒有每 byte duration/bitrate，因此平均 clock 與 jitter 顯示 `不可用`。
 
-| KPI 項目 | 畫面顯示數值 | 深度原理解析與觀察重點 |
+這些是輸入證據的狀態，不是「18 筆都通過硬體測試」的宣告。
+
+## 2. 三種輸入契約：欄位、單位與可回答的問題
+
+先在檔案來源上做分類。工具不會把缺少的欄位補成 0、ACK 或預設頻率。
+
+### 契約 A：Decoded Analyzer CSV（aggregate 或 per-byte）
+
+| 欄位 | 單位／值域 | 契約與限制 |
 |---|---|---|
-| **總傳輸次數** | `5` | 工具成功自 CSV 重建出 5 筆獨立的 I2C Transaction（ID #1 ~ #5）。 |
-| **異常事件數** | `0`（綠色） | 未命中目前支援的時序或協定異常規則（如無 Address NACK、無逾時等）。 |
-| **平均時鐘頻率** | `不可用` (Unavailable) | **為什麼不是 100 kHz？** 因為 `i2c_golden.csv` 是 Analyzer 匯出的摘要表格，每筆交易只有一個開始時間戳記，沒有每個 bit/byte 的實際 duration 或 SCL edge。本工具遵循嚴格的證據契約：**沒有實測資料就不臆測數值**，不假裝測到了時脈。 |
-| **時鐘抖動 (Jitter)** | `不可用` (Unavailable) | 缺乏時脈樣本時，絕不顯示 `0%` 這種易引發誤解的假數據。 |
+| `Time [s]` 或 `Time` | 秒，finite、非負；可缺省 | 只有來源含 timestamp 才能畫交易時間軸；交易時間差不是 SCL period。 |
+| `Address` | 一般 7-bit `0x08`～`0x77`；也接受 8-bit wire address | 8-bit 位址會正規化為 7-bit。保留 `0x00`～`0x07`、`0x78`～`0x7F` 供 forensic inspection，但會列 `I2C_RESERVED_ADDRESS_CANDIDATE`，不當成正常裝置身份；Packet Builder 會拒絕這些位址。仍須對照 datasheet/board profile。 |
+| `Read/Write` | `Read`/`Write`（或 `R`/`W`） | 沒有方向時，方向相依語意與 anomaly attribution 會保留為 unknown。 |
+| `Data` | 每 byte 0～255；可用空白或逗號分隔 | **Per-byte** 每列一個 byte，ACK/NAK 可歸屬；**aggregate** 一列多 byte 只有一個 ACK/NAK，會 withheld。 |
+| `ACK/NACK` 或 `ACK/NAK` | `ACK`、`NACK`/`NAK` | aggregate ACK 不會猜是哪個 byte；unknown 不列入成功率分母。 |
+| `Duration`／`Bit Rate`（選填） | `Duration` 單位為秒；`Bit Rate`／`bitrate`／`frequency` 通常填 kHz；相容規則是數值 `>10000` 視為 Hz 後轉成 kHz | 只有來源提供的 timing 才能計算 frequency；交易 timestamp 不可拿來臆測 clock。`Duration` 是整個 byte 的來源時間，**不能單獨證明 clock stretch**；若 analyzer 明確提供 SCL-low hold，另用 `Clock Stretch [s]`（秒）。aggregate（一列多 byte）不會把單一 `Duration` 猜分給各 byte；要取得 per-byte frequency samples，請拆成 per-byte rows，或使用 `Bit Rate`。若 aggregate row 只有一個 `Bit Rate`，解析器會把同一來源值帶到展開的 address/data slots，`Samples: N` 代表展開 slot 數，不代表原始 row 數；需要可追溯的每筆樣本時請拆成 per-byte rows。請先把 Saleae 的 μs 轉成秒，並避免混用單位。 |
 
-### 步驟 4：觀察「⚠ 資料證據與限制」面板
-若輸入資料並非完整實測波形，頂部會出現警示展開面板：
-- `I2C_ACK_AGGREGATE_UNATTRIBUTABLE`：一列包含多個 Byte 但僅有一個總結 ACK。工具會安全地將各 Byte 的 ACK 保留為未知，避免將未確認的 Payload 貿然視為有效命令。
-- `I2C_TIMING_UNAVAILABLE`：提示當前檔案未提供 SCL edge 或 bitrate，若需量測頻率請改用 Raw Digital CSV。
+最小 per-byte 範例：
 
----
-
-## 4. 五大功能區塊（Tabs）深度教學與輸出理解
-
-在 KPI 卡片下方，工具將分析結果拆解為 5 大專用分頁，以下逐一教您如何閱讀與操作：
-
-### 4.1 📈 數位方波與協定軌 (Waveform)
-
-**功能定位**：直觀呈現 SCL 時鐘、SDA 資料方波，並在最上方疊加彩色協定解碼軌道。
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ [Protocol Track]  START | 0x50 (W) | ACK | Reg:0x00 | ACK  │
-├─────────────────────────────────────────────────────────────┤
-│ [SDA Line]        ¯¯¯_______________/¯¯¯¯¯_______________ │
-├─────────────────────────────────────────────────────────────┤
-│ [SCL Line]        _/_/_/_/_/_/_/_/_/_/_/_/_/_  │
-└─────────────────────────────────────────────────────────────┘
+```csv
+Time [s],Packet ID,Address,Data,Read/Write,ACK/NAK
+0.001000,0,0x58,,Write,ACK
+0.001025,0,,0x88,Write,ACK
 ```
 
-- **操作方式**：
-  1. 透過下拉選單 **「選擇要檢視波形的交易」**，可切換 Tx #1 到 #5。
-  2. 支援 Plotly 互動式操作：可用滑鼠滾輪放大（Zoom In）、拖曳平移（Pan）、雙擊重設視圖。
-  3. 將滑鼠游標懸停在上方彩色方塊上，會彈出 Tooltip 顯示該階段的起始時間、持續微秒與詳細二進位數值（如 `Byte: 0x50 (binary: 01010000)`）。
-- **色彩與協定標籤對照**：
-  - 🟢 **START / Sr**（翡翠綠）：起始條件（SCL 為 High 時 SDA 產生下降邊緣）。
-  - 🔵 **ADDRESS**（電光藍）：7-bit Slave 位址加上 1-bit R/W 方向（如 `0x50 (W)` 或 `0x48 (R)`）。
-  - 🟢 **ACK**（春綠色）：第 9 個時脈週期 SDA 為 Low，表示接收端確認接收。
-  - 🔴 **NACK**（珊瑚紅）：第 9 個時脈週期 SDA 為 High，表示未確認（或 Read 正常終止）。
-  - 🟣 **DATA / Reg**（皇家紫）：傳輸的資料 Byte 或暫存器位移（Register Offset）。
-  - 🟠 **STRETCH**（琥珀橘）：Slave 拉低 SCL 進行時脈延展。
-  - 🌸 **STOP**（亮粉紅）：停止條件（SCL 為 High 時 SDA 產生上升邊緣）。
-- **資深判讀技巧**：
-  - 在 Decoded CSV 模式下，圖形上方會提示 **「Reconstructed」**（協定重建波形，以標準 100 kHz 示意時序繪製）；若切換為 Raw Digital CSV，則會顯示 **「Measured Raw Digital」**（真正來自邏輯分析儀取樣的 0/1 邊緣）。
+**資源邊界**：GUI 仍會先依 `AnalysisLimits` 限制輸入（records 50,000、raw transitions 50,000）；選取的 decoded transaction 另有 100,000 個理想 waveform points 上限。超過時，交易列表、異常、時序與報告仍可用，只有該筆重建波形會顯示「略過繪圖」並保留限制原因，不會把大型輸入一次展開到瀏覽器。
 
----
+### 契約 B：Raw digital transition CSV
 
-### 4.2 🚨 異常診斷 (Anomalies)
+```csv
+Time [s],SCL,SDA
+0.000000,1,1
+0.000005,1,0
+0.000010,0,0
+```
 
-**功能定位**：自動比對嵌入式與伺服器常見的 I2C/SMBus 硬韌體故障模式，提供具體的原因假說與排查清單。
+上面 3 行只展示欄位名稱與 `0/1` 值域，**刻意不是可完成解碼的 capture**；它沒有完整的 9-bit byte、ACK 與 STOP。要直接執行分析，請使用完整的 `examples/data/i2c_raw_100khz.csv`（或 GUI 的 `Raw digital measured 100 kHz（1 筆）` 範例）。
 
-- **正常狀態**：若無異常，顯示 `🎉 未偵測到任何 I2C/SMBus 時序與通訊異常！`。
-- **異常狀態（以故障檔案為例）**：當匯入包含異常的檔案（如 `examples/data/i2c_failing_nack.csv`）時，會展開詳細的診斷卡片：
-  1. **嚴重度與代碼**：如 `[ERROR] #1: I2C_DATA_NACK - Slave Data NACK on 0x50`。
-  2. **現象描述 (Description)**：清楚說明在哪一筆交易、哪一個 Byte 發生未預期的 NACK。
-  3. **可能原因假說 (Hypotheses)**：
-     - *假設 1*：EEPROM 正在進行內部 Page Write Cycle（tWR 典型需 5~10ms），內部狀態機忙碌中拒絕寫入。
-     - *假設 2*：寫入超出晶片合法暫存器範圍。
-  4. **排查行動清單 (Actionable Advice)**：
-     - ✔ 在寫入下一筆資料前，加入 Acknowledge Polling 檢查。
-     - ✔ 使用示波器量測晶片 VDD 電源是否在寫入瞬間產生 Voltage Dip。
+| 欄位 | 單位／值域 | 工具能回答什麼 |
+|---|---|---|
+| `Time [s]` | 秒；finite、非負、嚴格遞增 | transition 的時間差、SCL period、frequency、digital clock stretch。 |
+| `SCL`、`SDA` | 邏輯值 `0` 或 `1` | START/Repeated START、byte、ACK/NACK、STOP 的 digital decode。 |
 
----
+每一行是保留的 level/transition sample；同一時間同時改變 SCL 與 SDA 會被拒絕，因為 sampling 順序無法判定。這個契約仍然**不能**量類比電壓、rise/fall time、overshoot、ringing 或 pull-up 品質。
 
-### 4.3 📊 匯流排時序與健康圖表 (Timing & Health Charts)
+### 契約 C：Saleae-style text trace
 
-**功能定位**：從統計與巨觀角度評估匯流排負載與各 Slave 設備的通訊健康度。
+時間以秒表示；`S`/`Sr`/`P` 是 START、Repeated START、STOP，`A`/`N` 是 ACK/NACK：
 
-包含三大核心視覺化：
+```text
+[0.001000] S 0x48 W A 0x00 A P
+[0.002000] S 0x48 R A 0x19 A 0x80 N P
+```
 
-1. **匯流排物理層健康評等表 (Device Health Grade Table)**：
-   - 彙整所有出現的 Slave 位址（如 `0x70`、`0x50`、`0x48`）。
-   - 計算各設備的 `Total Transactions`、`NACK Count` 與 `Success Rate`。
-   - 給出健康等級評等：
-     - **Grade A**：成功率 100%，無異常 Stretch。
-     - **Grade B**：成功率 ≥ 95% 或存在輕微重試/延展。
-     - **Grade D**：成功率 50%~80%，存在高頻率 NACK。
-     - **Grade F**：成功率 < 50% 或 Clock Stretch ≥ 5 次，代表嚴重故障。
-2. **時脈頻率分佈直方圖 (SCL Clock Frequency Distribution)**：
-   - 統計匯流排所有 Byte 的 SCL 頻率分佈（kHz）。
-   - 當資料提供可靠 timing 時，可觀察頻率是否集中在 100 kHz 或 400 kHz，以及時鐘抖動率（Jitter %）。
-3. **匯流排交易時間軸與設備地圖 (Bus Transaction Timeline & Active Device Map)**：
-   - X 軸為時間軸（秒），Y 軸為被存取的 Slave 設備名稱/位址。
-   - 圓點顏色代表交易狀態（綠色 ACK、紅色 ADDR NAK、橘色 DATA NAK、藍色 READ END NAK、灰色 ACK UNKNOWN）。
-   - 圓點大小代表該筆交易佔用匯流排的持續時間（Duration）。
-   - 可一眼看出是否有頻繁存取特定裝置、連續 Retry 或通訊斷續現象。
+文字 trace 可以表達協定事件與缺少 STOP；它沒有 raw SCL/SDA edge，所以 frequency、digital stretch 與類比量測仍是 `Unavailable`。若省略 `P`，請把它當成待驗證的 bus-state evidence，不要直接寫成硬體已鎖死。
 
----
+只有 `S`/`P` 等 framing、沒有完整 address/data 的輸入，會保留 physical events 但產生 `I2C_SOURCE_NO_TRANSACTIONS`；這是「沒有可分析交易」而不是通訊正常。
 
-### 4.4 📜 封包交易列表 (Packet Transaction Table)
+## 3. 真實 fixture 實驗與預期輸出
 
-**功能定位**：結構化的資料表格，提供所有交易的完整二進位與語意解讀。
+### 3.1 Aggregate golden：`i2c_golden.csv`
 
-在匯入 `i2c_golden.csv` 後，表格呈現如下 5 筆交易：
+上傳 `examples/data/i2c_golden.csv` 後，預期是 **5 transactions、0 protocol issues**，但資料品質面板會指出 aggregate ACK 的限制：
 
-| ID | Time (s) | Address | Direction | ACK | Topology | Bytes | Data | Semantic Meaning |
-|---|---|---|---|---|---|---|---|---|
-| 1 | 0.001000 | 0x70 | WRITE | NONE | - | 1 | [0x04] | I2C MUX 0x70 Channel Switch -> [2] |
-| 2 | 0.002000 | 0x50 | WRITE | NONE | - | 2 | [0x00, 0x10] | EEPROM write pointer / offset |
-| 3 | 0.003000 | 0x50 | READ | NONE | - | 4 | [0xAA, 0xBB, 0xCC, 0xDD] | EEPROM Data Readback |
-| 4 | 0.004000 | 0x48 | WRITE | NONE | - | 1 | [0x00] | LM75 Temp Register Pointer |
-| 5 | 0.005000 | 0x48 | READ | NONE | - | 2 | [0x19, 0x00] | LM75 Raw Temperature Data |
+- 一列含多個 data byte，唯一 ACK/NACK 無法歸屬到 address 或哪個 data byte。
+- `I2C_ACK_AGGREGATE_UNATTRIBUTABLE` 與 `I2C_ACK_UNAVAILABLE` 會保留這個 unknown；PMBus/EEPROM payload semantic 會 withheld。
+- 若 aggregate row 另帶一個 `Duration`，會標記 `I2C_TIMING_AGGREGATE_UNATTRIBUTABLE`；工具保留來源值，但不把它猜分成 per-byte frequency sample。
+- `I2C_TIMING_UNAVAILABLE` 會使 frequency/jitter 顯示 `不可用`。
 
-- **ID**：交易序號。
-- **Topology**：若前面有 PCA9548A MUX 切換（如 Tx #1 切換到 Ch2），後續交易會自動標記 `MUX[2]` 下游拓撲。
-- **Semantic Meaning**：工具內建晶片特徵庫（LM75、EEPROM 24C 系列、PMBus VR），能自動辨識位址並翻譯暫存器指令。
+即使貼上 Board Profile，aggregate ACK row 仍可能只顯示 `Unknown Device (0xNN)`；這是因為來源沒有足夠的 per-byte evidence，工具不會用 profile 名稱掩蓋 attribution 缺口。要練習 profile 驅動的裝置名稱與 register/PMBus semantic，請改用 `i2c_split_decoded.csv`。
 
----
+這是「有 transaction shape、沒有 per-byte ACK attribution」的練習，不是 golden hardware proof。
 
-### 4.5 📝 Markdown 診斷報告 (Diagnostic Report)
+### 3.2 `i2c_failing_nack.csv`：為什麼不會產 issue
 
-**功能定位**：自動生成符合資深工程師報告規範的標準 Markdown 檔，並支援下載 Session 以便未來重現。
+此檔案把 aggregate row 的 summary ACK 改成 NACK，但仍然沒有 per-byte attribution。預期仍是 **5 transactions、0 issues**，且同樣顯示 aggregate/ACK unknown 品質限制。它不能證明 slave 發生 data NACK；若要測試真正的 address/data NACK，改用本章的 per-byte fixtures。
 
-- **畫面輸出**：即時排版精美的診斷報告，包含：
-  - 匯流排時序與健康統計表。
-  - 識別到的周邊晶片清單與分類。
-  - 完整的交易明細與異常事件清單。
-- **操作按鈕**：
-  1. **「下載 Markdown 報告」**：儲存為 `i2c_report.md`，可直接貼入 PR（Pull Request）、Bug 追蹤系統（Jira/GitHub Issues）或工作週報。
-  2. **「下載可重現 Session」**：儲存為 `i2c_analysis.fwsession.json`。Session 包含分析設定、演算法版本與原始輸入檔案的 SHA-256 雜湊值；符合企業資安規範（不夾帶機密原始波形），後續可隨時重新載入並驗證分析結果。
+### 3.3 Per-byte split：`i2c_split_decoded.csv`
 
----
+上傳 `examples/data/i2c_split_decoded.csv`，預期 **5 transactions**。0x48 的 read 會顯示：
 
-## 5. 進階實戰對照實驗
+```text
+Temperature = 25.50 °C (LM75/TMP102, raw 0x1980)
+```
 
-為了深刻體會本工具的強大之處，建議進行以下兩組對照練習：
+最後一個 read byte 的 `NACK` 是 controller 的正常讀取終止，因此不產 `I2C_DATA_NACK`。0x50 的 EEPROM profile 未指定時，報告會保留 read bytes、但對 write offset/page semantic 顯示 profile unavailable。
 
-### 練習 A：使用 `examples/data/i2c_split_decoded.csv` 觀察真實溫度解碼
-1. 在第 1 頁上傳 `examples/data/i2c_split_decoded.csv`。
-2. 切換至 **「📜 封包交易列表」**：
-   - 觀察 Tx #3（0x48 READ）：語意欄位顯示 **`Temperature = 25.50 °C (LM75/TMP102, raw 0x1980)`**。
-   - 這是因為 per-byte 模式下確認了 `0x19 0x80` 均被正常接收，工具成功執行了二進位浮點溫度換算！
+### 3.4 Raw digital：`i2c_raw_100khz.csv`
 
-### 練習 B：使用 `examples/data/i2c_raw_100khz.csv` 觀察實測時脈
-1. 將 **輸入資料型態** 切換為 **`Raw digital transition (Time, SCL, SDA)`**。
-2. 上傳 `examples/data/i2c_raw_100khz.csv`。
-3. 觀察頂部 KPI 卡片：
-   - **平均時鐘頻率** 成功計算並顯示為 **`100.0 kHz`**！
-   - **資料限制** 面板顯示 0 筆限制，代表這是最高證據等級的實測數位波形。
-4. 切換至 **「📈 數位方波與協定軌」**：
-   - 觀察真實的 45 個時鐘與資料切換邊緣，體驗與示波器一致的數位訊號視野。
+這個 fixture 有 **46 行（header 加 45 筆 transition samples）**。切換到 `Raw digital transition (Time, SCL, SDA)` 後上傳它，預期：
 
+- average SCL frequency 約 **100.0 kHz**，frequency sample count > 0。
+- quality panel **不會顯示資料品質 issue**；這只表示這份 raw CSV 通過 schema/timing 契約。
+- 圖是 measured digital 0/1 capture，不是類比電壓量測；仍需示波器或其他 analog evidence 才能回答 rise time。
+
+### 3.5 可執行 anomaly fixtures
+
+以下檔案都可直接用 `I2CDiagnosticEngine` 或 CLI `fw-diag i2c analyze` 分析；text trace 請加 `--text-trace`、raw 請加 `--raw-digital`。expected code 是 report 的 `issues[].code`，不是自由文字：
+
+| Fixture | 輸入形態 | 預期 issue code | 關鍵觀察 |
+|---|---|---|---|
+| `examples/data/i2c_address_nack.csv` | per-byte decoded CSV | `I2C_ADDR_NACK` | address byte NACK；不可當作 address 已存在。 |
+| `examples/data/i2c_data_nack.csv` | per-byte decoded CSV | `I2C_DATA_NACK` | address ACK 後，write data byte NACK。 |
+| `examples/data/i2c_missing_stop.csv` | event CSV（`Type` 欄） | `I2C_MISSING_STOP` | 沒有 STOP；capture 截斷與真正 bus hang 仍要用 raw/driver evidence 區分。 |
+| `examples/data/i2c_clock_stretch.csv` | decoded CSV + `Duration`／`Clock Stretch [s]`（秒） | `I2C_LONG_CLOCK_STRETCH`、`I2C_SMBUS_TIMEOUT` | `Duration` 支援 byte frequency；只有明確的 `Clock Stretch [s]` 才會計入 stretch。>100 µs 是 noticeable stretch；達到 GUI 預設 25 ms 才是 SMBus timeout。 |
+
+若要測試缺少 STOP 的 raw physical state，請另保存 raw capture；decoded event CSV 只能表達「解析到的事件沒有 STOP」。
+
+## 4. 五個 tabs：每頁先做什麼
+
+### 4.1 `📈 數位方波與協定軌 (Waveform)`
+
+選一筆 transaction，確認畫面標示是 `Reconstructed` 還是 `Measured Raw Digital`。Decoded CSV 的方波是協定重建；raw digital 才來自 SCL/SDA 0/1 samples。Aggregate row 即使 ACK 歸屬不明，已知的 data bytes 仍會保留在協定軌上，對應的 ACK slot 標成 `UNKNOWN`，不會被當成成功。Raw capture 最後的 STOP 若沒有下一個 edge，圖上的小寬度只是 **display-only marker**，不是量到的 STOP duration。Read 最後的 controller NACK 在協定軌上是正常終止，不等於 anomaly。圖表軸與 status 的詳細定義請看[附錄 A](appendix_chart_guide.md)。
+
+### 4.2 `🚨 異常診斷 (Anomalies)`
+
+先記錄 `severity`、`issue code`、transaction/address 與 evidence，再閱讀 hypotheses。`I2C_ADDR_NACK`、`I2C_DATA_NACK`、`I2C_MISSING_STOP`、`I2C_LONG_CLOCK_STRETCH`、`I2C_SMBUS_TIMEOUT` 代表不同觀察；原因文字是待驗證假說，不是 root-cause proof。Read-final NACK 不會被列為 `I2C_DATA_NACK`。
+
+### 4.3 `📊 匯流排時序與健康圖表`
+
+先看 frequency sample count、evidence label 與 timestamp availability，再看 histogram/timeline。報告中的 **Frequency Spread (peak-to-peak)** 是 `(max-min)/avg` 的樣本散布；舊欄位名 **Clock Frequency Jitter** 目前只是相容別名，不是嚴格定義的 cycle-to-cycle jitter。表格的 Health Grade 是目前 transaction evidence 的排查排序摘要，**不是 physical health grade、電氣 pass/fail 或晶片良率**。Timeline 的 `NO STOP` 與 `ABORTED` 分別代表缺少 STOP 與 transport abort；完整 axes/status/threshold 規則放在[附錄 A](appendix_chart_guide.md)。
+
+### 4.4 `📜 封包交易列表`
+
+逐列核對 transaction ID、Time (s)、7-bit address、R/W、address ACK、bytes/data 與 semantic summary。JSON report 中每筆交易另有 canonical `status` 欄位；GUI timeline 使用同一判定來源。`ACK UNKNOWN`、`NO STOP`、`ABORTED`、`n/a` 與 `semantic withheld` 要原樣保留；不要把空欄位改讀成 ACK 或裝置型號。
+
+### 4.5 `📝 Markdown 診斷報告`
+
+下載 `i2c_report.md` 作為觀察紀錄；它包含輸入中實際提供的事件、timing、quality 與 hypotheses，不會把 reconstructed waveform 寫成 physical measurement。另可下載 `i2c_analysis.fwsession.json`：session 保存 report/config 與 input SHA-256，**不包含原始 capture**。沒有原始檔且 SHA 不相符時，不能宣稱可重現分析。
+
+## 5. Board Profile、報告與 session
+
+在 **Board Profile（選填）** 展開區貼上 `examples/data/board_yv4.yaml`，再重新分析。它可提供 bus 1、PCA9548A channel、0x20/0x48/0x50/0x58 的名稱、category、register width 與 PMBus command mapping，讓報告更容易對照 schematic。Profile 是使用者提供的拓撲/命名輸入；它不會把 address candidate 變成已量測的晶片身份，也不會替缺失的 ACK、timing 或 power evidence 背書。
+
+目前 decoded/raw input contract 沒有保存 bus number；若 profile 在不同 bus 對同一 7-bit address 有不同裝置，工具會列出 `I2C_BOARD_PROFILE_ADDRESS_AMBIGUOUS` 並 withheld device-specific semantic，不會任意挑第一個 bus。單純在 CSV 加上未被契約支援的 `Bus` 欄位不會消除歧義；請改用只保留唯一 address mapping 的 profile，或在匯入前按 bus 分檔並分別分析。
+
+建議保存下列三件事：
+
+1. 原始 capture（不可只保存 Markdown）。
+2. 匯入檔名、input mode、SMBus timeout、board profile 版本。
+3. Markdown report、session JSON 與 SHA-256；若重跑結果不同，先比對 capture/profile/tool version。
+
+## 6. 資深工程師 workflow 與 self-check
+
+資深 review 可以用這條單線流程：
+
+1. **定義輸入**：標記 decoded aggregate、decoded per-byte、raw digital 或 text trace，並記下單位。
+2. **保存證據**：先保存原始檔與 SHA，再分析；不要只貼 GUI screenshot。
+3. **找第一個可驗證差異**：address NACK、data NACK、missing STOP、stretch 或 semantic truncation，分別回到 driver log、board profile、datasheet 或 raw edge。
+4. **寫假說與區分測試**：每一個 hypothesis 都要有下一個能使它失敗的量測；報告中的原因文字不等於已證明根因。
+5. **控制寫入風險**：任何 i2c-tools/driver write 前重新核對 bus、7-bit address、register width/endian、data 與裝置 power/reset 狀態。
+
+離開第 1 頁前，逐項自問：
+
+- 我能說出這份輸入的欄位與單位嗎？
+- ACK/NACK 是 per-byte 可歸屬，還是 aggregate unknown？
+- 這個 NACK 是 slave rejection，還是 read-final controller termination？
+- Frequency、stretch、timeline 的 evidence level 與 sample count 在哪裡？
+- Health Grade 是否被誤讀成 physical grade？
+- Report/session 是否仍保留原始檔、SHA 與未驗證限制？
+
+若任何一題答不出來，先停在「待確認」，不要把報告升級成硬體根因結論。
+
+## 7. 規格與證據邊界參考
+
+協定名詞與 timing threshold 應以目標平台採用的正式版本為準；本工具的報告只呈現輸入中實際可觀察的 evidence：
+
+- [NXP UM10204 I2C-bus specification and user manual Rev. 7.0 (2021-10-01)](https://www.nxp.com/docs/en/user-guide/UM10204.pdf)：START/STOP、ACK、Repeated START 與 I2C timing 定義。
+- [SMBus Specification v3.3.1 (2024-10-20)](https://www.smbus.org/specs/SMBus_3_3_1_20241020.pdf)：SMBus timeout 等規範語境；實際門檻仍由 GUI 設定與來源 timing evidence 決定。
+- [PMBus current specifications](https://pmbus.org/current-specifications/)：PMBus command、data format 與 revision 來源；address candidate 或缺少 payload 時不應自行補語意。
+
+這些規格連結可以定義「應該如何」，但不能把 decoded table、ideal waveform 或 synthetic fixture 變成目標板的實測證據。

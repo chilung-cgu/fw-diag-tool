@@ -1,0 +1,6 @@
+Time [s],Packet ID,Address,Data,Read/Write,ACK/NAK,Duration,Clock Stretch [s]
+0.000100,0,0x48,,Write,ACK,0.000025,
+0.000125,0,,0x00,Write,ACK,0.000350,0.000250
+0.001000,1,0x58,,Read,ACK,0.000025,
+0.001025,1,,0x00,Read,ACK,0.028500,0.028500
+0.029600,1,,0xE2,Read,NAK,0.000025,

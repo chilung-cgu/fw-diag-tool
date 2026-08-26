@@ -2,15 +2,18 @@
 
 > **Summary**: Analyzed 53 physical events grouped into 18 logical transactions across 4 peripheral device(s). Detected 0 diagnostic issue(s).
 
-## 1. Bus Timing & Physical Health
+## 1. Bus Timing & Transaction Health Heuristic
+
+> This health summary is a protocol-evidence heuristic, not an electrical or physical-layer pass/fail measurement.
 
 - **Nominal Speed Mode**: `Custom / Unknown Speed`
 - **Average Clock Frequency**: `Unavailable` (no bitrate or byte-duration evidence)
 - **Clock Frequency Jitter**: `Unavailable`
+- **Frequency Spread (peak-to-peak)**: `Unavailable`
 - **Clock Stretching Events**: `0` (Max duration: `0.000 ms`)
 - **Average Inter-byte Delay**: `25.00 µs` (Max: `25.00 µs`)
 - **Average Inter-transaction Delay**: `0.00 ms`
-- **Bus Utilization**: `0.00 %`
+- **Bus Utilization**: `Unavailable` (total trace duration is unavailable)
 
 ## 2. Detected Peripheral Device Map
 
