@@ -4,6 +4,11 @@ from typing import Any
 
 from fw_diag_tool.board_profile import BoardProfile, load_board_profile
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
+from fw_diag_tool.i2c.input import (
+    I2CInputFormat,
+    dispatch_i2c_input,
+    normalize_i2c_input_format,
+)
 from fw_diag_tool.i2c.models import I2CAnalysisReport
 from fw_diag_tool.limits import AnalysisLimits, coerce_limits
 
@@ -26,18 +31,37 @@ def load_board_profile_from_text(yaml_text: str) -> BoardProfile:
 
 
 def analyze_i2c(
-    csv_content: str,
-    input_mode: str,
-    smbus_timeout_ms: float,
+    csv_content: str | bytes,
+    input_mode: I2CInputFormat | str | None = None,
+    smbus_timeout_ms: float = 25.0,
     *,
+    input_format: I2CInputFormat | str | None = None,
+    board_profile: BoardProfile | None = None,
     limits: AnalysisLimits | None = None,
 ) -> tuple[I2CAnalysisReport, Any]:
-    engine = build_i2c_engine(smbus_timeout_ms, limits=limits)
-    if input_mode == "Raw digital transition (Time, SCL, SDA)":
-        from fw_diag_tool.i2c.raw_adapter import raw_decode_to_events
-        from fw_diag_tool.i2c.raw_capture import analyze_raw_i2c_csv
+    if input_mode is None and input_format is None:
+        selected_format: I2CInputFormat | str = I2CInputFormat.DECODED_CSV
+    elif input_mode is None:
+        selected_format = input_format  # type: ignore[assignment]
+    elif input_format is None:
+        selected_format = input_mode
+    else:
+        selected_mode = normalize_i2c_input_format(input_mode)
+        selected_format = normalize_i2c_input_format(input_format)
+        if selected_mode is not selected_format:
+            raise ValueError("input_mode and input_format identify different I2C formats")
 
-        raw_capture_result = analyze_raw_i2c_csv(csv_content, limits=limits)
-        report = engine.analyze(raw_decode_to_events(raw_capture_result))
-        return report, raw_capture_result
-    return engine.analyze_csv_content(csv_content), None
+    engine = build_i2c_engine(smbus_timeout_ms, board_profile=board_profile, limits=limits)
+    return dispatch_i2c_input(engine, csv_content, selected_format, limits=limits)
+
+
+analyze_i2c_input = analyze_i2c
+
+
+__all__ = [
+    "I2CInputFormat",
+    "analyze_i2c",
+    "analyze_i2c_input",
+    "build_i2c_engine",
+    "load_board_profile_from_text",
+]

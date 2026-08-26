@@ -22,10 +22,14 @@ class FixtureCase:
     builder: Callable[[], str]
 
 
-def _i2c_csv(rows: list[str], *, with_duration: bool = False) -> str:
+def _i2c_csv(
+    rows: list[str], *, with_duration: bool = False, with_clock_stretch: bool = False
+) -> str:
     header = "Time [s],Packet ID,Address,Data,Read/Write,ACK/NAK"
     if with_duration:
         header += ",Duration"
+    if with_clock_stretch:
+        header += ",Clock Stretch [s]"
     return header + "\n" + "\n".join(rows) + "\n"
 
 
@@ -63,13 +67,14 @@ def case_02_eeprom_data_nack() -> str:
 def case_03_clock_stretching() -> str:
     return _i2c_csv(
         [
-            "0.000000,0,0x58,,Write,ACK,",
-            "0.000025,0,,0x88,Write,ACK,",
-            "0.000050,1,0x58,,Read,ACK,",
-            "0.000075,1,,0x00,Read,ACK,0.030000",
-            "0.030075,1,,0xE2,Read,NACK,",
+            "0.000000,0,0x58,,Write,ACK,,",
+            "0.000025,0,,0x88,Write,ACK,,",
+            "0.000050,1,0x58,,Read,ACK,,",
+            "0.000075,1,,0x00,Read,ACK,0.030000,0.030000",
+            "0.030075,1,,0xE2,Read,NACK,,",
         ],
         with_duration=True,
+        with_clock_stretch=True,
     )
 
 

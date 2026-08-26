@@ -276,6 +276,13 @@ class SessionManager:
             payload = cls.migrate_v1(payload)
         elif version != cls.CURRENT_VERSION:
             raise ValueError(f"unsupported session version: {version!r}")
+        elif "schema_version" not in payload:
+            # A few early v2 exporters used ``version`` as the top-level key.
+            # Normalize that documented alias before the strict payload model
+            # reads the canonical field, so malformed files produce the same
+            # user-facing ValueError/TypeError path instead of leaking KeyError.
+            payload = dict(payload)
+            payload["schema_version"] = str(version)
         return SessionDocument.from_payload(payload)
 
     def load_document(self, filepath: str | Path) -> SessionDocument:
