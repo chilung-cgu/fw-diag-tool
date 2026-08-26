@@ -49,6 +49,20 @@ def test_cli_pcie_analyze_dmesg_and_lspci(tmp_path: Path):
     assert "Device Overview" in res3.output
 
 
+def test_cli_i2c_text_trace_requires_explicit_format(tmp_path: Path):
+    runner = CliRunner()
+    trace = tmp_path / "trace.log"
+    trace.write_text("[0.001] S 0x48 W A 0x00 A P\n", encoding="utf-8")
+
+    explicit = runner.invoke(app, ["i2c", "analyze", str(trace), "--text-trace"])
+    assert explicit.exit_code == 0
+    assert "grouped into 1 logical transaction" in explicit.output
+
+    ambiguous = runner.invoke(app, ["i2c", "analyze", str(trace)])
+    assert ambiguous.exit_code == 2
+    assert "I2C trace or report generation failed" in ambiguous.output
+
+
 def test_cli_spi_analyze_and_reporter(tmp_path: Path):
     runner = CliRunner()
     spi_csv = tmp_path / "spi.csv"

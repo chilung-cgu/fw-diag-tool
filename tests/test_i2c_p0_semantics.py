@@ -152,6 +152,21 @@ def test_multibyte_aggregate_ack_withholds_eeprom_semantics():
     )
 
 
+def test_aggregate_duration_is_explicitly_withheld_from_frequency_samples():
+    report = I2CDiagnosticEngine().analyze_csv_string(
+        "Time,Address,Read/Write,Data,ACK/NACK,Duration\n"
+        '0.001,0x50,Write,"0x00 0x01",ACK,0.000090\n'
+    )
+
+    assert report.timing_stats.frequency_sample_count == 0
+    issue = next(
+        issue
+        for issue in report.data_quality_issues
+        if issue.code == "I2C_TIMING_AGGREGATE_UNATTRIBUTABLE"
+    )
+    assert issue.count == 1
+
+
 def test_source_provided_byte_duration_produces_frequency_measurement():
     csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK,Duration
 0.001000,0,0x50,Write,,ACK,0.0000225
@@ -167,6 +182,32 @@ def test_source_provided_byte_duration_produces_frequency_measurement():
     frequency_figure = I2CTimingCharts.create_frequency_distribution(report)
     assert len(frequency_figure.data) == 1
     assert "Samples: 2" in frequency_figure.layout.title.text
+
+
+def test_whole_byte_duration_does_not_become_clock_stretch_without_scl_evidence():
+    csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK,Duration
+0.001000,0,0x50,Write,,ACK,0.000180
+0.001180,0,,Write,0x10,ACK,0.000180
+"""
+
+    report = I2CDiagnosticEngine().analyze_csv_string(csv_data)
+
+    assert report.timing_stats.avg_frequency_khz == pytest.approx(50.0)
+    assert report.timing_stats.clock_stretch_count == 0
+    assert not any(issue.code == "I2C_LONG_CLOCK_STRETCH" for issue in report.issues)
+
+
+def test_explicit_clock_stretch_column_is_source_evidence():
+    csv_data = """Time,Packet ID,Address,Read/Write,Data,ACK/NACK,Duration,Clock Stretch [s]
+0.001000,0,0x50,Write,,ACK,0.000025,
+0.001025,0,,Write,0x10,ACK,0.000025,0.000250
+"""
+
+    report = I2CDiagnosticEngine().analyze_csv_string(csv_data)
+
+    assert report.timing_stats.clock_stretch_count == 1
+    assert report.timing_stats.max_clock_stretch_ms == pytest.approx(0.25)
+    assert any(issue.code == "I2C_LONG_CLOCK_STRETCH" for issue in report.issues)
 
 
 def test_bus_utilization_is_unavailable_without_trace_duration():

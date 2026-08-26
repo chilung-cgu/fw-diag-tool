@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,6 +10,7 @@ from streamlit.testing.v1 import AppTest
 from typer.testing import CliRunner
 
 from fw_diag_tool import __version__
+from fw_diag_tool.board_profile import load_board_profile
 from fw_diag_tool.cli import app
 from fw_diag_tool.errors import ResourceLimitError
 from fw_diag_tool.gui.session_io import serialize_i2c_session
@@ -164,6 +166,109 @@ def test_gui_builtin_sample_survives_configuration_rerun():
     assert any(metric.label == "總傳輸次數" and metric.value == "18" for metric in at.metric)
 
 
+def test_gui_builtin_sample_is_cleared_when_input_format_changes():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.button[0].click().run()
+    assert any(metric.label == "總傳輸次數" and metric.value == "18" for metric in at.metric)
+
+    at.radio[0].set_value("raw_digital").run()
+
+    assert not at.exception
+    assert any("原教學範例已清除" in item.value for item in at.warning)
+    assert not any(metric.label == "總傳輸次數" for metric in at.metric)
+
+
+def test_gui_teaching_selector_routes_text_and_raw_samples_to_declared_parsers():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+
+    at.selectbox[0].set_value("Text trace（2 筆）").run()
+    at.button[0].click().run()
+    assert not at.exception
+    assert any(metric.label == "總傳輸次數" and metric.value == "2" for metric in at.metric)
+
+    at.selectbox[0].set_value("Raw digital measured 100 kHz（1 筆）").run()
+    at.button[0].click().run()
+    assert not at.exception
+    assert any(metric.label == "總傳輸次數" and metric.value == "1" for metric in at.metric)
+    assert any(metric.label == "平均時鐘頻率" and metric.value == "100.0 kHz" for metric in at.metric)
+
+
+def test_gui_session_restores_raw_input_format_before_replay():
+    raw = Path("examples/data/i2c_raw_100khz.csv").read_bytes()
+    session = serialize_i2c_session(
+        {"total_transactions": 1},
+        input_name="raw.csv",
+        input_bytes=raw,
+        input_mode="raw_digital",
+        smbus_timeout_ms=30.0,
+    )
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.file_uploader[0].upload("raw.fwsession.json", session.encode(), "application/json").run()
+    at.file_uploader[1].upload("raw.csv", raw, "text/csv").run()
+
+    assert not at.exception
+    assert at.radio[0].value == "raw_digital"
+    assert any(metric.label == "總傳輸次數" and metric.value == "1" for metric in at.metric)
+
+
+def test_gui_session_without_capture_clears_previous_teaching_sample():
+    raw = Path("examples/data/i2c_raw_100khz.csv").read_bytes()
+    session = serialize_i2c_session(
+        {"total_transactions": 1},
+        input_name="raw.csv",
+        input_bytes=raw,
+        input_mode="raw_digital",
+        smbus_timeout_ms=30.0,
+    )
+
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.button[0].click().run()
+    assert any(metric.label == "總傳輸次數" and metric.value == "18" for metric in at.metric)
+
+    at.file_uploader[0].upload(
+        "raw.fwsession.json", session.encode("utf-8"), "application/json"
+    ).run()
+
+    assert not at.exception
+    assert not at.error
+    assert at.radio[0].value == "raw_digital"
+    assert not any(metric.label == "總傳輸次數" for metric in at.metric)
+
+
+def test_gui_session_without_sha_does_not_claim_replay():
+    raw = Path("examples/data/i2c_raw_100khz.csv").read_bytes()
+    legacy_session = json.dumps(
+        {
+            "version": "1.0",
+            "name": "legacy",
+            "data": {"old": "summary"},
+            "provenance": {"input_mode": "raw_digital", "smbus_timeout_ms": 30.0},
+        }
+    ).encode("utf-8")
+
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.file_uploader[0].upload(
+        "legacy.fwsession.json", legacy_session, "application/json"
+    ).run()
+    assert at.radio[0].value == "decoded_csv"
+    assert at.number_input[0].value == 25.0
+    at.file_uploader[1].upload("raw.csv", raw, "text/csv").run()
+
+    assert not at.exception
+    assert any("沒有 capture SHA-256" in item.value for item in at.warning)
+    assert not any("SHA-256 與 capture 相符" in item.value for item in at.success)
+
+
+def test_gui_accepts_version_alias_session_without_streamlit_exception():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    content = b'{"version":"2.0","config":{},"report":{}}'
+    at.file_uploader[0].upload("malformed.fwsession.json", content, "application/json").run()
+
+    assert not at.exception
+    assert not at.error
+    assert any("Session" in info.value for info in at.info)
+
+
 def test_gui_loads_session_settings_and_replays_matching_capture():
     sample = load_i2c_sample()
     session = serialize_i2c_session(
@@ -184,6 +289,101 @@ def test_gui_loads_session_settings_and_replays_matching_capture():
     assert at.number_input[0].value == 30.0
     assert any("SHA-256 與 capture 相符" in item.value for item in at.success)
     assert any(metric.label == "總傳輸次數" and metric.value == "18" for metric in at.metric)
+
+
+def test_gui_session_replacement_resets_missing_saved_settings():
+    raw = Path("examples/data/i2c_raw_100khz.csv").read_bytes()
+    sample = load_i2c_sample().encode("utf-8")
+    profile = load_board_profile(
+        {
+            "board_name": "board-a",
+            "version": "1",
+            "i2c_buses": [{"bus_num": 0, "speed_mode": "standard", "devices": []}],
+        }
+    )
+    first_session = serialize_i2c_session(
+        {},
+        input_name="raw.csv",
+        input_bytes=raw,
+        input_mode="raw_digital",
+        smbus_timeout_ms=30.0,
+        board_profile=profile,
+    )
+    second_payload = json.loads(
+        serialize_i2c_session(
+            {},
+            input_name="decoded.csv",
+            input_bytes=sample,
+            input_mode="decoded_csv",
+        )
+    )
+    for key in (
+        "input_mode",
+        "input_format",
+        "smbus_timeout_ms",
+        "board_profile_name",
+        "board_profile_version",
+        "board_profile_sha256",
+        "board_profile_hash",
+        "board_profile_content",
+    ):
+        second_payload["config"].pop(key, None)
+    second_session = json.dumps(second_payload).encode("utf-8")
+
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.file_uploader[0].upload(
+        "first.fwsession.json", first_session.encode("utf-8"), "application/json"
+    ).run()
+    at.file_uploader[1].upload("raw.csv", raw, "text/csv").run()
+    at.file_uploader[0].upload(
+        "second.fwsession.json", second_session, "application/json"
+    ).run()
+    at.file_uploader[1].upload("decoded.csv", sample, "text/csv").run()
+
+    assert not at.exception
+    assert not at.error
+    assert at.radio[0].value == "decoded_csv"
+    assert at.number_input[0].value == 25.0
+    assert any("- **Board profile**: `none`" in item.value for item in at.markdown)
+
+
+def test_gui_invalid_session_settings_clear_previous_state():
+    raw = Path("examples/data/i2c_raw_100khz.csv").read_bytes()
+    profile = load_board_profile(
+        {
+            "board_name": "board-a",
+            "version": "1",
+            "i2c_buses": [{"bus_num": 0, "speed_mode": "standard", "devices": []}],
+        }
+    )
+    session_payload = json.loads(
+        serialize_i2c_session(
+            {},
+            input_name="raw.csv",
+            input_bytes=raw,
+            input_mode="raw_digital",
+            smbus_timeout_ms=30.0,
+            board_profile=profile,
+        )
+    )
+    bad_payload = dict(session_payload)
+    bad_payload["config"] = dict(session_payload["config"])
+    bad_payload["config"]["smbus_timeout_ms"] = "bad"
+
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.file_uploader[0].upload(
+        "valid.fwsession.json", json.dumps(session_payload).encode("utf-8"), "application/json"
+    ).run()
+    at.file_uploader[1].upload("raw.csv", raw, "text/csv").run()
+    at.file_uploader[0].upload(
+        "invalid.fwsession.json", json.dumps(bad_payload).encode("utf-8"), "application/json"
+    ).run()
+
+    assert not at.exception
+    assert any("smbus_timeout_ms" in item.value for item in at.error)
+    assert at.radio[0].value == "decoded_csv"
+    assert at.number_input[0].value == 25.0
+    assert at.text_area[0].value == ""
 
 
 def test_gui_respects_pcie_mode_and_rejects_invalid_register_value():
@@ -226,13 +426,49 @@ def test_gui_c_header_invalid_module_name_is_reported():
 def test_gui_packet_builder_read_template_is_explicit_about_length():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
     at.sidebar.radio[0].set_value("🎨 I2C 封包模擬器與驅動產生").run()
-    at.selectbox[0].set_value("Read").run()
-    at.number_input[0].set_value(4).run()
+    at.selectbox[0].set_value("Temperature sensor：combined register read")
+    at.button[0].click().run()
+    at.number_input[1].set_value(4).run()
 
     assert not at.exception
     assert any("rx_buf[4]" in block.value for block in at.code)
     assert any("r4" in block.value for block in at.code)
     assert any("不是硬體量測" in caption.value for caption in at.caption)
+
+
+def test_gui_packet_builder_supports_direct_read_without_register_field():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🎨 I2C 封包模擬器與驅動產生").run()
+    at.selectbox[0].set_value("Sensor：direct read")
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert not any(field.label == "Register Offset" for field in at.text_input)
+    assert any("Direct read: no register phase" in block.value for block in at.code)
+    assert any("i2ctransfer 1 r2@0x40" in block.value for block in at.code)
+
+
+def test_gui_packet_builder_uses_little_endian_register_bytes_and_safe_cli():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🎨 I2C 封包模擬器與驅動產生").run()
+    at.selectbox[0].set_value("EEPROM：16-bit little-endian register write")
+    at.button[0].click().run()
+
+    cli_blocks = [block.value for block in at.code if "i2ctransfer" in block.value]
+    assert not at.exception
+    assert any("0x34 0x12 0xAA" in block for block in cli_blocks)
+    assert all("i2ctransfer -y" not in block for block in cli_blocks)
+    assert any("Write 可能改變" in warning.value for warning in at.warning)
+
+
+def test_gui_packet_builder_validates_before_rendering_or_codegen():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🎨 I2C 封包模擬器與驅動產生").run()
+    at.text_input[0].set_value("0x78").run()
+
+    assert not at.exception
+    assert any("address_7bit must be between" in error.value for error in at.error)
+    assert not any("i2ctransfer" in block.value for block in at.code)
 
 
 def test_gui_dts_generator_requires_and_renders_explicit_device_topology():

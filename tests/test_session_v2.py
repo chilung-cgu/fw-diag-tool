@@ -20,6 +20,13 @@ from fw_diag_tool.uart.parser import UARTCrashParser
 
 
 class TestSessionV2Schema:
+    def test_version_alias_is_normalized_without_keyerror(self):
+        document = SessionManager.deserialize_session(
+            '{"version":"2.0","config":{},"report":{}}'
+        )
+
+        assert document.schema_version == "2.0"
+
     def test_saved_payload_has_v2_top_level_fields(self, tmp_path: Path):
         mgr = SessionManager(session_dir=tmp_path)
         filepath = mgr.save_session("v2-schema", {"transactions": []})

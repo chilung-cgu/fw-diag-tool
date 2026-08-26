@@ -25,7 +25,8 @@ def test_driver_register_read_uses_repeated_start_and_full_length():
     assert "I2C_RDWR" in linux
 
     cli = snippets["OpenBMC / Linux CLI (i2c-tools)"]
-    assert "i2ctransfer -y 2 w2@0x50 0x12 0x34 r4" in cli
+    assert "i2ctransfer 2 w2@0x50 0x12 0x34 r4" in cli
+    assert "-y" not in cli
     assert " -f " not in cli
 
     stm32 = snippets["STM32 HAL C Driver"]
@@ -51,7 +52,7 @@ def test_driver_16bit_register_write_preserves_every_data_byte():
 
     assert "{ 0x12, 0x34, 0xAB, 0xCD }" in snippets["Linux Userspace (i2c-dev)"]
     assert (
-        "i2ctransfer -y 1 w4@0x50 0x12 0x34 0xAB 0xCD"
+        "i2ctransfer 1 w4@0x50 0x12 0x34 0xAB 0xCD"
         in snippets["OpenBMC / Linux CLI (i2c-tools)"]
     )
     assert "I2C_MEMADD_SIZE_16BIT" in snippets["STM32 HAL C Driver"]
@@ -64,7 +65,7 @@ def test_driver_direct_read_and_write_without_register():
         addr_7bit=0x48, reg_offset=None, is_read=True, read_length=3
     )
     assert "read(file, rx_buf" in read_snippets["Linux Userspace (i2c-dev)"]
-    assert "i2ctransfer -y 1 r3@0x48" in read_snippets["OpenBMC / Linux CLI (i2c-tools)"]
+    assert "i2ctransfer 1 r3@0x48" in read_snippets["OpenBMC / Linux CLI (i2c-tools)"]
     assert "HAL_I2C_Master_Receive" in read_snippets["STM32 HAL C Driver"]
     assert "Wire.requestFrom(0x48, 3)" in read_snippets["Arduino / Wire.h"]
 
@@ -72,7 +73,7 @@ def test_driver_direct_read_and_write_without_register():
         addr_7bit=0x48, reg_offset=None, data_bytes=[0x11, 0x22]
     )
     assert "{ 0x11, 0x22 }" in write_snippets["Linux Userspace (i2c-dev)"]
-    assert "i2ctransfer -y 1 w2@0x48 0x11 0x22" in write_snippets["OpenBMC / Linux CLI (i2c-tools)"]
+    assert "i2ctransfer 1 w2@0x48 0x11 0x22" in write_snippets["OpenBMC / Linux CLI (i2c-tools)"]
     assert "HAL_I2C_Master_Transmit" in write_snippets["STM32 HAL C Driver"]
     assert write_snippets["Arduino / Wire.h"].count("Wire.write(") == 2
 

@@ -22,6 +22,7 @@ from fw_diag_tool.i2c.raw_capture import (
     decode_i2c_capture,
     parse_transition_csv,
 )
+from fw_diag_tool.limits import DEFAULT_ANALYSIS_LIMITS
 
 
 class _CaptureBuilder:
@@ -139,6 +140,33 @@ def test_combined_write_repeated_start_read_and_final_controller_nack() -> None:
     assert read.data_samples[-1].ack == RawAck.NACK
     assert read.data_samples[-1].ack_role == RawAckRole.CONTROLLER_READ_TERMINATION
     assert read.controller_terminated_read is True
+
+
+def test_raw_waveform_can_focus_one_transaction_and_reports_downsampling() -> None:
+    builder = _CaptureBuilder()
+    builder.start()
+    builder.byte(0xA0, 0)
+    builder.byte(0x00, 0)
+    builder.repeated_start()
+    builder.byte(0xA1, 0)
+    builder.byte(0xAB, 1)
+    builder.stop()
+    result = analyze_raw_i2c_csv(builder.csv())
+
+    write_waveform = raw_decode_to_waveform(result, transaction_index=0)
+    read_waveform = raw_decode_to_waveform(
+        result,
+        transaction_index=1,
+        limits=replace(DEFAULT_ANALYSIS_LIMITS, max_render_rows=10),
+    )
+
+    write_labels = [annotation.label for annotation in write_waveform.annotations]
+    read_labels = [annotation.label for annotation in read_waveform.annotations]
+    assert "0x50 (W)" in write_labels
+    assert "0x50 (R)" not in write_labels
+    assert "0x50 (R)" in read_labels
+    assert read_waveform.downsampled is True
+    assert read_waveform.source_transition_count > read_waveform.rendered_transition_count
 
 
 def test_clock_stretch_is_preserved_as_measured_low_time() -> None:
@@ -395,7 +423,8 @@ def test_raw_adapter_feeds_main_engine_without_losing_measured_evidence() -> Non
     assert report.transactions[0].address_7bit == 0x50
     assert report.transactions[0].data_bytes == [0x33]
     assert report.timing_stats.avg_frequency_khz == pytest.approx(100.0)
-    assert report.timing_stats.frequency_evidence == "source-provided"
+    assert report.timing_stats.frequency_evidence == "measured"
+    assert report.timing_stats.bus_utilization_evidence == "measured"
     assert not report.data_quality_issues
 
 
@@ -512,6 +541,9 @@ def test_raw_adapter_waveform_uses_captured_levels_and_protocol_overlay() -> Non
         "NACK",
         "STOP",
     }
+    stop = next(annotation for annotation in waveform.annotations if annotation.annotation_type == "STOP")
+    assert stop.end_time > stop.start_time
+    assert "display-only" in stop.details
 
 
 def test_cli_raw_digital_mode_analyzes_file(tmp_path) -> None:
