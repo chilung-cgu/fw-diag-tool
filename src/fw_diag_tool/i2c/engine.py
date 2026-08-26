@@ -37,6 +37,14 @@ from fw_diag_tool.limits import AnalysisLimits, coerce_limits
 
 from .mux_tracker import I2CMuxTracker
 
+_DEVICE_IDENTITY_CONFIDENCE_RANK = {
+    "unknown": 0,
+    "address-only": 1,
+    "ambiguous": 2,
+    "single-address-candidate": 3,
+    "board-profile": 4,
+}
+
 
 class I2CDiagnosticEngine:
     """High-level Diagnostic Engine for I2C, SMBus, and PMBus Traces."""
@@ -163,6 +171,7 @@ class I2CDiagnosticEngine:
                         finish_at_event(current_tx, ev)
                         if ev.event_type == RawEventType.REPEATED_START:
                             current_tx.has_stop = False
+                            current_tx.ended_by_repeated_start = True
                         transactions.append(current_tx)
                         self._check_transaction_limit(transactions)
                     current_tx = None
@@ -331,8 +340,6 @@ class I2CDiagnosticEngine:
                 clock_stretch_us = 0.0
                 if ev.extra and "clock_stretch_us" in ev.extra:
                     clock_stretch_us = float(ev.extra["clock_stretch_us"])
-                elif dur_s is not None and dur_s > 0.000100:
-                    clock_stretch_us = dur_s * 1_000_000.0
                 if clock_stretch_us > 0:
                     current_tx.clock_stretching_events.append(
                         {
@@ -464,10 +471,6 @@ class I2CDiagnosticEngine:
                 clock_stretch_us = 0.0
                 if ev.extra and "clock_stretch_us" in ev.extra:
                     clock_stretch_us = float(ev.extra["clock_stretch_us"])
-                elif dur_s is not None and dur_s > 0.000100:
-                    # Analyzer tables may expose only whole-byte duration. Raw
-                    # digital adapters provide an explicit SCL-low delta instead.
-                    clock_stretch_us = dur_s * 1_000_000.0
                 if clock_stretch_us > 0:
                     current_tx.clock_stretching_events.append(
                         {
@@ -554,9 +557,16 @@ class I2CDiagnosticEngine:
         address_nack_semantic_unavailable = 0
         data_nack_semantic_unavailable = 0
         semantic_source_error = 0
+        ambiguous_board_profile_addresses = 0
 
         for tx in transactions:
             if tx.device_category == "I2C Multiplexer (PCA9548A/PCA9546)":
+                if tx.device_name is None and tx.address_available:
+                    tx.device_name = f"Unknown Device (0x{tx.address_7bit:02X})"
+                if tx.protocol is None:
+                    tx.protocol = "I2C"
+                if tx.identity_confidence is None:
+                    tx.identity_confidence = "unknown"
                 continue
             if not tx.address_available:
                 tx.device_name = "Unknown Device (address unavailable)"
@@ -574,6 +584,19 @@ class I2CDiagnosticEngine:
                 tx.semantic_summary = "Read/write direction unavailable; semantic decoding withheld"
                 tx.decoded_values = {"evidence": "source-error" if tx.source_error else "direction-unavailable"}
                 continue
+            # Establish explicit, non-null identity fallbacks before the
+            # conservative source/aggregate-ACK exits below.  A decoded row
+            # may prove only an address while still lacking per-byte ACK
+            # attribution; the UI must show that as Unknown rather than an
+            # empty device/category cell.
+            if tx.device_name is None:
+                tx.device_name = f"Unknown Device (0x{tx.address_7bit:02X})"
+            if tx.device_category is None:
+                tx.device_category = "General I2C Peripheral"
+            if tx.protocol is None:
+                tx.protocol = "I2C"
+            if tx.identity_confidence is None:
+                tx.identity_confidence = "unknown"
             if tx.source_error and tx.aggregate_ack == AckType.NONE:
                 tx.semantic_summary = "Source field invalid; semantic decoding withheld"
                 tx.decoded_values = {"evidence": "source-error"}
@@ -602,24 +625,40 @@ class I2CDiagnosticEngine:
                 address_nack_data += 1
                 continue
             addr = tx.address_7bit
-            dev_profile = None
+            profile_matches: list[Any] = []
             if self.board_profile is not None:
                 for bus in self.board_profile.i2c_buses:
+                    bus_matches: list[Any] = []
                     if tx.mux_channels:
                         for mux in bus.muxes:
                             for ch in mux.channels:
                                 if ch.channel in tx.mux_channels:
                                     for d in ch.devices:
                                         if d.address_7bit == addr:
-                                            dev_profile = d
-                                            break
-                    if dev_profile is None:
+                                            bus_matches.append(d)
+                    if not bus_matches:
                         for d in bus.devices:
                             if d.address_7bit == addr:
-                                dev_profile = d
-                                break
-                    if dev_profile is not None:
-                        break
+                                bus_matches.append(d)
+                    profile_matches.extend(bus_matches)
+
+            if len(profile_matches) > 1:
+                ambiguous_board_profile_addresses += 1
+                tx.device_name = f"Ambiguous Board Profile (0x{addr:02X})"
+                tx.device_category = "Ambiguous Board Profile Address"
+                tx.protocol = "I2C"
+                tx.identity_confidence = "ambiguous"
+                tx.device_candidates = [profile.name for profile in profile_matches]
+                tx.semantic_summary = (
+                    "Board profile maps this address to multiple buses/devices; "
+                    "bus context is unavailable, so semantic decoding was withheld"
+                )
+                tx.decoded_values = {
+                    "evidence": "ambiguous-board-profile",
+                    "candidate_profiles": tx.device_candidates,
+                }
+                continue
+            dev_profile = profile_matches[0] if profile_matches else None
 
             candidates = get_all_matching_devices(addr)
             chip = lookup_device(addr) if len(candidates) == 1 else None
@@ -1082,6 +1121,18 @@ class I2CDiagnosticEngine:
                     count=semantic_source_error,
                 )
             )
+        if ambiguous_board_profile_addresses:
+            quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_BOARD_PROFILE_ADDRESS_AMBIGUOUS",
+                    message=(
+                        "A board profile maps an observed address to multiple buses/devices, "
+                        "but the capture has no bus identity; device-specific semantic decoding "
+                        "was withheld instead of selecting an arbitrary profile."
+                    ),
+                    count=ambiguous_board_profile_addresses,
+                )
+            )
         return quality_issues
 
     def analyze(self, events: list[RawI2CEvent]) -> I2CAnalysisReport:
@@ -1099,6 +1150,16 @@ class I2CDiagnosticEngine:
         )
 
         timing_stats = analyze_timing_statistics(transactions, total_duration)
+        if any(
+            event.extra and event.extra.get("timing_evidence") == "raw_scl_period_delta"
+            for event in events
+        ):
+            # Raw adapter timing is derived from captured SCL edges, whereas
+            # decoded analyzer timing comes from source table fields.
+            if timing_stats.frequency_sample_count:
+                timing_stats.frequency_evidence = "measured"
+            if timing_stats.bus_utilization_evidence != "unavailable":
+                timing_stats.bus_utilization_evidence = "measured"
         issues = self.anomaly_detector.analyze_transactions(transactions, timing_stats) + mux_issues
         if len(issues) > self.limits.max_findings:
             raise ResourceLimitError(
@@ -1119,8 +1180,9 @@ class I2CDiagnosticEngine:
             if not tx.address_available:
                 continue
             addr_hex = f"0x{tx.address_7bit:02X}"
-            if addr_hex not in devices_detected:
-                devices_detected[addr_hex] = {
+            device = devices_detected.get(addr_hex)
+            if device is None:
+                device = {
                     "address_7bit": addr_hex,
                     "address_8bit": f"0x{tx.address_8bit:02X}",
                     "name": tx.device_name,
@@ -1130,9 +1192,41 @@ class I2CDiagnosticEngine:
                     "candidates": tx.device_candidates,
                     "transaction_count": 0,
                 }
-            devices_detected[addr_hex]["transaction_count"] += 1
+                devices_detected[addr_hex] = device
+            elif _DEVICE_IDENTITY_CONFIDENCE_RANK.get(
+                tx.identity_confidence or "unknown", 0
+            ) > _DEVICE_IDENTITY_CONFIDENCE_RANK.get(
+                device.get("identity_confidence") or "unknown", 0
+            ):
+                device.update(
+                    {
+                        "name": tx.device_name,
+                        "category": tx.device_category,
+                        "protocol": tx.protocol,
+                        "identity_confidence": tx.identity_confidence,
+                        "candidates": tx.device_candidates,
+                    }
+                )
+            device["transaction_count"] += 1
 
         data_quality_issues: list[DataQualityIssue] = list(semantic_quality_issues)
+        reserved_address_count = sum(
+            tx.address_available
+            and not 0x08 <= tx.address_7bit <= 0x77
+            for tx in transactions
+        )
+        if reserved_address_count:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_RESERVED_ADDRESS_CANDIDATE",
+                    message=(
+                        "Some transactions use an I2C reserved 7-bit address (outside 0x08..0x77). "
+                        "The address was retained for forensic inspection, but it is not a normal device "
+                        "identity candidate and the packet builder will reject it."
+                    ),
+                    count=reserved_address_count,
+                )
+            )
         if not events:
             data_quality_issues.append(
                 DataQualityIssue(
@@ -1140,6 +1234,17 @@ class I2CDiagnosticEngine:
                     message=(
                         "The capture contains no data rows after ignoring blank/comment lines; "
                         "there is no protocol evidence to classify as clean."
+                    ),
+                    count=1,
+                )
+            )
+        elif not transactions:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_SOURCE_NO_TRANSACTIONS",
+                    message=(
+                        "The source contained framing or unknown events but no complete logical I2C "
+                        "transaction; this input cannot be classified as a clean capture."
                     ),
                     count=1,
                 )
@@ -1183,6 +1288,21 @@ class I2CDiagnosticEngine:
                         "per-byte ACK attribution and semantic payload acceptance were withheld."
                     ),
                     count=aggregate_ack_count,
+                )
+            )
+        aggregate_duration_count = sum(
+            bool(event.extra and event.extra.get("aggregate_duration_unattributable"))
+            for event in events
+        )
+        if aggregate_duration_count:
+            data_quality_issues.append(
+                DataQualityIssue(
+                    code="I2C_TIMING_AGGREGATE_UNATTRIBUTABLE",
+                    message=(
+                        "An aggregate analyzer row supplied one Duration for address plus data bytes; "
+                        "the value was retained as source metadata but not attributed to per-byte frequency samples."
+                    ),
+                    count=aggregate_duration_count,
                 )
             )
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 from dataclasses import replace
@@ -107,6 +108,11 @@ def analyze_i2c_trace(
         "--raw-digital",
         help="Parse a raw digital transition CSV with Time/SCL/SDA columns instead of an analyzer table.",
     ),
+    text_trace: bool = typer.Option(
+        False,
+        "--text-trace",
+        help="Parse a tokenized text trace (S/Sr/P, W/R, ACK/NACK, 0xNN).",
+    ),
     time_column: str | None = typer.Option(
         None,
         "--time-column",
@@ -140,6 +146,8 @@ def analyze_i2c_trace(
         engine = I2CDiagnosticEngine(
             smbus_timeout_ms=smbus_timeout, board_profile=profile, limits=limits
         )
+        if raw_digital and text_trace:
+            raise ValueError("--raw-digital and --text-trace are mutually exclusive")
         if raw_digital:
             result = analyze_raw_i2c_csv(
                 file_path.read_bytes(),
@@ -149,11 +157,39 @@ def analyze_i2c_trace(
                 limits=limits,
             )
             report = engine.analyze(raw_decode_to_events(result, limits=limits))
+        elif text_trace:
+            report = engine.analyze_text(file_path.read_text(encoding="utf-8"))
         else:
             report = engine.analyze_csv_file(str(file_path))
+            if report.total_transactions == 0 and file_path.suffix.lower() in {".txt", ".log"}:
+                raise ValueError(
+                    "decoded CSV input produced no transactions; use --text-trace for tokenized text logs"
+                )
         I2CReporter.render_terminal(report, console=console)
         if markdown_out:
-            md_text = I2CReporter.generate_markdown(report)
+            input_format = (
+                "raw_digital"
+                if raw_digital
+                else ("text_trace" if text_trace else "decoded_csv")
+            )
+            profile_metadata = "none"
+            if profile is not None:
+                profile_metadata = (
+                    f"{profile.board_name}@{profile.version}; "
+                    f"sha256={hashlib.sha256(profile.to_yaml().encode('utf-8')).hexdigest()}"
+                )
+            md_text = I2CReporter.generate_markdown(
+                report,
+                metadata={
+                    "tool": f"fw-diag-tool {__version__}",
+                    "input_name": str(file_path),
+                    "input_sha256": hashlib.sha256(file_path.read_bytes()).hexdigest(),
+                    "input_format": input_format,
+                    "smbus_timeout_ms": smbus_timeout,
+                    "board_profile": profile_metadata,
+                    "evidence_sample_count": report.timing_stats.frequency_sample_count,
+                },
+            )
             markdown_out.write_text(md_text, encoding="utf-8")
             console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
         if json_out:
@@ -172,7 +208,7 @@ def analyze_i2c_trace(
             if any(issue.severity.value in allowed for issue in report.issues):
                 raise typer.Exit(code=1)
     except (OSError, UnicodeError, TypeError, ValueError, SchemaError) as exc:
-        label = "raw digital capture" if raw_digital else "I2C trace"
+        label = "raw digital capture" if raw_digital else ("text trace" if text_trace else "I2C trace")
         console.print(f"[bold red]Error: {label} or report generation failed: {exc}[/]")
         raise typer.Exit(code=2) from exc
 

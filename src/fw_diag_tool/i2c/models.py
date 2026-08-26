@@ -139,6 +139,7 @@ class I2CTransaction:
     # the aggregate status separately from per-byte ACKs, whose attribution is
     # intentionally unknown.
     aggregate_ack: AckType = AckType.NONE
+    ended_by_repeated_start: bool = False
 
     @property
     def hex_dump(self) -> str:
@@ -178,6 +179,14 @@ class I2CTransaction:
                 continue
             return True
         return False
+
+    @property
+    def status(self) -> str:
+        """Return the canonical transaction status label."""
+
+        from fw_diag_tool.i2c.status import get_transaction_status
+
+        return get_transaction_status(self).value
 
 
 @dataclass
@@ -221,6 +230,7 @@ class TimingStatistics:
     avg_frequency_khz: float = 0.0
     min_frequency_khz: float = 0.0
     max_frequency_khz: float = 0.0
+    # Kept as a compatibility alias for callers using the original name.
     frequency_jitter_pct: float = 0.0
     speed_mode: I2CSpeedMode = I2CSpeedMode.UNKNOWN
     clock_stretch_count: int = 0
@@ -234,12 +244,20 @@ class TimingStatistics:
     frequency_sample_count: int = 0
     frequency_evidence: str = "unavailable"
     bus_utilization_evidence: str = "unavailable"
+    frequency_spread_pct: float = 0.0
+
+    def __post_init__(self) -> None:
+        if self.frequency_spread_pct == 0.0 and self.frequency_jitter_pct != 0.0:
+            self.frequency_spread_pct = self.frequency_jitter_pct
+        elif self.frequency_jitter_pct == 0.0 and self.frequency_spread_pct != 0.0:
+            self.frequency_jitter_pct = self.frequency_spread_pct
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "avg_frequency_khz": round(self.avg_frequency_khz, 2),
             "min_frequency_khz": round(self.min_frequency_khz, 2),
             "max_frequency_khz": round(self.max_frequency_khz, 2),
+            "frequency_spread_pct": round(self.frequency_spread_pct, 2),
             "frequency_jitter_pct": round(self.frequency_jitter_pct, 2),
             "speed_mode": self.speed_mode.value,
             "clock_stretch_count": self.clock_stretch_count,
@@ -287,6 +305,8 @@ class I2CAnalysisReport:
         return self.issues
 
     def to_dict(self) -> dict[str, Any]:
+        from fw_diag_tool.i2c.status import get_transaction_status
+
         return {
             "summary": {
                 "total_events": self.total_events,
@@ -315,6 +335,14 @@ class I2CAnalysisReport:
                     ),
                     "address_ack": tx.address_ack.value,
                     "aggregate_ack": tx.aggregate_ack.value,
+                    "status": get_transaction_status(
+                        tx,
+                        next_transaction=(
+                            self.transactions[index + 1]
+                            if index + 1 < len(self.transactions)
+                            else None
+                        ),
+                    ).value,
                     "data_hex": tx.hex_dump,
                     "byte_count": len(tx.data_bytes),
                     "source_byte_count": sum(
@@ -322,6 +350,7 @@ class I2CAnalysisReport:
                     ),
                     "has_stop": tx.has_stop,
                     "is_repeated_start": tx.is_repeated_start,
+                    "ended_by_repeated_start": tx.ended_by_repeated_start,
                     "device_name": tx.device_name,
                     "protocol": tx.protocol,
                     "semantic_summary": tx.semantic_summary,
@@ -331,7 +360,7 @@ class I2CAnalysisReport:
                     "anomalies": tx.anomalies,
                     "source_error": tx.source_error,
                 }
-                for tx in self.transactions
+                for index, tx in enumerate(self.transactions)
             ],
         }
 

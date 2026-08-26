@@ -7,6 +7,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 from .models import AckType, I2CAnalysisReport, I2CDirection
+from .status import TransactionStatus, get_transaction_status
+from .timing import frequency_samples_khz
 
 
 class I2CTimingCharts:
@@ -14,16 +16,7 @@ class I2CTimingCharts:
 
     @staticmethod
     def create_frequency_distribution(report: I2CAnalysisReport) -> go.Figure:
-        bitrates: list[float] = []
-        for tx in report.transactions:
-            for p in tx.byte_packets:
-                if p.bit_rate_khz and p.bit_rate_khz > 0:
-                    bitrates.append(p.bit_rate_khz)
-                elif p.duration_s and p.duration_s > 0:
-                    # Compute per-byte frequency: 9 clock cycles (8 data + 1 ACK)
-                    freq_khz = (9.0 / p.duration_s) / 1000.0
-                    if 1.0 <= freq_khz <= 5000.0:
-                        bitrates.append(freq_khz)
+        bitrates = frequency_samples_khz(report.transactions)
 
         if not bitrates:
             fig = go.Figure()
@@ -51,7 +44,8 @@ class I2CTimingCharts:
             title=(
                 "<b>SCL Clock Frequency Distribution</b> "
                 f"(Avg: {report.timing_stats.avg_frequency_khz:.1f} kHz, "
-                f"Jitter: {report.timing_stats.frequency_jitter_pct:.1f}%, "
+                f"Spread: {report.timing_stats.frequency_spread_pct:.1f}% "
+                f"(Jitter: {report.timing_stats.frequency_jitter_pct:.1f}%), "
                 f"Samples: {len(bitrates)})"
             ),
             template="plotly_dark",
@@ -63,21 +57,13 @@ class I2CTimingCharts:
     @staticmethod
     def create_bus_activity_timeline(report: I2CAnalysisReport) -> go.Figure:
         data: list[dict[str, Any]] = []
-        for tx in report.transactions:
-            if not tx.address_available or not tx.direction_available:
-                status = "EVIDENCE INCOMPLETE"
-            elif tx.address_ack == AckType.NACK:
-                status = "ADDR NAK"
-            elif tx.address_ack == AckType.NONE:
-                status = "ACK UNKNOWN"
-            elif tx.has_unexpected_data_nack:
-                status = "DATA NAK"
-            elif tx.has_normal_read_termination_nack:
-                status = "READ END NAK"
-            elif any(p.ack == AckType.NONE for p in tx.byte_packets if not p.is_address):
-                status = "ACK UNKNOWN"
-            else:
-                status = "ACK"
+        for index, tx in enumerate(report.transactions):
+            next_tx = (
+                report.transactions[index + 1]
+                if index + 1 < len(report.transactions)
+                else None
+            )
+            status = get_transaction_status(tx, next_transaction=next_tx).value
             data.append(
                 {
                     "Transaction ID": f"#{tx.id}",
@@ -131,6 +117,8 @@ class I2CTimingCharts:
                 "READ END NAK": "#636EFA",
                 "ACK UNKNOWN": "#7F7F7F",
                 "EVIDENCE INCOMPLETE": "#7F7F7F",
+                "NO STOP": "#EF553B",
+                "ABORTED": "#AB63FA",
             },
             "hover_data": ["Transaction ID", "Direction", "Bytes", "Duration (ms)"],
             "title": timeline_title,
@@ -148,18 +136,36 @@ class I2CTimingCharts:
         for addr_str, dev in report.devices_detected.items():
             addr_int = int(addr_str, 16)
             dev_txs = [t for t in report.transactions if t.address_7bit == addr_int]
+            statuses = [
+                get_transaction_status(
+                    t,
+                    next_transaction=(
+                        report.transactions[index + 1]
+                        if index + 1 < len(report.transactions)
+                        else None
+                    ),
+                )
+                for index, t in enumerate(report.transactions)
+                if t.address_7bit == addr_int
+            ]
+            # The display status has a single canonical label, so a missing
+            # STOP can legitimately take precedence over a data NACK.  Health
+            # counters must still reflect the independent ACK evidence rather
+            # than treating that transaction as a successful ACK.
             nack_count = sum(
-                1 for t in dev_txs if t.address_ack == AckType.NACK or t.has_unexpected_data_nack
+                t.address_ack == AckType.NACK or t.has_unexpected_data_nack
+                for t in dev_txs
             )
             unknown_ack_count = sum(
-                1
-                for t in dev_txs
-                if t.address_ack != AckType.NACK
-                and not t.has_unexpected_data_nack
-                and (
-                    t.address_ack == AckType.NONE
-                    or any(p.ack == AckType.NONE for p in t.byte_packets if not p.is_address)
+                status == TransactionStatus.EVIDENCE_INCOMPLETE
+                or status == TransactionStatus.ACK_UNKNOWN
+                or t.address_ack in (AckType.NONE, None)
+                or any(
+                    packet.ack in (AckType.NONE, None)
+                    for packet in t.byte_packets
+                    if not packet.is_address
                 )
+                for t, status in zip(dev_txs, statuses, strict=True)
             )
             stretch_count = sum(len(t.clock_stretching_events) for t in dev_txs)
             total_tx = len(dev_txs)
@@ -177,8 +183,8 @@ class I2CTimingCharts:
             summary_rows.append(
                 {
                     "Slave Address": addr_str,
-                    "Device Name": dev.get("name", "Unknown"),
-                    "Category": dev.get("category", "General I2C"),
+                    "Device Name": dev.get("name") or f"Unknown Device ({addr_str})",
+                    "Category": dev.get("category") or "General I2C Peripheral",
                     "Total Transactions": total_tx,
                     "NACK Count": nack_count,
                     "Unknown ACK Count": unknown_ack_count,

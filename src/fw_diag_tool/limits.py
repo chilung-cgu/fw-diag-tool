@@ -16,6 +16,10 @@ class AnalysisLimits:
     max_transactions: int = 25_000
     max_findings: int = 5_000
     max_render_rows: int = 2_000
+    # Decoded transactions expand into several digital samples per byte when
+    # rendered by Plotly. Keep this separate from raw transition rows so a
+    # single large transaction cannot amplify the browser payload unchecked.
+    max_waveform_points: int = 100_000
     max_session_bytes: int = 10 * 1024 * 1024
 
     def __post_init__(self) -> None:
@@ -27,6 +31,7 @@ class AnalysisLimits:
             ("max_transactions", self.max_transactions),
             ("max_findings", self.max_findings),
             ("max_render_rows", self.max_render_rows),
+            ("max_waveform_points", self.max_waveform_points),
             ("max_session_bytes", self.max_session_bytes),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:

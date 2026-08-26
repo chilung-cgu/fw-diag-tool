@@ -9,7 +9,7 @@ claiming that a reconstructed analyzer-table waveform was measured.
 from __future__ import annotations
 
 import math
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from itertools import pairwise
 from statistics import median
 from typing import TYPE_CHECKING
@@ -45,8 +45,8 @@ def raw_decode_to_events(
 ) -> list[RawI2CEvent]:
     """Convert a validated raw capture into events accepted by the main engine.
 
-    Byte duration is derived only from the measured rising-edge period and is
-    therefore source-backed.  No timestamps or ACK values are synthesized.
+    Byte duration is derived only from the measured rising-edge period.  No
+    timestamps or ACK values are synthesized.
     """
     limits = coerce_limits(limits)
     if not isinstance(result, RawI2CDecodeResult):
@@ -174,14 +174,40 @@ def _sample_periods(sample: RawI2CByteSample) -> list[float]:
 
 
 def raw_decode_to_waveform(
-    result: RawI2CDecodeResult, *, limits: AnalysisLimits | None = None
+    result: RawI2CDecodeResult,
+    *,
+    limits: AnalysisLimits | None = None,
+    transaction_index: int | None = None,
 ) -> I2CWaveformData:
     """Build a measured digital-level waveform with protocol annotations."""
     limits = coerce_limits(limits)
     if not isinstance(result, RawI2CDecodeResult):
         raise TypeError("result must be a RawI2CDecodeResult")
     _validate_decode_result(result)
-    transitions = list(result.capture.transitions)
+    selected_transactions = result.transactions
+    selected_conditions = result.conditions
+    all_transitions = result.capture.transitions
+    transitions = list(all_transitions)
+    if transaction_index is not None:
+        if isinstance(transaction_index, bool) or not isinstance(transaction_index, int):
+            raise TypeError("transaction_index must be an integer or None")
+        if not 0 <= transaction_index < len(result.transactions):
+            raise IndexError("transaction_index is outside the decoded transaction range")
+        transaction = result.transactions[transaction_index]
+        selected_transactions = (transaction,)
+        selected_conditions = tuple(
+            condition
+            for condition in result.conditions
+            if transaction.start_time_s <= condition.timestamp_s <= transaction.end_time_s
+        )
+        transition_times_s = [transition.timestamp_s for transition in all_transitions]
+        first = max(0, bisect_left(transition_times_s, transaction.start_time_s) - 1)
+        last = min(
+            len(all_transitions),
+            bisect_right(transition_times_s, transaction.end_time_s) + 1,
+        )
+        transitions = list(all_transitions[first:last])
+    source_transition_count = len(transitions)
     if len(transitions) > limits.max_render_rows:
         # Deterministic stride downsampling preserves first and last edges
         # so the waveform always shows START and STOP boundaries.
@@ -206,16 +232,23 @@ def raw_decode_to_waveform(
         "STOP": "#FF6692",
         "UNKNOWN": "#7F7F7F",
     }
-    transition_times = [transition.timestamp_s for transition in result.capture.transitions]
+    transition_times = [transition.timestamp_s for transition in all_transitions]
 
-    for condition in result.conditions:
+    for condition in selected_conditions:
         start = condition.timestamp_s * 1_000_000.0
         end = _next_transition_us(transition_times, condition.timestamp_s)
+        display_only_marker = False
+        if end <= start:
+            end = start + _display_marker_width_us(transition_times)
+            display_only_marker = True
         label = (
             "Sr"
             if condition.kind == RawConditionKind.REPEATED_START
             else condition.kind.value.upper()
         )
+        details = f"Measured raw digital {condition.kind.value} condition."
+        if display_only_marker:
+            details += " Marker width is display-only; condition duration was not captured."
         annotations.append(
             ProtocolAnnotation(
                 start_time=start,
@@ -223,11 +256,11 @@ def raw_decode_to_waveform(
                 label=label,
                 annotation_type="START" if condition.kind != RawConditionKind.STOP else "STOP",
                 color=colors["START" if condition.kind != RawConditionKind.STOP else "STOP"],
-                details=f"Measured raw digital {condition.kind.value} condition.",
+                details=details,
             )
         )
 
-    for transaction in result.transactions:
+    for transaction in selected_transactions:
         samples = (transaction.address_sample, *transaction.data_samples)
         for sample in samples:
             start = sample.bit_timestamps_s[0] * 1_000_000.0
@@ -263,7 +296,15 @@ def raw_decode_to_waveform(
                 )
             )
 
-    return I2CWaveformData(time_us=time_us, scl=scl, sda=sda, annotations=annotations)
+    return I2CWaveformData(
+        time_us=time_us,
+        scl=scl,
+        sda=sda,
+        annotations=annotations,
+        source_transition_count=source_transition_count,
+        rendered_transition_count=len(transitions),
+        downsampled=len(transitions) < source_transition_count,
+    )
 
 
 def _next_transition_us(times: list[float], timestamp_s: float) -> float:
@@ -271,6 +312,14 @@ def _next_transition_us(times: list[float], timestamp_s: float) -> float:
     if index < len(times):
         return times[index] * 1_000_000.0
     return timestamp_s * 1_000_000.0
+
+
+def _display_marker_width_us(times: list[float]) -> float:
+    if len(times) >= 2:
+        interval_us = (times[-1] - times[-2]) * 1_000_000.0
+        if math.isfinite(interval_us) and interval_us > 0:
+            return max(0.5, interval_us)
+    return 0.5
 
 
 def _validate_decode_result(result: RawI2CDecodeResult) -> None:

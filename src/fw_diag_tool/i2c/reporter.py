@@ -7,17 +7,16 @@ and actionable root-cause troubleshooting checklists for junior firmware enginee
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from fw_diag_tool.i2c.models import (
-    AckType,
-    I2CAnalysisReport,
-    I2CDirection,
-    Severity,
-)
+from fw_diag_tool.i2c.models import I2CAnalysisReport, I2CDirection, Severity
+from fw_diag_tool.i2c.status import get_transaction_status
 
 
 class I2CReporter:
@@ -78,9 +77,19 @@ class I2CReporter:
                 f"[{jitter_style}]{t.frequency_jitter_pct:.1f} %[/]",
                 "< 15% is stable; > 35% indicates high capacitance/ISR",
             )
+            timing_tbl.add_row(
+                "Frequency Spread (peak-to-peak)",
+                f"{t.frequency_spread_pct:.1f} %",
+                "Compatibility alias: Clock Frequency Jitter",
+            )
         else:
             timing_tbl.add_row(
                 "Clock Frequency Jitter",
+                "Unavailable",
+                "No frequency samples",
+            )
+            timing_tbl.add_row(
+                "Frequency Spread (peak-to-peak)",
                 "Unavailable",
                 "No frequency samples",
             )
@@ -133,16 +142,17 @@ class I2CReporter:
         dev_tbl.add_column("Transactions", justify="right")
 
         for dev in report.devices_detected.values():
-            device_name = dev["name"]
+            address = dev.get("address_7bit", "unknown")
+            device_name = dev.get("name") or f"Unknown Device ({address})"
             if dev.get("identity_confidence") == "ambiguous":
                 device_name = "; ".join(dev.get("candidates", []))
             dev_tbl.add_row(
-                dev["address_7bit"],
-                dev["address_8bit"],
+                str(address),
+                str(dev.get("address_8bit", "unknown")),
                 device_name,
-                dev["category"],
-                dev["protocol"],
-                str(dev["transaction_count"]),
+                str(dev.get("category") or "General I2C Peripheral"),
+                str(dev.get("protocol") or "I2C"),
+                str(dev.get("transaction_count", 0)),
             )
         console.print(dev_tbl)
         console.print()
@@ -161,26 +171,30 @@ class I2CReporter:
         tx_tbl.add_column("Decoded Semantic Meaning / Telemetry", style="bold cyan")
         tx_tbl.add_column("Status", justify="center")
 
-        for tx in report.transactions:
+        for index, tx in enumerate(report.transactions):
             if tx.direction_available and isinstance(tx.direction, I2CDirection):
                 rw_color = "cyan" if tx.direction == I2CDirection.READ else "magenta"
                 rw_text = f"[{rw_color}]{tx.direction.value}[/]"
             else:
                 rw_text = "[yellow]UNKNOWN[/]"
 
-            status_text = "[green]ACK[/]"
-            if tx.address_ack == AckType.NACK:
-                status_text = "[red]ADDR NAK[/]"
-            elif tx.address_ack == AckType.NONE:
-                status_text = "[yellow]ACK UNKNOWN[/]"
-            elif tx.has_unexpected_data_nack:
-                status_text = "[red]DATA NAK[/]"
-            elif tx.has_normal_read_termination_nack:
-                status_text = "[blue]READ END NAK[/]"
-            elif any(p.ack == AckType.NONE for p in tx.byte_packets if not p.is_address):
-                status_text = "[yellow]ACK UNKNOWN[/]"
-            elif not tx.has_stop and not tx.is_repeated_start:
-                status_text = "[bold red]HANG/NO STOP[/]"
+            next_tx = (
+                report.transactions[index + 1]
+                if index + 1 < len(report.transactions)
+                else None
+            )
+            status = get_transaction_status(tx, next_transaction=next_tx).value
+            status_style = {
+                "ACK": "green",
+                "ADDR NAK": "red",
+                "DATA NAK": "red",
+                "READ END NAK": "blue",
+                "ACK UNKNOWN": "yellow",
+                "EVIDENCE INCOMPLETE": "yellow",
+                "NO STOP": "bold red",
+                "ABORTED": "bold red",
+            }.get(status, "white")
+            status_text = f"[{status_style}]{status}[/]"
 
             summary_str = tx.semantic_summary or "-"
             if tx.decoded_values.get("rollover_hazard"):
@@ -264,7 +278,11 @@ class I2CReporter:
             )
 
     @classmethod
-    def generate_markdown(cls, report: I2CAnalysisReport) -> str:
+    def generate_markdown(
+        cls,
+        report: I2CAnalysisReport,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> str:
         """Generate comprehensive Markdown diagnostic report."""
         lines: list[str] = []
         lines.append("# I2C / SMBus / PMBus Protocol Diagnostic Report")
@@ -272,8 +290,41 @@ class I2CReporter:
         lines.append(f"> **Summary**: {report.summary_text}")
         lines.append("")
 
+        if metadata:
+            if not isinstance(metadata, Mapping):
+                to_dict = getattr(metadata, "to_dict", None)
+                metadata = to_dict() if callable(to_dict) else vars(metadata)
+            lines.append("## Metadata")
+            lines.append("")
+            metadata_values = {
+                "Tool": metadata.get("tool", metadata.get("tool_name", "-")),
+                "Input name": metadata.get("input_name", "-"),
+                "Input SHA-256": metadata.get(
+                    "input_sha256", metadata.get("input_hash", metadata.get("capture_sha256", "-"))
+                ),
+                "Input format": metadata.get("input_format", metadata.get("input_mode", "-")),
+                "SMBus timeout (ms)": metadata.get(
+                    "smbus_timeout_ms", metadata.get("timeout_ms", metadata.get("timeout", "-"))
+                ),
+                "Board profile": metadata.get(
+                    "board_profile", metadata.get("profile", metadata.get("board_profile_name", "-"))
+                ),
+                "Evidence sample count": metadata.get(
+                    "evidence_sample_count",
+                    metadata.get(
+                        "evidence_samples",
+                        metadata.get("sample_count", report.timing_stats.frequency_sample_count),
+                    ),
+                ),
+            }
+            for label, value in metadata_values.items():
+                lines.append(f"- **{label}**: `{value}`")
+            lines.append("")
+
         # Summary Card
-        lines.append("## 1. Bus Timing & Physical Health")
+        lines.append("## 1. Bus Timing & Transaction Health Heuristic")
+        lines.append("")
+        lines.append("> This health summary is a protocol-evidence heuristic, not an electrical or physical-layer pass/fail measurement.")
         lines.append("")
         t = report.timing_stats
         lines.append(f"- **Nominal Speed Mode**: `{t.speed_mode.value}`")
@@ -282,11 +333,13 @@ class I2CReporter:
                 f"- **Average Clock Frequency**: `{t.avg_frequency_khz:.2f} kHz` (Min: `{t.min_frequency_khz:.1f} kHz`, Max: `{t.max_frequency_khz:.1f} kHz`)"
             )
             lines.append(f"- **Clock Frequency Jitter**: `{t.frequency_jitter_pct:.1f} %`")
+            lines.append(f"- **Frequency Spread (peak-to-peak)**: `{t.frequency_spread_pct:.1f} %`")
         else:
             lines.append(
                 "- **Average Clock Frequency**: `Unavailable` (no bitrate or byte-duration evidence)"
             )
             lines.append("- **Clock Frequency Jitter**: `Unavailable`")
+            lines.append("- **Frequency Spread (peak-to-peak)**: `Unavailable`")
         lines.append(
             f"- **Clock Stretching Events**: `{t.clock_stretch_count}` (Max duration: `{t.max_clock_stretch_ms:.3f} ms`)"
         )
@@ -310,11 +363,12 @@ class I2CReporter:
         )
         lines.append("|---|---|---|---|---|---|")
         for dev in report.devices_detected.values():
-            device_name = dev["name"]
+            address = dev.get("address_7bit", "unknown")
+            device_name = dev.get("name") or f"Unknown Device ({address})"
             if dev.get("identity_confidence") == "ambiguous":
                 device_name = "Possible: " + "; ".join(dev.get("candidates", []))
             lines.append(
-                f"| `{dev['address_7bit']}` | `{dev['address_8bit']}` | **{device_name}** | {dev['category']} | {dev['protocol']} | {dev['transaction_count']} |"
+                f"| `{address}` | `{dev.get('address_8bit', 'unknown')}` | **{device_name}** | {dev.get('category') or 'General I2C Peripheral'} | {dev.get('protocol') or 'I2C'} | {dev.get('transaction_count', 0)} |"
             )
         lines.append("")
 
@@ -325,20 +379,13 @@ class I2CReporter:
             "| # | Time (s) | Addr | R/W | Raw Hex Bytes | Decoded Semantic Meaning / Telemetry | Status |"
         )
         lines.append("|---|---|---|---|---|---|---|")
-        for tx in report.transactions:
-            status = "ACK"
-            if tx.address_ack == AckType.NACK:
-                status = "**ADDR NAK**"
-            elif tx.address_ack == AckType.NONE:
-                status = "ACK UNKNOWN"
-            elif tx.has_unexpected_data_nack:
-                status = "**DATA NAK**"
-            elif tx.has_normal_read_termination_nack:
-                status = "READ END NAK"
-            elif any(p.ack == AckType.NONE for p in tx.byte_packets if not p.is_address):
-                status = "ACK UNKNOWN"
-            elif not tx.has_stop and not tx.is_repeated_start:
-                status = "**NO STOP**"
+        for index, tx in enumerate(report.transactions):
+            next_tx = (
+                report.transactions[index + 1]
+                if index + 1 < len(report.transactions)
+                else None
+            )
+            status = get_transaction_status(tx, next_transaction=next_tx).value
 
             summary = tx.semantic_summary or "-"
             if tx.decoded_values.get("rollover_hazard"):
@@ -402,6 +449,10 @@ class I2CReporter:
         return "\n".join(lines)
 
     @classmethod
-    def to_markdown(cls, report: I2CAnalysisReport) -> str:
+    def to_markdown(
+        cls,
+        report: I2CAnalysisReport,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> str:
         """Backward-compatible report export alias."""
-        return cls.generate_markdown(report)
+        return cls.generate_markdown(report, metadata=metadata)

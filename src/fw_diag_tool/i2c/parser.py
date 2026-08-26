@@ -206,6 +206,18 @@ class I2CParser:
         ack_idx = first_column("ack/nak", "ack", "ack_nak", "ack/nack")
         duration_idx = first_column("duration", "duration_s")
         bitrate_idx = first_column("bit_rate", "bitrate", "frequency")
+        # A whole-byte Duration is sufficient for a frequency estimate but
+        # cannot identify which portion of the byte held SCL low. Accept a
+        # separate source column when an analyzer/export explicitly provides
+        # measured clock-stretch duration.
+        clock_stretch_idx = first_column(
+            "clock_stretch",
+            "clock_stretch_s",
+            "scl_low_duration",
+            "scl_low_duration_s",
+            "stretch_duration",
+            "stretch_duration_s",
+        )
 
         for row in _iter_csv_rows(reader):
             if not row or not any(cell.strip() for cell in row):
@@ -414,6 +426,25 @@ class I2CParser:
                 elif row[bitrate_idx].strip():
                     source_error = source_error or "bitrate is not a positive finite number"
 
+            clock_stretch_s = None
+            if clock_stretch_idx is not None and clock_stretch_idx < len(row):
+                stretch_cell = row[clock_stretch_idx].strip()
+                if stretch_cell:
+                    clock_stretch_s = _positive_finite_float(stretch_cell)
+                    if clock_stretch_s is None:
+                        source_error = source_error or (
+                            "clock stretch duration is not a positive finite number"
+                        )
+
+            timing_extra: dict[str, Any] = {}
+            if clock_stretch_s is not None:
+                timing_extra.update(
+                    {
+                        "clock_stretch_us": clock_stretch_s * 1_000_000.0,
+                        "timing_evidence": "source_clock_stretch",
+                    }
+                )
+
             # Determine event type
             if type_token == "START":
                 ev_type = RawEventType.START
@@ -443,11 +474,11 @@ class I2CParser:
                 # one data token.  Preserve the bytes, but keep ACK attribution
                 # unknown and let the engine withhold accepted-payload semantics.
                 aggregate_ack = ack_val != AckType.NONE
-                if aggregate_ack:
-                    source_error = source_error or (
-                        "aggregate ACK/NACK cannot be attributed to individual data bytes"
-                    )
-                aggregate_extra = (
+                # Attribution ambiguity is a data-evidence limitation, not a
+                # malformed CSV field.  Keep it in the dedicated aggregate
+                # marker so status remains ``ACK UNKNOWN`` rather than the
+                # stronger ``EVIDENCE INCOMPLETE``/parse-error classification.
+                aggregate_extra: dict[str, Any] = (
                     {
                         "aggregate_ack": True,
                         "aggregate_ack_value": ack_val.value,
@@ -457,6 +488,14 @@ class I2CParser:
                 )
                 if source_error:
                     aggregate_extra["source_error"] = source_error
+                aggregate_extra.update(timing_extra)
+                if dur is not None:
+                    # A summary row has one timing value for address plus all
+                    # payload bytes; retain the fact that it could not be
+                    # attributed to a single byte without turning it into a
+                    # frequency sample.
+                    aggregate_extra["aggregate_duration_unattributable"] = True
+                    aggregate_extra["aggregate_duration_s"] = dur
                 events.append(
                     RawI2CEvent(
                         timestamp=timestamp,
@@ -477,6 +516,9 @@ class I2CParser:
                     )
                 )
                 for b_idx, b_val in enumerate(raw_data_tokens):
+                    data_extra = aggregate_extra.copy()
+                    data_extra.pop("aggregate_duration_unattributable", None)
+                    data_extra.pop("aggregate_duration_s", None)
                     events.append(
                         RawI2CEvent(
                             timestamp=timestamp,
@@ -496,7 +538,7 @@ class I2CParser:
                             ),
                             duration_s=None,
                             bit_rate_khz=bitrate,
-                            extra=aggregate_extra.copy(),
+                            extra=data_extra,
                             raw_text=",".join(row),
                         )
                     )
@@ -515,7 +557,10 @@ class I2CParser:
                         ack=ack_val,
                         duration_s=dur,
                         bit_rate_khz=bitrate,
-                        extra={"source_error": source_error} if source_error else {},
+                        extra={
+                            **timing_extra,
+                            **({"source_error": source_error} if source_error else {}),
+                        },
                         raw_text=",".join(row),
                     )
                 )
@@ -684,6 +729,18 @@ class I2CParser:
                                 )
 
                             address_extra = {}
+                            if val > 0x7F and next_rw is not None:
+                                implied_direction = (
+                                    I2CDirection.READ if (val & 0x01) else I2CDirection.WRITE
+                                )
+                                if next_rw != implied_direction:
+                                    address_extra = {
+                                        "source_error": (
+                                            f"8-bit address {val:#04x} conflicts with explicit "
+                                            f"direction {next_rw.value}; implied direction is "
+                                            f"{implied_direction.value}"
+                                        )
+                                    }
                             if current_rw is None:
                                 address_extra = {
                                     "source_error": "7-bit address is missing a READ/WRITE token"
@@ -795,6 +852,13 @@ class I2CParser:
             rw = parse_direction(raw_direction)
             if has_value(raw_direction) and rw is None:
                 source_errors.append("direction is not READ/WRITE")
+            if addr is not None and addr > 0x7F and rw is not None:
+                implied_direction = I2CDirection.READ if (addr & 0x01) else I2CDirection.WRITE
+                if rw != implied_direction:
+                    source_errors.append(
+                        f"8-bit address {addr:#04x} conflicts with explicit direction {rw.value}; "
+                        f"implied direction is {implied_direction.value}"
+                    )
             raw_data = rec.get("data", rec.get("data_byte", rec.get("byte")))
             data_val = parse_hex_or_int(raw_data)
             if has_value(raw_data) and data_val is None:
