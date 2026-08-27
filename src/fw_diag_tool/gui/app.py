@@ -440,11 +440,11 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
 
         tab_tx, tab_wave, tab_anom, tab_timing, tab_md = st.tabs(
             [
-                "📜 封包交易列表",
+                "📜 封包交易列表 (Transactions)",
                 "📈 數位方波與協定軌 (Waveform)",
                 "🚨 異常診斷 (Anomalies)",
-                "📊 匯流排時序與健康圖表",
-                "📝 Markdown 診斷報告",
+                "📊 匯流排時序與健康圖表 (Bus Timing & Health)",
+                "📝 Markdown 診斷報告 (Markdown Report)",
             ]
         )
 
@@ -681,20 +681,20 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
     b_col1, b_col2, b_col3 = st.columns(3)
     with b_col1:
         builder_operation_value = st.selectbox(
-            "Operation",
+            "操作類型 (Operation)",
             list(operation_labels),
             format_func=lambda value: operation_labels[value],
             key="i2c_builder_operation",
         )
     with b_col2:
         builder_addr_str = st.text_input(
-            "Slave 7-bit Address",
+            "從裝置 7-bit 位址 (Slave 7-bit Address)",
             key="i2c_builder_address",
             help="合法範圍 0x08～0x77。",
         )
     with b_col3:
         builder_bus_num = st.number_input(
-            "I2C Bus Number",
+            "I2C 匯流排編號 (I2C Bus Number)",
             min_value=0,
             max_value=0xFFFF,
             step=1,
@@ -717,14 +717,14 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         reg_col, width_col, endian_col = st.columns(3)
         with reg_col:
             builder_reg_str = st.text_input(
-                "Register Offset",
+                "暫存器位移 (Register Offset)",
                 key="i2c_builder_register",
                 help="例如 0x10 或 0x1234。",
             )
         with width_col:
             builder_register_width = int(
                 st.selectbox(
-                    "Register Width (bits)",
+                    "暫存器寬度 Register Width (bits)",
                     [8, 16],
                     key="i2c_builder_register_width",
                 )
@@ -732,7 +732,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         with endian_col:
             if builder_register_width == 16:
                 builder_endianness = st.selectbox(
-                    "Register Byte Order",
+                    "暫存器位元組順序 Register Byte Order",
                     [Endianness.BIG.value, Endianness.LITTLE.value],
                     format_func=lambda value: (
                         "Big-endian / MSB first"
@@ -752,7 +752,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         with read_col:
             builder_read_length = int(
                 st.number_input(
-                    "Read Length (bytes)",
+                    "讀取長度 Read Length (bytes)",
                     min_value=1,
                     max_value=255,
                     step=1,
@@ -761,7 +761,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
             )
         with expected_col:
             builder_expected_read = st.text_input(
-                "Expected Read Bytes（選填、僅假設）",
+                "預期讀回資料 Expected Read Bytes（選填、僅假設）",
                 key="i2c_builder_expected_read_data",
                 max_chars=MAX_PACKET_HEX_CHARS,
                 help="若填寫，byte 數必須等於 Read Length；只標在波形上，不會送到裝置。",
@@ -772,7 +772,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
             register_width=builder_register_width,
         )
         builder_data_str = st.text_input(
-            "Write Data Bytes (Hex)",
+            "寫入資料位元組 Write Data Bytes (Hex)",
             key="i2c_builder_write_data",
             max_chars=MAX_PACKET_HEX_CHARS,
             help=(
@@ -784,7 +784,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
     clock_col, timeout_col = st.columns(2)
     with clock_col:
         builder_clock_khz = st.number_input(
-            "Ideal Clock (kHz)",
+            "理想時鐘頻率 Ideal Clock (kHz)",
             min_value=1.0,
             max_value=1000.0,
             step=10.0,
@@ -792,7 +792,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         )
     with timeout_col:
         builder_timeout_ms = st.number_input(
-            "Template Timeout (ms)",
+            "模板逾時門檻 Template Timeout (ms)",
             min_value=0.001,
             max_value=60_000.0,
             step=1.0,
@@ -841,7 +841,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
             max_waveform_points=MAX_BUILDER_WAVEFORM_POINTS,
         )
 
-        st.subheader("Canonical Transaction Preview")
+        st.subheader("標準交易預覽 (Canonical Transaction Preview)")
         preview_rows = []
         for index, segment in enumerate(spec.segments, 1):
             payload_labels = [
@@ -854,20 +854,20 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
                 ]
             preview_rows.append(
                 {
-                    "Segment": index,
-                    "Start": "Repeated START (Sr)" if segment.repeated_start else "START",
-                    "Direction": segment.direction.value.upper(),
-                    "7-bit Address": f"0x{spec.address_7bit:02X}",
-                    "Wire Address Byte": (
+                    "段落 (Segment)": index,
+                    "起始 (Start)": "Repeated START (Sr)" if segment.repeated_start else "START",
+                    "方向 (Direction)": segment.direction.value.upper(),
+                    "7-bit 位址 (Address)": f"0x{spec.address_7bit:02X}",
+                    "線路位址 (Wire Byte)": (
                         f"0x{((spec.address_7bit << 1) | int(segment.is_read)):02X}"
                     ),
-                    "Payload": " ".join(payload_labels) or "(none)",
-                    "Final ACK slot": (
+                    "負載資料 (Payload)": " ".join(payload_labels) or "(none)",
+                    "最終 ACK Slot": (
                         "Controller NACK (normal read end)"
                         if segment.final_controller_nack
                         else "ACK (ideal assumption)"
                     ),
-                    "End": "STOP" if index == len(spec.segments) else "continue to Sr",
+                    "結束 (End)": "STOP" if index == len(spec.segments) else "continue to Sr",
                 }
             )
         st.dataframe(pd.DataFrame(preview_rows), width="stretch", hide_index=True)
