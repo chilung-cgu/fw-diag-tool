@@ -1,6 +1,6 @@
 # I2C / SMBus / PMBus：第 1 頁任務導向實驗室
 
-本章只處理 GUI 第 1 頁 **「📊 I2C / PMBus 診斷與波形檢視」**。目標是把一份 capture 變成可追溯的觀察：先確認輸入契約，再看五個 tabs，最後保存報告與 session。圖表軸、顏色、threshold 與 issue code 的完整定義集中在[附錄 A：圖表與證據判讀](appendix_chart_guide.md)。
+本章專門指引 GUI 第 1 頁 **「📊 I2C / PMBus 診斷與波形檢視」**。核心目標是將邏輯分析儀匯出的 capture 轉換為具備可追溯證據的工程觀察：先確認輸入格式契約（Input Contract），再深入解讀五個分頁（Tabs），最後匯出診斷報告與可重現 Session。圖表軸線、顏色、門檻值（Threshold）與異常代碼（Issue Code）的嚴格定義集中於[附錄 A：圖表與證據判讀](appendix_chart_guide.md)。
 
 ## 1. 兩分鐘完成第一次分析
 
@@ -80,9 +80,43 @@ Time [s],SCL,SDA
 
 只有 `S`/`P` 等 framing、沒有完整 address/data 的輸入，會保留 physical events 但產生 `I2C_SOURCE_NO_TRANSACTIONS`；這是「沒有可分析交易」而不是通訊正常。
 
-## 3. 真實 fixture 實驗與預期輸出
+## 3. 真實 Fixture 實戰解析：以 i2c_golden.csv 為例
 
-### 3.1 Aggregate golden：`i2c_golden.csv`
+### 3.1 匯入 i2c_golden.csv 的 Step-by-Step 操作與關鍵觀察
+
+當你在 GUI 選擇 `Decoded Analyzer CSV` 並上傳 `examples/data/i2c_golden.csv` 後，請依以下步驟進行觀察與學習：
+
+**步驟 1：檢視上方 KPI 摘要與資料證據面板**
+- **總傳輸次數（Total Transactions）**：顯示 `5` 筆交易。
+- **已證實協定異常（Protocol Anomalies）**：顯示 `0` 筆。
+- **平均時鐘頻率（Average SCL Clock）與抖動（Jitter）**：均顯示 `不可用 (Unavailable)`。
+- **展開「⚠ 資料證據與限制（Data Quality Limitations）」**：
+  - 工具會明確標註 `I2C_ACK_AGGREGATE_UNATTRIBUTABLE` 與 `I2C_ACK_UNAVAILABLE`。
+  - 若 CSV 含有單一 `Duration` 欄位，會標記 `I2C_TIMING_AGGREGATE_UNATTRIBUTABLE`。
+  - **核心觀念**：為什麼沒有異常卻顯示資料品質警告？因為 `i2c_golden.csv` 屬於 **Aggregate 格式**（單一列包含多個 Data Bytes，卻只有一個整體 ACK 欄位）。工具無法百分之百確定 ACK 是從機（Slave）對 Address 回應、還是對 Data 回應，因此不會憑空臆測，而是客觀保留 Unknown 狀態並保留交易形貌。
+
+**步驟 2：切換至 📜 封包交易列表（Transactions）**
+- 核對 5 筆交易：包含 0x58（PMBus）、0x50（EEPROM）、0x48（溫度感測器）與 0x20（GPIO 擴展晶片）。
+- 觀察 `整體狀態 (Overall Status)` 欄位均標記為 `ACK UNKNOWN`。這體現了嚴謹工程態度：來源未給每位元組 ACK 歸屬前，不將它草率標為綠色 PASS。
+
+**步驟 3：切換至 📈 數位方波與協定軌（Waveform）**
+- 選擇 Tx #1（0x58 Write），觀察上方波形狀態標示為 **Reconstructed（協定層重建波形）**。
+- SCL/SDA 是根據協定狀態機以理想 100 kHz 時序繪製，包含 START、Address (0xB0)、Data 與 STOP。
+- 注意波形上的 ACK Slot 標示為 `UNKNOWN`，這正是忠實反映了 Aggregate 輸入的證據邊界。
+
+**步驟 4：切換至 🚨 異常診斷（Anomalies）**
+- 頁面顯示「未偵測到任何 I2C/SMBus 時序與通訊異常」。
+- 請記住：這代表在現有欄位證據下「未命中違規規則」，但因資料品質受限，資深工程師不會以此宣稱實體晶片已 100% 驗證通過。
+
+**步驟 5：切換至 📊 匯流排時序與健康圖表（Bus Timing & Health）**
+- **時鐘頻率分佈圖**：顯示 `Unavailable`（無 per-byte bitrate/duration 證據），不畫出假 0 kHz 柱狀圖。
+- **交易時間軸分佈圖**：若有 Time 欄位，會依時間戳記繪製 5 筆散佈點，狀態顏色為灰色 `ACK UNKNOWN`。
+- **裝置健康評等表（Device Health Summary）**：Health Grade 顯示 `N/A (ACK unavailable)`，成功率顯示 `N/A`，避免將未知誤導為滿分 A。
+
+**步驟 6：切換至 📝 Markdown 診斷報告（Markdown Report）**
+- 預覽自動產生的繁體中文報告，包含完整詮釋資料、交易明細與資料品質限制，可點擊「下載 Markdown 報告」或「下載可重現 Session」。
+
+### 3.2 Aggregate Golden 限制對比：`i2c_golden.csv`
 
 上傳 `examples/data/i2c_golden.csv` 後，預期是 **5 transactions、0 protocol issues**，但資料品質面板會指出 aggregate ACK 的限制：
 
@@ -130,27 +164,61 @@ Temperature = 25.50 °C (LM75/TMP102, raw 0x1980)
 
 若要測試缺少 STOP 的 raw physical state，請另保存 raw capture；decoded event CSV 只能表達「解析到的事件沒有 STOP」。
 
-## 4. 五個 tabs：每頁先做什麼
+## 4. 五大功能分頁（Tabs）：細項使用與輸出判讀教學
 
-### 4.1 `📈 數位方波與協定軌 (Waveform)`
+### 4.1 `📜 封包交易列表 (Transactions)`
 
-選一筆 transaction，確認畫面標示是 `Reconstructed` 還是 `Measured Raw Digital`。Decoded CSV 的方波是協定重建；raw digital 才來自 SCL/SDA 0/1 samples。Aggregate row 即使 ACK 歸屬不明，已知的 data bytes 仍會保留在協定軌上，對應的 ACK slot 標成 `UNKNOWN`，不會被當成成功。Raw capture 最後的 STOP 若沒有下一個 edge，圖上的小寬度只是 **display-only marker**，不是量到的 STOP duration。Read 最後的 controller NACK 在協定軌上是正常終止，不等於 anomaly。圖表軸與 status 的詳細定義請看[附錄 A](appendix_chart_guide.md)。
+**【如何使用】**：
+1. 上傳檔案後，直接在列表中按交易序號（ID）瀏覽所有解析完成的封包。
+2. 搭配上方下拉選單 `目前交易`，可讓下一個 Waveform 分頁同步聚焦於特定封包。
 
-### 4.2 `🚨 異常診斷 (Anomalies)`
+**【欄位意義與輸出判讀】**：
+- **時間 Time (s)**：交易開始時間戳記；若檔案無時間欄位則顯示 `n/a`。
+- **從機位址 Address**：7-bit 十六進位位址（如 `0x58`）。保留位址會顯示警示。
+- **讀寫方向 Direction**：`WRITE` 或 `READ`；方向不明時顯示 `UNKNOWN`。
+- **位址確認 Address ACK**：從機對位址的應答（`ACK` 或 `NACK`）。
+- **整體狀態 Overall Status**：整筆交易的綜合健康狀態（`ACK`、`ADDR NAK`、`DATA NAK`、`READ END NAK`、`ACK UNKNOWN`、`NO STOP`、`ABORTED`、`EVIDENCE INCOMPLETE`）。
+- **解碼語意 Semantic Meaning**：自動解碼的工程數據（如 PMBus 電壓 `READ_VIN = 32.0 V`、溫度 `25.50 °C`）。若資料品質不足則標註 `withheld`（保留不猜測）。
 
-先記錄 `severity`、`issue code`、transaction/address 與 evidence，再閱讀 hypotheses。`I2C_ADDR_NACK`、`I2C_DATA_NACK`、`I2C_MISSING_STOP`、`I2C_LONG_CLOCK_STRETCH`、`I2C_SMBUS_TIMEOUT` 代表不同觀察；原因文字是待驗證假說，不是 root-cause proof。Read-final NACK 不會被列為 `I2C_DATA_NACK`。
+### 4.2 `📈 數位方波與協定軌 (Waveform)`
 
-### 4.3 `📊 匯流排時序與健康圖表`
+**【如何使用】**：
+1. 先在上方下拉選單選取欲聚焦的交易（例如 Tx #1）。
+2. 放大（Zoom in）檢視 START 條件、Address 位元、ACK Slot、Data 位元與 STOP 條件。
 
-先看 frequency sample count、evidence label 與 timestamp availability，再看 histogram/timeline。報告中的 **Frequency Spread (peak-to-peak)** 是 `(max-min)/avg` 的樣本散布；舊欄位名 **Clock Frequency Jitter** 目前只是相容別名，不是嚴格定義的 cycle-to-cycle jitter。表格的 Health Grade 是目前 transaction evidence 的排查排序摘要，**不是 physical health grade、電氣 pass/fail 或晶片良率**。Timeline 的 `NO STOP` 與 `ABORTED` 分別代表缺少 STOP 與 transport abort；完整 axes/status/threshold 規則放在[附錄 A](appendix_chart_guide.md)。
+**【輸出判讀與證據層級】**：
+- **確認波形類型標籤**：
+  - 若顯示 **Measured Raw Digital**：代表來自實測 SCL/SDA 0/1 取樣點，可觀察邊緣時序與 Clock Stretching。注意：raw capture 最後的 STOP 若無後續 transition，僅為 **display-only marker**，非實測寬度。
+  - 若顯示 **Reconstructed**：代表根據解碼資料重建的理想時序模型，非真實類比電壓波形，不能拿來推論 Pull-up 電阻或上升時間（Rise time）。
+- **Read 終止識別**：讀取交易最後一個位元組由主控端（Controller）送出 NACK（標示為 Controller NACK），隨後發送 STOP，這是標準正常終止，切勿誤判為硬體異常。
 
-### 4.4 `📜 封包交易列表`
+### 4.3 `🚨 異常診斷 (Anomalies)`
 
-逐列核對 transaction ID、Time (s)、7-bit address、R/W、address ACK、bytes/data 與 semantic summary。JSON report 中每筆交易另有 canonical `status` 欄位；GUI timeline 使用同一判定來源。`ACK UNKNOWN`、`NO STOP`、`ABORTED`、`n/a` 與 `semantic withheld` 要原樣保留；不要把空欄位改讀成 ACK 或裝置型號。
+**【如何使用】**：
+1. 檢視系統過濾後的前 50 筆異常事件，展開卡片查看細節。
+2. 依序閱讀「現象描述」、「可能原因假設」與「排查行動清單」。
 
-### 4.5 `📝 Markdown 診斷報告`
+**【輸出判讀】**：
+- **嚴格區分 Issue Code**：如 `I2C_ADDR_NACK`（從機不存在/未上電）、`I2C_DATA_NACK`（寫入被拒）、`I2C_MISSING_STOP`（通訊中斷/匯流排鎖死）、`I2C_LONG_CLOCK_STRETCH`（從機處理延遲 >100 µs）、`I2C_SMBUS_TIMEOUT`（延長逾時 ≥25 ms）。
+- **原因非定論**：報告中的原因文字為「待驗證假說（Hypotheses）」，非已證明的單一根因。必須搭配排查清單以示波器、Driver 日誌進一步區分。
 
-下載 `i2c_report.md` 作為觀察紀錄；它包含輸入中實際提供的事件、timing、quality 與 hypotheses，不會把 reconstructed waveform 寫成 physical measurement。另可下載 `i2c_analysis.fwsession.json`：session 保存 report/config 與 input SHA-256，**不包含原始 capture**。沒有原始檔且 SHA 不相符時，不能宣稱可重現分析。
+### 4.4 `📊 匯流排時序與健康圖表 (Bus Timing & Health)`
+
+**【如何使用】**：
+1. 觀察左側「時鐘頻率分佈直方圖 (Frequency Distribution)」。
+2. 觀察右側「交易時序與裝置活動時間軸 (Timeline)」。
+3. 檢視下方「裝置健康評等表 (Device Health Summary)」。
+
+**【輸出判讀】**：
+- **頻率散布 (Frequency Spread / Jitter)**：以 `(max-min)/avg` 計算樣本散布度。若大於 35% 會列為高抖動。
+- **裝置健康評等 (Health Grade)**：計算公式為 `成功率 = (有效交易 - NACK數) / 有效交易`。A 為優秀、B 為輕微重試/延遲、D 為高 NACK 率、F 為嚴重故障、N/A 為 ACK 證據不足。**特別強調：此評等純為除錯排查優先順序之啟發式摘要，絕非晶片良率或實體電氣品質的通過宣告。**
+
+### 4.5 `📝 Markdown 診斷報告 (Markdown Report)`
+
+**【如何使用】**：
+1. 在畫面直接閱讀產出的結構化 Markdown 診斷報告。
+2. 點擊「下載 Markdown 報告」匯出 `i2c_report.md` 作為專案除錯紀錄。
+3. 點擊「下載可重現 Session」匯出 `i2c_analysis.fwsession.json`。注意：Session 檔保存了分析設定與輸入檔案的 SHA-256 雜湊值，**不包含原始 capture 內容**；重新載入時必須搭配同一原始檔案驗證 SHA 相符才能重現。
 
 ## 5. Board Profile、報告與 session
 
