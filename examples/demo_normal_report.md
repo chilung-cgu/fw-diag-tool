@@ -1,32 +1,32 @@
-# I2C / SMBus / PMBus Protocol Diagnostic Report
+# I2C / SMBus / PMBus Protocol Diagnostic Report (協定診斷報告)
 
-> **Summary**: Analyzed 53 physical events grouped into 18 logical transactions across 4 peripheral device(s). Detected 0 diagnostic issue(s).
+> **總結摘要 (Summary)**: 共分析 53 筆實體事件，歸納為 18 筆邏輯交易，涵蓋 4 個從裝置。共偵測出 0 筆協定診斷異常。
 
-## 1. Bus Timing & Transaction Health Heuristic
+## 1. 匯流排時序與交易健康啟發評等 (Bus Timing & Health)
 
-> This health summary is a protocol-evidence heuristic, not an electrical or physical-layer pass/fail measurement.
+> 本健康度摘要為協定層證據之啟發式統計，非實體電氣特性或晶片良率之通過判定。
 
-- **Nominal Speed Mode**: `Custom / Unknown Speed`
-- **Average Clock Frequency**: `Unavailable` (no bitrate or byte-duration evidence)
-- **Clock Frequency Jitter**: `Unavailable`
-- **Frequency Spread (peak-to-peak)**: `Unavailable`
-- **Clock Stretching Events**: `0` (Max duration: `0.000 ms`)
-- **Average Inter-byte Delay**: `25.00 µs` (Max: `25.00 µs`)
-- **Average Inter-transaction Delay**: `0.00 ms`
-- **Bus Utilization**: `Unavailable` (total trace duration is unavailable)
+- **標準速度模式 (Nominal Speed Mode)**: `Custom / Unknown Speed（自訂 / 未知速率）`
+- **平均 SCL 時鐘頻率 (Average Clock Frequency)**: `不可用 (Unavailable)` (來源無每位元組時序或位元率證據)
+- **時鐘頻率抖動 (Clock Frequency Jitter)**: `不可用 (Unavailable)`
+- **頻率分佈跨度 (Frequency Spread p-p)**: `不可用 (Unavailable)`
+- **時鐘延展事件 (Clock Stretching Events)**: `0` 筆 (最大持續時間: `0.000 ms`)
+- **位元組間平均延遲 (Avg Inter-byte Delay)**: `25.00 µs` (最大值: `25.00 µs`)
+- **交易間平均間隔 (Avg Inter-transaction Delay)**: `0.00 ms`
+- **匯流排使用率 (Bus Utilization)**: `不可用 (Unavailable)` (總捕捉時間不可用)
 
-## 2. Detected Peripheral Device Map
+## 2. 偵測之從裝置分佈表 (Detected Peripheral Device Map)
 
-| 7-bit Addr | 8-bit (W/R) | Identified Device / Chip Profile | Category | Protocol | Transactions |
+| 7-bit 位址 | 8-bit 位址 (W/R) | 識別晶片型號 (Device Profile) | 裝置類別 (Category) | 協定 (Protocol) | 交易次數 |
 |---|---|---|---|---|---|
 | `0x58` | `0xB0` | **Possible: PMBus Power Controller / VR (XDPE / ISL / TPS / MP / MAX); Delta / Murata / BelPower PMBus PSU** | PMBus (ambiguous candidates) | PMBus | 11 |
 | `0x50` | `0xA0` | **Possible: AT24Cxx / 24LCxx EEPROM; DDC / EDID Display EEPROM** | EEPROM (ambiguous candidates) | EEPROM | 3 |
-| `0x48` | `0x90` | **Possible: LM75 / TMP75 / TMP102 Temperature Sensor; ADT7410 / ADT7420 High-Accuracy Temp Sensor** | Temperature Sensor | I2C | 2 |
-| `0x20` | `0x40` | **Possible: PCA9555 / TCA9539 / PCA9535 16-bit GPIO Expander; PCF8574 / PCF8574A 8-bit Quasi-bidirectional GPIO Expander; MCP23017 / MCP23008 GPIO Expander** | GPIO Expander | I2C | 2 |
+| `0x48` | `0x90` | **Possible: LM75 / TMP75 / TMP102 Temperature Sensor; ADT7410 / ADT7420 High-Accuracy Temp Sensor** | 溫度感測器 | I2C | 2 |
+| `0x20` | `0x40` | **Possible: PCA9555 / TCA9539 / PCA9535 16-bit GPIO Expander; PCF8574 / PCF8574A 8-bit Quasi-bidirectional GPIO Expander; MCP23017 / MCP23008 GPIO Expander** | GPIO 擴充晶片 | I2C | 2 |
 
-## 3. Transaction Sequence & Decoded Telemetry
+## 3. 封包交易序列與解碼明細 (Transaction Sequence & Decoded Telemetry)
 
-| # | Time (s) | Addr | R/W | Raw Hex Bytes | Decoded Semantic Meaning / Telemetry | Status |
+| # | 時間 Time (s) | 位址 Addr | 方向 R/W | 原始資料 (Raw Hex) | 協定語意與遙測解碼 (Decoded Telemetry) | 狀態 (Status) |
 |---|---|---|---|---|---|---|
 | 1 | 0.000100 | `0x58` | `WRITE` | `[0x00, 0x00]` | PAGE = Rail 0 | ACK |
 | 2 | 0.000200 | `0x58` | `WRITE` | `[0x01, 0x80]` | OPERATION = ON, Nominal (0x80) | ACK |
@@ -42,17 +42,17 @@
 | 12 | 0.001500 | `0x50` | `WRITE` | `[0x00, 0x55, 0xAA, 0x12, 0x34]` | EEPROM write not decoded: address width/page size unavailable; select an explicit EEPROM profile | ACK |
 | 13 | 0.002000 | `0x50` | `WRITE` | `[0x00]` | EEPROM write not decoded: address width/page size unavailable; select an explicit EEPROM profile | ACK |
 | 14 | 0.002050 | `0x50` | `READ` | `[0x55, 0xAA, 0x12, 0x34]` | EEPROM Sequential Read (4 bytes): [55 AA 12 34] | READ END NAK |
-| 15 | 0.002500 | `0x48` | `WRITE` | `[0x00]` | Set Register Pointer to TEMP_REG (0x00) | ACK |
+| 15 | 0.002500 | `0x48` | `WRITE` | `[0x00]` | 設定暫存器指標為 TEMP_REG (0x00) | ACK |
 | 16 | 0.002550 | `0x48` | `READ` | `[0x19, 0x20]` | Temperature = 25.12 °C (LM75/TMP102, raw 0x1920) | READ END NAK |
 | 17 | 0.003000 | `0x20` | `WRITE` | `[0x06, 0x00]` | CONFIG_DIR_PORT_0 = 0b00000000 (0x00) | ACK |
 | 18 | 0.003100 | `0x20` | `WRITE` | `[0x02, 0xA5]` | OUTPUT_PORT_0 = 0b10100101 (0xA5) | ACK |
 
-## Data Quality Limitations
+## ⚠ 資料證據與品質限制 (Data Quality Limitations)
 
-- **I2C_EEPROM_PROFILE_UNAVAILABLE** (2): EEPROM writes at ambiguous addresses were retained, but offset/page decoding was skipped until an explicit EEPROM profile or address-width configuration is supplied.
-- **I2C_PMBUS_PAYLOAD_TRUNCATED** (1): A PMBus command response did not contain the number of bytes declared by the command definition; telemetry/status interpretation was withheld.
-- **I2C_TIMING_UNAVAILABLE** (53): No byte duration or bitrate evidence was provided; SCL frequency is unavailable.
+- **I2C_EEPROM_PROFILE_UNAVAILABLE** (2 筆): 目標位址存在多種可能裝置（如 EEPROM），在未指定明確 Board Profile 或位址寬度前，保留 Offset/分頁解碼。
+- **I2C_PMBUS_PAYLOAD_TRUNCATED** (1 筆): PMBus 指令回應位元組數小於標準規格長度，已保留狀態與遙測數據解碼。
+- **I2C_TIMING_UNAVAILABLE** (53 筆): 未提供每位元組持續時間或傳輸速率證據，SCL 時鐘頻率不可用。
 
-## 4. Diagnostic Issues & Junior Debugging Advice
+## 4. 異常診斷與排查行動建議 (Diagnostic Issues & Debugging Advice)
 
-⚠ **No protocol anomaly was proven, but source evidence is incomplete; review the data-quality section before calling this trace clean.**
+⚠ **在現有證據下未發現違規規則，但來源資料品質不完整；在確認通訊正常前請先檢視上方資料限制。**
