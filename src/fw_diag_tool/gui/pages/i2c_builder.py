@@ -159,17 +159,23 @@ def build_i2c_bundle(
         raise TypeError("spec must provide to_dict()")
     if not isinstance(snippets, Mapping) or not snippets:
         raise ValueError("snippets must be a non-empty mapping")
-    spec_json = json.dumps(
-        spec.to_dict(), indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False
-    ) + "\n"
+    spec_json = (
+        json.dumps(spec.to_dict(), indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
+        + "\n"
+    )
     spec_sha256 = hashlib.sha256(spec_json.encode("utf-8")).hexdigest()
     files: dict[str, str] = {
         "transfer_spec.json": spec_json,
         "SAFETY.txt": (
-            "Generated templates are not proof that a target device accepts this transfer.\n"
-            "Before hardware access, verify the adapter/bus, 7-bit address, register map,\n"
-            "device power state, kernel-driver ownership, timeout, and write side effects.\n"
-            "The GUI does not execute these commands.\n"
+            "【安全提示與操作邊界】\n"
+            "本套件產生的程式碼與 CLI 模板僅供開發與 Review 參考，不代表目標硬體裝置必定能正常接收。\n"
+            "在進行任何硬體實際存取前，請務必確認：\n"
+            "1. 實體 I2C Bus 編號與線路連接一致。\n"
+            "2. 從裝置 7-bit 位址、暫存器位移、位元組順序與 Datasheet 一致。\n"
+            "3. 目標晶片已正常供電且未處於 Reset 狀態。\n"
+            "4. 核心驅動程式 (Kernel Driver) 佔用權與存取衝突已排除。\n"
+            "5. 寫入操作所可能產生的硬體副作用（如電源重設、防寫抹除）已評估完畢。\n"
+            "GUI 工具不會直接在硬體上執行這些指令。\n"
         ),
     }
     used_names: set[str] = set()
@@ -202,8 +208,7 @@ def build_i2c_bundle(
         },
     }
     files["manifest.json"] = (
-        json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False)
-        + "\n"
+        json.dumps(manifest, indent=2, sort_keys=True, ensure_ascii=False, allow_nan=False) + "\n"
     )
 
     output = io.BytesIO()

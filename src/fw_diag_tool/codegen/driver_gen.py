@@ -67,10 +67,12 @@ class I2CDriverCodeGenerator:
                 raise ValueError("spec conflicts with positional I2CTransferSpec")
             spec = addr_7bit
         if spec is not None:
-            if any(
-                value is not None
-                for value in (reg_offset, data_bytes, read_length)
-            ) or is_read or bus_num != 1 or register_width != 8:
+            if (
+                any(value is not None for value in (reg_offset, data_bytes, read_length))
+                or is_read
+                or bus_num != 1
+                or register_width != 8
+            ):
                 raise ValueError("legacy generator arguments cannot be combined with spec")
             return cls.generate_from_spec(spec)
 
@@ -163,12 +165,12 @@ class I2CDriverCodeGenerator:
     def _linux_i2c_dev(cls, spec: I2CTransferSpec) -> str:
         address = cls._hex(spec.address_7bit)
         lines = [
-            "// TEMPLATE: Linux userspace i2c-dev; adapt error handling and close() for production.",
-            "// Prerequisites: include <fcntl.h>, <linux/i2c-dev.h>, <linux/i2c.h>, <sys/ioctl.h>, <unistd.h>, <stdint.h>, <stdio.h>.",
-            "// Safety: verify the bus/address and keep write operations behind an explicit operator check.",
-            f"// Note: template timeout {spec.timeout_ms:g} ms is not enforced by portable i2c-dev calls; add your own deadline.",
+            "// 【程式碼模板】Linux userspace i2c-dev；正式產品請補充完整錯誤處理與 close() 機制。",
+            "// 前置引用：<fcntl.h>, <linux/i2c-dev.h>, <linux/i2c.h>, <sys/ioctl.h>, <unistd.h>, <stdint.h>, <stdio.h>。",
+            "// 安全防護：確認匯流排編號與 7-bit 位址，寫入操作請置於明確的人工安全檢查之後。",
+            f"// 提示：模板逾時 {spec.timeout_ms:g} ms 需由應用程式自行實作 deadline 機制。",
             f'int file = open("/dev/i2c-{spec.bus}", O_RDWR);',
-            "if (file < 0) { perror(\"open i2c bus\"); return; }",
+            'if (file < 0) { perror("open i2c bus"); return; }',
         ]
         segment = spec.segments[0]
         if spec.operation == I2CTransferOperation.COMBINED_REGISTER_READ:
@@ -177,9 +179,9 @@ class I2CDriverCodeGenerator:
             reg_array = cls._bytes_literal(reg_bytes)
             lines.extend(
                 [
-                    "// Combined register read: the two messages are joined by a repeated START.",
+                    "// 複合暫存器讀取 (Combined Register Read)：兩個 i2c_msg 由 Repeated START 連接。",
                     f"uint8_t reg_buf[{len(reg_bytes)}] = {{ {reg_array} }};",
-                    f"uint8_t rx_buf[{length}]; // RX values are supplied by the target at runtime.",
+                    f"uint8_t rx_buf[{length}]; // 接收緩衝區；資料由目標裝置於執行期回傳。",
                     "struct i2c_msg msgs[2] = {",
                     f"    {{ .addr = {address}, .flags = 0, .len = sizeof(reg_buf), .buf = reg_buf }},",
                     f"    {{ .addr = {address}, .flags = I2C_M_RD, .len = sizeof(rx_buf), .buf = rx_buf }},",
@@ -194,13 +196,13 @@ class I2CDriverCodeGenerator:
             length = cls._read_length(spec)
             lines.extend(
                 [
-                    "// Direct read: no register phase is sent.",
+                    "// 直接讀取 (Direct Read)：不發送暫存器位移階段。",
                     f"if (ioctl(file, I2C_SLAVE, {address}) < 0) {{",
                     '    perror("select I2C slave");',
                     "    close(file);",
                     "    return;",
                     "}",
-                    f"uint8_t rx_buf[{length}]; // RX values are supplied by the target at runtime.",
+                    f"uint8_t rx_buf[{length}]; // 接收緩衝區；資料由目標裝置於執行期回傳。",
                     "if (read(file, rx_buf, sizeof(rx_buf)) != sizeof(rx_buf)) {",
                     '    perror("Failed to read from I2C device");',
                     "}",
@@ -228,25 +230,25 @@ class I2CDriverCodeGenerator:
     def _linux_cli(cls, spec: I2CTransferSpec) -> str:
         address = cls._hex(spec.address_7bit)
         lines = [
-            "# TEMPLATE: OpenBMC/Linux i2c-tools command; review before running on hardware.",
-            f"# Prerequisites: i2c-tools installed, /dev/i2c-{spec.bus} present, and permission to access the bus.",
-            "# Safety: automatic confirmation is intentionally omitted so i2ctransfer prompts interactively.",
-            "# Safety: verify bus, 7-bit address, register bytes, and write data before execution.",
-            f"# Note: template timeout {spec.timeout_ms:g} ms is metadata only; i2c-tools has no portable per-command deadline here.",
+            "# 【指令模板】OpenBMC/Linux i2c-tools 指令；在硬體執行前請確認所有參數。",
+            f"# 前置條件：已安裝 i2c-tools、/dev/i2c-{spec.bus} 存在且具備存取權限。",
+            "# 安全防護：刻意省略自動確認旗標，讓 i2ctransfer 在執行前先進行互動確認。",
+            "# 安全防護：執行前請對照硬體確認 Bus 編號、7-bit 位址、暫存器位元組與寫入資料。",
+            f"# 提示：模板逾時 {spec.timeout_ms:g} ms 僅供參考；i2c-tools 無跨平台單一指令 deadline。",
         ]
         if spec.operation == I2CTransferOperation.COMBINED_REGISTER_READ:
             segment = spec.segments[0]
             reg_cli = " ".join(cls._hex(int(byte)) for byte in segment.bytes)
             lines.extend(
                 [
-                    f"# Combined register read from {address}; the tool emits a repeated START.",
+                    f"# 從 {address} 進行複合暫存器讀取；i2ctransfer 自動送出 Repeated START。",
                     f"i2ctransfer {spec.bus} w{len(segment.bytes)}@{address} {reg_cli} r{cls._read_length(spec)}",
                 ]
             )
         elif spec.operation == I2CTransferOperation.DIRECT_READ:
             lines.extend(
                 [
-                    f"# Direct read of {cls._read_length(spec)} byte(s) from {address}.",
+                    f"# 從 {address} 直接讀取 {cls._read_length(spec)} 個位元組。",
                     f"i2ctransfer {spec.bus} r{cls._read_length(spec)}@{address}",
                 ]
             )
@@ -254,7 +256,7 @@ class I2CDriverCodeGenerator:
             payload = tuple(int(byte) for byte in spec.segments[0].bytes)
             lines.extend(
                 [
-                    f"# Write {len(payload)} payload byte(s) to {address}.",
+                    f"# 向 {address} 寫入 {len(payload)} 個位元組資料。",
                     (
                         f"i2ctransfer {spec.bus} w{len(payload)}@{address} "
                         f"{' '.join(cls._hex(byte) for byte in payload)}"
@@ -269,10 +271,10 @@ class I2CDriverCodeGenerator:
         shifted_address = f"({address} << 1)"
         timeout = cls._timeout_literal(spec.timeout_ms)
         lines = [
-            "// TEMPLATE: STM32 HAL; provide a configured I2C_HandleTypeDef (hi2c1).",
-            "// Prerequisites: CubeMX clock/pin setup, HAL_I2C_Init(), and application-level error handling.",
-            "// Safety: confirm the 7-bit address; STM32 HAL takes the address shifted left by one bit.",
-            f"// HAL timeout uses ceil({spec.timeout_ms:g}) = {timeout} integer millisecond(s).",
+            "// 【程式碼模板】STM32 HAL；請傳入已完成初始化之 I2C_HandleTypeDef (hi2c1)。",
+            "// 前置引用：CubeMX 時鐘/腳位配置、HAL_I2C_Init() 與應用層錯誤處理。",
+            "// 安全防護：STM32 HAL API 需傳入左移 1 位元的 8-bit 位址 (Shifted Address)。",
+            f"// HAL 逾時設定為 ceil({spec.timeout_ms:g}) = {timeout} ms 整數值。",
         ]
         asynchronous_sequential_read = False
         if spec.operation == I2CTransferOperation.COMBINED_REGISTER_READ:
@@ -280,8 +282,8 @@ class I2CDriverCodeGenerator:
             if spec.endianness == Endianness.BIG:
                 lines.extend(
                     [
-                        "// Combined register read (HAL generates the repeated START).",
-                        f"uint8_t rx_buf[{length}]; // RX values are supplied by the target at runtime.",
+                        "// 複合暫存器讀取 (HAL API 會自動產生 Repeated START)。",
+                        f"uint8_t rx_buf[{length}]; // 接收緩衝區；資料由目標裝置於執行期回傳。",
                         (
                             "HAL_StatusTypeDef status = HAL_I2C_Mem_Read(&hi2c1, "
                             f"{shifted_address}, {cls._hex(spec.register or 0)}, "
@@ -342,7 +344,10 @@ class I2CDriverCodeGenerator:
             )
         else:
             payload = tuple(int(byte) for byte in spec.segments[0].bytes)
-            if spec.operation == I2CTransferOperation.REGISTER_WRITE and spec.endianness == Endianness.BIG:
+            if (
+                spec.operation == I2CTransferOperation.REGISTER_WRITE
+                and spec.endianness == Endianness.BIG
+            ):
                 data = spec.data_bytes
                 lines.extend(
                     [
@@ -380,27 +385,27 @@ class I2CDriverCodeGenerator:
     def _arduino(cls, spec: I2CTransferSpec) -> str:
         address = cls._hex(spec.address_7bit)
         lines = [
-            "// TEMPLATE: Arduino Wire.h; call Wire.begin() and configure the bus before this code.",
-            "// Prerequisites: include <Wire.h>, select the correct controller, and handle endTransmission().",
-            "// Safety: verify the 7-bit address and write payload before applying power to a target board.",
-            f"// Note: template timeout {spec.timeout_ms:g} ms is not enforced by Wire; add a platform watchdog/deadline.",
+            "// 【程式碼模板】Arduino Wire.h；請先呼叫 Wire.begin() 並完成匯流排配置。",
+            "// 前置引用：包含 <Wire.h>，選擇正確的控制器並檢查 endTransmission() 回傳狀態。",
+            "// 安全防護：對板卡上電前請確認 7-bit 位址與寫入資料符合晶片規範。",
+            f"// 提示：模板逾時 {spec.timeout_ms:g} ms 未由 Wire 函式庫原生強制，需自行加入 Watchdog/逾時機制。",
         ]
         if spec.operation == I2CTransferOperation.COMBINED_REGISTER_READ:
             lines.extend(
                 [
-                    "// Combined register read; false preserves a repeated START.",
+                    "// 複合暫存器讀取；false 參數確保發送 Repeated START (不釋放匯流排)。",
                     f"Wire.beginTransmission({address});",
                     *[f"Wire.write({cls._hex(int(byte))});" for byte in spec.register_bytes],
-                    "uint8_t tx_err = Wire.endTransmission(false); // Repeated START",
-                    "if (tx_err != 0) { /* Handle address/register NACK. */ }",
+                    "uint8_t tx_err = Wire.endTransmission(false); // 保持 Bus 連線，發送 Repeated START",
+                    "if (tx_err != 0) { /* 處理位址或暫存器 NACK 錯誤 */ }",
                 ]
             )
             length = cls._read_length(spec)
             lines.extend(
                 [
-                    f"uint8_t rx_buf[{length}]; // RX values are supplied by the target at runtime.",
+                    f"uint8_t rx_buf[{length}]; // 接收緩衝區；資料由目標裝置於執行期回傳。",
                     f"uint8_t received = Wire.requestFrom({address}, {length});",
-                    f"if (received != {length}) {{ /* Handle short read; verify the board's Wire buffer limit. */ }}",
+                    f"if (received != {length}) {{ /* 處理讀取長度不足；請檢查板卡的 Wire Buffer 限制 */ }}",
                     "for (uint8_t i = 0; (i < received) && Wire.available(); ++i) {",
                     "    rx_buf[i] = Wire.read();",
                     "}",

@@ -40,6 +40,14 @@ from fw_diag_tool.gui.uploads import (
 )
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.input import I2CInputFormat, normalize_i2c_input_format
+from fw_diag_tool.i2c.localization import (
+    localize_category,
+    localize_direction,
+    localize_health_grade,
+    localize_quality_message,
+    localize_semantic_summary,
+    localize_status,
+)
 from fw_diag_tool.i2c.models import I2CDirection
 from fw_diag_tool.i2c.raw_adapter import raw_decode_to_waveform
 from fw_diag_tool.i2c.reporter import I2CReporter
@@ -105,7 +113,9 @@ def analyze_spi_input(csv_content: str) -> Any:
     return SPIDiagnosticEngine().analyze_csv_content(csv_content)
 
 
-def render_guide_expander(chapter_rel_path: str, label: str = "📖 點擊展開本功能詳細實戰教學手冊") -> None:
+def render_guide_expander(
+    chapter_rel_path: str, label: str = "📖 點擊展開本功能詳細實戰教學手冊"
+) -> None:
     markdown = load_guide_text(chapter_rel_path)
     if markdown is not None:
         with st.expander(label, expanded=False):
@@ -138,7 +148,9 @@ menu = st.sidebar.radio(
 if menu == "📊 I2C / PMBus 診斷與波形檢視":
     st.header("I2C / SMBus / PMBus 協定分析與數位波形檢視")
     render_guide_expander("chapters/ch01_i2c_pmbus.md", "📖 點擊展開：I2C/PMBus 波形診斷手冊")
-    render_guide_expander("chapters/appendix_chart_guide.md", "📊 點擊展開：附錄 A 圖表與數據判讀指南")
+    render_guide_expander(
+        "chapters/appendix_chart_guide.md", "📊 點擊展開：附錄 A 圖表與數據判讀指南"
+    )
     session_upload = st.file_uploader(
         "載入可重現 Session（需另行提供原始 capture 才能重播）",
         type=["json"],
@@ -186,14 +198,10 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                 saved_mode = loaded_session.config.get("input_mode")
                 saved_format = loaded_session.config.get("input_format")
                 normalized_mode = (
-                    normalize_i2c_input_format(saved_mode)
-                    if saved_mode is not None
-                    else None
+                    normalize_i2c_input_format(saved_mode) if saved_mode is not None else None
                 )
                 normalized_format = (
-                    normalize_i2c_input_format(saved_format)
-                    if saved_format is not None
-                    else None
+                    normalize_i2c_input_format(saved_format) if saved_format is not None else None
                 )
                 if (
                     normalized_mode is not None
@@ -203,7 +211,9 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                     raise ValueError(
                         "session input_mode and input_format identify different I2C formats"
                     )
-                saved_input_format = normalized_format or normalized_mode or I2CInputFormat.DECODED_CSV
+                saved_input_format = (
+                    normalized_format or normalized_mode or I2CInputFormat.DECODED_CSV
+                )
             except (TypeError, ValueError) as exc:
                 st.error(f"Session 內的分析設定未通過完整性檢查：{exc}")
                 loaded_session = None
@@ -344,11 +354,9 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                             "input_mode", I2CInputFormat.DECODED_CSV.value
                         )
                     settings_match = True
-                    if (
-                        saved_format is not None
-                        and normalize_i2c_input_format(saved_format)
-                        is not normalize_i2c_input_format(input_mode)
-                    ):
+                    if saved_format is not None and normalize_i2c_input_format(
+                        saved_format
+                    ) is not normalize_i2c_input_format(input_mode):
                         settings_match = False
                     saved_timeout = loaded_session.config.get(
                         "smbus_timeout_ms", DEFAULT_I2C_TIMEOUT_MS
@@ -357,7 +365,10 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                         settings_match = False
                     saved_profile = loaded_session.config.get("board_profile_content", "")
                     current_profile = st.session_state.get("i2c_board_profile_yaml", "")
-                    if isinstance(saved_profile, str) and saved_profile.strip() != str(current_profile).strip():
+                    if (
+                        isinstance(saved_profile, str)
+                        and saved_profile.strip() != str(current_profile).strip()
+                    ):
                         settings_match = False
                     if settings_match:
                         st.success("Session SHA-256 與 capture 相符，已套用保存的分析設定。")
@@ -379,10 +390,16 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             input_name = f"builtin:{sample_filenames.get(sample_key, sample_key)}"
             input_bytes = csv_content.encode("utf-8")
             if use_sample:
-                st.info("已載入內建範例 CSV！" if sample_key == "builtin-decoded" else f"已載入範例：{sample_key}")
+                st.info(
+                    "已載入內建範例 CSV！"
+                    if sample_key == "builtin-decoded"
+                    else f"已載入範例：{sample_key}"
+                )
 
     board_profile_yaml = None
-    with st.expander("Board Profile（選填；貼上 YAML 以啟用 device name / PMBus 解碼）", expanded=False):
+    with st.expander(
+        "Board Profile（選填；貼上 YAML 以啟用 device name / PMBus 解碼）", expanded=False
+    ):
         profile_text = st.text_area(
             "Board Profile YAML（留空則不套用）",
             height=100,
@@ -401,7 +418,11 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             st.stop()
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
         kpi1.metric("總傳輸次數", report.total_transactions)
-        kpi2.metric("已證實協定異常", len(report.issues), help="只計入有足夠證據的 anomaly；資料缺口另列在品質面板。")
+        kpi2.metric(
+            "已證實協定異常",
+            len(report.issues),
+            help="只計入有足夠證據的 anomaly；資料缺口另列在品質面板。",
+        )
         timing = report.timing_stats
         if timing.frequency_sample_count:
             kpi3.metric(
@@ -426,8 +447,8 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                 help="沒有頻率樣本，因此不顯示 0% 這種容易誤解的數字。",
             )
         st.caption(
-            f"Frequency evidence: {timing.frequency_evidence}; samples: {timing.frequency_sample_count}. "
-            f"Bus-utilization evidence: {timing.bus_utilization_evidence}."
+            f"時鐘頻率證據 (Frequency Evidence): {timing.frequency_evidence}；有效時序樣本數: {timing.frequency_sample_count}。"
+            f"匯流排使用率證據: {timing.bus_utilization_evidence}。"
         )
         if report.data_quality_issues:
             with st.expander("⚠ 資料證據與限制（先看這裡）", expanded=True):
@@ -435,7 +456,8 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                     "診斷結果只代表檔案中實際提供的欄位；缺少 timestamp、ACK 或 SCL/SDA edge 時，工具不會把未知值當成正常。"
                 )
                 for quality in report.data_quality_issues:
-                    st.markdown(f"- **{quality.code}**（{quality.count} 筆）：{quality.message}")
+                    zh_quality_msg = localize_quality_message(quality.code, quality.message)
+                    st.markdown(f"- **{quality.code}**（{quality.count} 筆）：{zh_quality_msg}")
         st.divider()
 
         tab_tx, tab_wave, tab_anom, tab_timing, tab_md = st.tabs(
@@ -451,11 +473,16 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
         selected_idx = 0
         if report.transactions:
             tx_options = [
-                f"Tx #{t.id}: {f'0x{t.address_7bit:02X}' if t.address_available else 'address n/a'} "
-                f"({t.direction.value if t.direction_available and isinstance(t.direction, I2CDirection) else 'UNKNOWN'})"
+                f"Tx #{t.id}: {f'0x{t.address_7bit:02X}' if t.address_available else '位址未知'} "
+                f"({localize_direction(t.direction if t.direction_available else None)})"
                 for t in report.transactions
             ]
-            selected_idx = st.selectbox("目前交易（Waveform 會聚焦此筆）", range(len(tx_options)), format_func=lambda i: tx_options[i], key="i2c_selected_tx")
+            selected_idx = st.selectbox(
+                "目前交易（Waveform 會聚焦此筆）",
+                range(len(tx_options)),
+                format_func=lambda i: tx_options[i],
+                key="i2c_selected_tx",
+            )
 
         with tab_wave:
             st.subheader("I2C 互動式數位方波與協定疊加 (SCL / SDA / Protocol Overlay)")
@@ -463,8 +490,8 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                 selected_tx = report.transactions[selected_idx]
                 if raw_capture_result is not None:
                     st.success(
-                        "這是 Logic Analyzer raw digital transition 的實測 0/1 波形；"
-                        "它不是類比電壓/上升時間量測。"
+                        "這是 Logic Analyzer raw digital transition 的實測 0/1 數位波形；"
+                        "請注意：此為邏輯訊號轉態，非類比電壓或上升時間 (Rise Time) 量測。"
                     )
                     raw_wave = raw_decode_to_waveform(
                         raw_capture_result,
@@ -474,14 +501,14 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                     st.plotly_chart(
                         I2CWaveformReconstructor.create_plotly_figure(
                             raw_wave,
-                            title="Measured Raw Digital I2C Waveform & Protocol Overlay",
+                            title="實測 Logic Analyzer 數位波形與協定疊加 (Measured Raw Digital I2C Waveform)",
                         ),
                         width="stretch",
                     )
                     st.caption(
-                        f"目前選取 Tx #{selected_tx.id}；來源 {raw_wave.source_transition_count} 個、"
-                        f"繪製 {raw_wave.rendered_transition_count} 個 transition。"
-                        f"{'已 deterministic downsample。' if raw_wave.downsampled else ''}"
+                        f"目前選取 Tx #{selected_tx.id}；來源轉態數 {raw_wave.source_transition_count} 個、"
+                        f"繪製轉態數 {raw_wave.rendered_transition_count} 個。"
+                        f"{'（已執行確定性降取樣 Deterministic Downsample）' if raw_wave.downsampled else ''}"
                     )
                 else:
                     selected_frequency_samples = frequency_samples_khz([selected_tx])
@@ -492,13 +519,13 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                     )
                     if measured_clock_khz is None:
                         st.info(
-                            "目前顯示的是重建波形（Reconstructed），不是邏輯分析儀實測電壓波形。"
-                            "此 CSV 沒有 SCL/SDA edge；若要看真實時序，請使用 raw digital transition 匯出。"
+                            "目前顯示的是根據解碼數據重建之理想數位波形（Reconstructed），非邏輯分析儀實測電壓波形。"
+                            "此 CSV 缺少 SCL/SDA 轉態邊緣；若要觀察真實實體時序，請匯出 Raw Digital Transition CSV。"
                         )
                     else:
                         st.caption(
-                            f"波形時鐘使用此 Tx 的來源 timing evidence（{len(selected_frequency_samples)} samples）；"
-                            "仍屬協定層重建，非類比電壓量測。"
+                            f"波形時鐘採用此筆交易來源之時序證據（{len(selected_frequency_samples)} 個樣本）；"
+                            "仍屬協定層理想時序重建，非類比電壓量測。"
                         )
                     try:
                         reconstructor = I2CWaveformReconstructor(
@@ -511,17 +538,17 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                         address_text = (
                             f"0x{selected_tx.address_7bit:02X}"
                             if selected_tx.address_available
-                            else "address unavailable"
+                            else "位址未知"
                         )
                         direction_text = (
-                            selected_tx.direction.value
+                            localize_direction(selected_tx.direction)
                             if selected_tx.direction_available
                             and isinstance(selected_tx.direction, I2CDirection)
-                            else "UNKNOWN"
+                            else "方向未知"
                         )
                         fig = reconstructor.create_plotly_figure(
                             wave_data,
-                            title=f"Reconstructed Tx #{selected_tx.id} Waveform: {address_text} {direction_text}",
+                            title=f"理想重建 Tx #{selected_tx.id} 數位波形 (Reconstructed Waveform): {address_text} {direction_text}",
                         )
                         st.plotly_chart(fig, width="stretch")
                     except ResourceLimitError as exc:
@@ -541,7 +568,9 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                 else:
                     st.success("🎉 未偵測到任何 I2C/SMBus 時序與通訊異常！")
             else:
-                st.caption(f"共 {len(report.issues)} 筆；優先顯示前 50 筆，避免大型 capture 讓瀏覽器一次展開數千面板。")
+                st.caption(
+                    f"共 {len(report.issues)} 筆；優先顯示前 50 筆，避免大型 capture 讓瀏覽器一次展開數千面板。"
+                )
                 for idx, issue in enumerate(report.issues[:50], 1):
                     addr_str = (
                         f"0x{issue.address_7bit:02X}" if issue.address_7bit is not None else "N/A"
@@ -559,12 +588,33 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                             st.markdown(f"- ✔ {adv}")
 
         with tab_timing:
-            st.subheader("匯流排交易／協定健康啟發式評等")
+            st.subheader("匯流排交易／協定健康啟發式評等 (Bus Health Heuristic)")
             st.caption(
-                "健康評等只使用已知 ACK/NACK；READ 最後一個 controller NACK 是正常結束。"
-                "缺少 ACK 時顯示 N/A，不把未知當成功。"
+                "健康評等僅根據已知 ACK/NACK 與時序計算；主機讀取最後 1 Byte 的 NACK 為標準正常結束條件。"
+                "缺少 ACK 數據時顯示 N/A，嚴格避免把未知狀態誤導為通過。"
             )
-            st.table(I2CTimingCharts.get_device_health_summary(report))
+            health_df = I2CTimingCharts.get_device_health_summary(report)
+            display_health_df = health_df.copy()
+            display_health_df["Category"] = display_health_df["Category"].map(
+                lambda c: localize_category(str(c))
+            )
+            display_health_df["Health Grade"] = display_health_df["Health Grade"].map(
+                lambda g: localize_health_grade(str(g))
+            )
+            display_health_df = display_health_df.rename(
+                columns={
+                    "Slave Address": "從裝置 7-bit 位址 (Slave Address)",
+                    "Device Name": "識別晶片型號 (Device Profile)",
+                    "Category": "裝置類別 (Category)",
+                    "Total Transactions": "總傳輸次數",
+                    "NACK Count": "NACK 失敗數",
+                    "Unknown ACK Count": "未知 ACK 數",
+                    "Success Rate": "通訊成功率 (Success Rate)",
+                    "Clock Stretches": "時鐘延展次數",
+                    "Health Grade": "健康等級 (Health Grade)",
+                }
+            )
+            st.table(display_health_df)
             c_t1, c_t2 = st.columns(2)
             with c_t1:
                 st.plotly_chart(
@@ -578,23 +628,27 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
         with tab_tx:
             tx_data = [
                 {
-                    "ID": t.id,
-                    "Time (s)": f"{t.start_time:.6f}" if t.timestamp_available else "n/a",
-                    "Address": f"0x{t.address_7bit:02X}" if t.address_available else "n/a",
-                    "Direction": (
-                        t.direction.value
-                        if t.direction_available and isinstance(t.direction, I2CDirection)
-                        else "UNKNOWN"
+                    "交易 ID": t.id,
+                    "時間 Time (s)": f"{t.start_time:.6f}" if t.timestamp_available else "n/a",
+                    "7-bit 位址": f"0x{t.address_7bit:02X}" if t.address_available else "n/a",
+                    "傳輸方向 (R/W)": localize_direction(
+                        t.direction if t.direction_available else None
                     ),
-                    "Address ACK": t.address_ack.value,
-                    "Overall Status": get_transaction_status(
-                        t,
-                        next_transaction=(report.transactions[index + 1] if index + 1 < len(report.transactions) else None),
-                    ).value,
-                    "Topology": t.mux_topology or "-",
-                    "Bytes": len(t.data_bytes),
-                    "Data": t.hex_dump,
-                    "Semantic Meaning": t.semantic_summary or "-",
+                    "位址應答 (Address ACK)": t.address_ack.value,
+                    "整體狀態 (Overall Status)": localize_status(
+                        get_transaction_status(
+                            t,
+                            next_transaction=(
+                                report.transactions[index + 1]
+                                if index + 1 < len(report.transactions)
+                                else None
+                            ),
+                        )
+                    ),
+                    "多工拓撲 (Topology)": t.mux_topology or "-",
+                    "資料長度 (Bytes)": len(t.data_bytes),
+                    "原始資料 (Hex Dump)": t.hex_dump,
+                    "解碼語意 (Semantic Meaning)": localize_semantic_summary(t.semantic_summary),
                 }
                 for index, t in enumerate(report.transactions)
             ]
@@ -611,7 +665,9 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             metadata = {
                 "tool": f"fw-diag-tool {__version__}",
                 "input_name": input_name or "-",
-                "input_sha256": hashlib.sha256(input_bytes).hexdigest() if input_bytes is not None else None,
+                "input_sha256": hashlib.sha256(input_bytes).hexdigest()
+                if input_bytes is not None
+                else None,
                 "input_format": input_mode,
                 "smbus_timeout_ms": float(smbus_timeout),
                 "evidence_sample_count": report.timing_stats.frequency_sample_count,
@@ -735,9 +791,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
                     "暫存器位元組順序 Register Byte Order",
                     [Endianness.BIG.value, Endianness.LITTLE.value],
                     format_func=lambda value: (
-                        "Big-endian / MSB first"
-                        if value == "big"
-                        else "Little-endian / LSB first"
+                        "Big-endian / MSB first" if value == "big" else "Little-endian / LSB first"
                     ),
                     key="i2c_builder_endianness",
                 )
@@ -803,9 +857,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
     try:
         b_addr = parse_hex_integer(builder_addr_str, label="Slave 7-bit Address")
         b_reg = (
-            parse_hex_integer(builder_reg_str, label="Register Offset")
-            if is_register_op
-            else None
+            parse_hex_integer(builder_reg_str, label="Register Offset") if is_register_op else None
         )
         b_data = parse_hex_bytes(
             builder_data_str,
@@ -845,8 +897,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         preview_rows = []
         for index, segment in enumerate(spec.segments, 1):
             payload_labels = [
-                byte.value if hasattr(byte, "value") else f"0x{byte:02X}"
-                for byte in segment.bytes
+                byte.value if hasattr(byte, "value") else f"0x{byte:02X}" for byte in segment.bytes
             ]
             if segment.is_read and spec.expected_read_data:
                 payload_labels = [
@@ -863,11 +914,13 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
                     ),
                     "負載資料 (Payload)": " ".join(payload_labels) or "(none)",
                     "最終 ACK Slot": (
-                        "Controller NACK (normal read end)"
+                        "主機 NACK (Controller NACK; 正常讀取結束)"
                         if segment.final_controller_nack
-                        else "ACK (ideal assumption)"
+                        else "ACK (理想應答假設)"
                     ),
-                    "結束 (End)": "STOP" if index == len(spec.segments) else "continue to Sr",
+                    "結束 (End)": "STOP 結束條件"
+                    if index == len(spec.segments)
+                    else "保持連線至 Repeated START (Sr)",
                 }
             )
         st.dataframe(pd.DataFrame(preview_rows), width="stretch", hide_index=True)
@@ -878,7 +931,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
             reconstructor.create_plotly_figure(
                 wave_data,
                 title=(
-                    "Ideal / Reconstructed I2C Transfer: "
+                    "理想協定波形模型 (Ideal I2C Transfer Waveform): "
                     f"{operation_labels[spec.operation.value]}"
                 ),
             ),
@@ -887,8 +940,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         if is_read_op:
             if spec.expected_read_data:
                 st.caption(
-                    "Expected bytes 只以 assumed 標籤顯示，不是裝置回傳值，"
-                    "也不會寫入生成程式碼。"
+                    "Expected bytes 只以 assumed 標籤顯示，不是裝置回傳值，也不會寫入生成程式碼。"
                 )
             else:
                 st.caption(
@@ -914,11 +966,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
             with st.expander(f"💻 {plat}", expanded=False):
                 st.code(
                     code_txt,
-                    language=(
-                        "bash"
-                        if "CLI" in plat
-                        else ("cpp" if "Arduino" in plat else "c")
-                    ),
+                    language=("bash" if "CLI" in plat else ("cpp" if "Arduino" in plat else "c")),
                 )
         bundle, bundle_sha256, spec_sha256 = build_i2c_bundle(spec, snippets)
         hash_col, download_col = st.columns([3, 1])
@@ -942,7 +990,9 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
 # 3. Waveform Diff
 elif menu == "⚖️ 雙波形對比檢視 (Waveform Diff)":
     st.header("Golden (正常板卡) vs Failing (故障板卡) 雙波形差分對比")
-    render_guide_expander("chapters/ch03_waveform_diff.md", "📖 點擊展開：Golden vs Failing 雙波形差分比對教學")
+    render_guide_expander(
+        "chapters/ch03_waveform_diff.md", "📖 點擊展開：Golden vs Failing 雙波形差分比對教學"
+    )
     d_col1, d_col2 = st.columns(2)
     with d_col1:
         golden_file = st.file_uploader(
@@ -986,7 +1036,9 @@ elif menu == "⚖️ 雙波形對比檢視 (Waveform Diff)":
 # 4. UART Crash Dump
 elif menu == "📟 UART Crash & HardFault 分析":
     st.header("UART Serial Crash Dump & ARM Cortex-M HardFault 智慧診斷")
-    render_guide_expander("chapters/ch04_uart_crash.md", "📖 點擊展開：UART 崩潰與 ARM HardFault 診斷教學")
+    render_guide_expander(
+        "chapters/ch04_uart_crash.md", "📖 點擊展開：UART 崩潰與 ARM HardFault 診斷教學"
+    )
     u_mode = st.radio(
         "選擇輸入方式",
         [
@@ -1004,9 +1056,7 @@ elif menu == "📟 UART Crash & HardFault 分析":
         u_raw = """HardFault Exception Occurred!\nHFSR: 0x40000000 (FORCED)\nCFSR: 0x02000000 (DIVBYZERO)\nStacked R0: 0x00000000\nStacked R1: 0x0000000A\nStacked PC: 0x08001234\nStacked LR: 0x08000456\nStacked xPSR: 0x61000000"""
     if st.button("執行 UART Crash 分析") and u_raw.strip():
         try:
-            u_report = UARTCrashParser.parse_log_text(
-                validate_pasted_text(u_raw, label="UART log")
-            )
+            u_report = UARTCrashParser.parse_log_text(validate_pasted_text(u_raw, label="UART log"))
         except (TypeError, ValueError) as exc:
             st.error(f"UART 輸入錯誤：{exc}")
         else:
@@ -1015,7 +1065,9 @@ elif menu == "📟 UART Crash & HardFault 分析":
 # 5. MCTP / IPMB
 elif menu == "🌐 MCTP / IPMB 伺服器協定解析":
     st.header("MCTP (DSP0236/PLDM/SPDM) 與 IPMB 伺服器管理協定解碼")
-    render_guide_expander("chapters/ch05_mctp_ipmb.md", "📖 點擊展開：MCTP 與 IPMB 伺服器協定解析教學")
+    render_guide_expander(
+        "chapters/ch05_mctp_ipmb.md", "📖 點擊展開：MCTP 與 IPMB 伺服器協定解析教學"
+    )
     m_raw = st.text_area(
         "請輸入 MCTP 或 IPMB 封包 Hex Dump (每行一封包)：",
         height=150,
@@ -1071,9 +1123,10 @@ elif menu == "🌲 Device Tree (.dts) 產生器":
     )
     if st.button("產生 Device Tree"):
         try:
-            devices = yaml.safe_load(
-                validate_pasted_text(dts_devices_text, label="Device Tree YAML")
-            ) or []
+            devices = (
+                yaml.safe_load(validate_pasted_text(dts_devices_text, label="Device Tree YAML"))
+                or []
+            )
             dts_code = DeviceTreeGenerator.generate_dts_from_topology(
                 bus_num=int(dts_bus),
                 mux_addr=dts_mux,
@@ -1089,13 +1142,13 @@ elif menu == "🌲 Device Tree (.dts) 產生器":
 # 7. PCIe
 elif menu == "🚀 PCIe Config & AER 診斷":
     st.header("PCIe 配置空間、Capability 鏈表與 AER 嚴重錯誤診斷")
-    render_guide_expander("chapters/ch07_pcie_aer.md", "📖 點擊展開：PCIe Config Space 與 AER 診斷教學")
+    render_guide_expander(
+        "chapters/ch07_pcie_aer.md", "📖 點擊展開：PCIe Config Space 與 AER 診斷教學"
+    )
     input_mode = st.radio(
         "輸入方式", ["貼上 lspci -xxxx / Hex Dump", "貼上 Linux dmesg AER Error Log"]
     )
-    raw_input = st.text_area(
-        "輸入 Log 或 Dump 內容：", height=200, max_chars=MAX_TEXT_BYTES
-    )
+    raw_input = st.text_area("輸入 Log 或 Dump 內容：", height=200, max_chars=MAX_TEXT_BYTES)
     if st.button("執行 PCIe 分析") and raw_input.strip():
         try:
             raw_input = validate_pasted_text(raw_input, label="PCIe log/dump")
@@ -1141,7 +1194,9 @@ elif menu == "🚀 PCIe Config & AER 診斷":
 # 8. SPI Flash
 elif menu == "⚡ SPI Flash 協定診斷":
     st.header("SPI / QSPI Flash 協定解析與寫入異常診斷")
-    render_guide_expander("chapters/ch08_spi_flash.md", "📖 點擊展開：SPI Flash 協定與狀態機診斷教學")
+    render_guide_expander(
+        "chapters/ch08_spi_flash.md", "📖 點擊展開：SPI Flash 協定與狀態機診斷教學"
+    )
     spi_col1, spi_col2 = st.columns([3, 1])
     with spi_col1:
         uploaded_spi = st.file_uploader(
@@ -1189,7 +1244,9 @@ elif menu == "⚡ SPI Flash 協定診斷":
 # 9. Register Decoder
 elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
     st.header("硬體 / 晶片暫存器 Bitfield 視覺化解碼器")
-    render_guide_expander("chapters/ch09_register_codegen.md", "📖 點擊展開：暫存器 Bitfield 解碼教學")
+    render_guide_expander(
+        "chapters/ch09_register_codegen.md", "📖 點擊展開：暫存器 Bitfield 解碼教學"
+    )
     builtin_map = {
         "PMBus 標準狀態暫存器 (PMBus STATUS_WORD)": "pmbus_standard.yaml",
         "PCIe AER Uncorrectable Error 暫存器": "pcie_aer_registers.yaml",
@@ -1237,7 +1294,9 @@ elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
 # 10. C Codegen
 elif menu == "🛠 C 語言 Register 巨集產生器":
     st.header("YAML 暫存器定義檔 -> C 語言 Header (#define / RMW 巨集) 自動生成")
-    render_guide_expander("chapters/ch09_register_codegen.md", "📖 點擊展開：C 語言 Register 巨集產生器教學")
+    render_guide_expander(
+        "chapters/ch09_register_codegen.md", "📖 點擊展開：C 語言 Register 巨集產生器教學"
+    )
     data_dir = Path(__file__).parent.parent / "data"
     builtin_yamls = list(data_dir.glob("*.yaml"))
     choice_yaml = st.selectbox("選擇 YAML 範本", [y.name for y in builtin_yamls])
@@ -1331,7 +1390,9 @@ elif menu == "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)":
 # 12. SOP
 elif menu == "📚 韌體除錯指南 & SOP":
     st.header("Junior Firmware 工程師韌體除錯指南與心智模型")
-    render_guide_expander("chapters/appendix_gui_reading_guide.md", "🧭 點擊展開：附錄 B 12 個 GUI 頁面第一輪閱讀地圖")
+    render_guide_expander(
+        "chapters/appendix_gui_reading_guide.md", "🧭 點擊展開：附錄 B 12 個 GUI 頁面第一輪閱讀地圖"
+    )
     render_guide_expander("chapters/ch12_sop.md", "📖 點擊展開：L1~L7 系統化除錯 SOP 手冊")
     st.info(
         "先確認證據，再提出假設：工具的圖表與報告能縮小範圍，不能取代示波器、datasheet、"
