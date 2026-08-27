@@ -9,6 +9,7 @@ from plotly.subplots import make_subplots
 
 from fw_diag_tool.errors import ResourceLimitError
 
+from .localization import localize_waveform_detail, localize_waveform_label
 from .models import AckType, I2CDirection, I2CTransaction
 
 
@@ -517,15 +518,17 @@ class I2CWaveformReconstructor:
     def create_plotly_figure(
         cls,
         waveform: I2CWaveformData,
-        title: str = "I2C Interactive Digital Waveform & Protocol Overlay",
+        title: str = "I2C 互動式數位波形與協定疊加（Protocol Overlay）",
     ) -> go.Figure:
+        if title == "I2C Interactive Digital Waveform & Protocol Overlay":
+            title = "I2C 互動式數位波形與協定疊加（Protocol Overlay）"
         fig = make_subplots(
             rows=3,
             cols=1,
             shared_xaxes=True,
             vertical_spacing=0.06,
             row_heights=[0.35, 0.32, 0.33],
-            subplot_titles=("Protocol Annotation Track", "SDA (Serial Data)", "SCL (Serial Clock)"),
+            subplot_titles=("協定標註軌（Protocol Annotation Track）", "SDA（串列資料）", "SCL（串列時鐘）"),
         )
 
         # 1. Protocol Annotation Track (Horizontal colored boxes)
@@ -538,12 +541,17 @@ class I2CWaveformReconstructor:
                     fillcolor=ann.color,
                     line=dict(color=ann.color, width=1.5),
                     mode="lines+text",
-                    text=["", f"<b>{ann.label}</b>", "", "", ""],
+                    text=["", f"<b>{localize_waveform_label(ann.label)}</b>", "", "", ""],
                     textposition="middle center",
                     textfont=dict(color="#FFFFFF", size=11),
                     name=ann.annotation_type,
                     hoverinfo="text",
-                    hovertext=f"{ann.label} ({ann.annotation_type})<br>Time: {ann.start_time:.1f}µs - {ann.end_time:.1f}µs (Δ={(ann.end_time - ann.start_time):.1f}µs)<br>{ann.details}",
+                    hovertext=(
+                        f"{localize_waveform_label(ann.label)}（{ann.annotation_type}）<br>"
+                        f"時間：{ann.start_time:.1f} µs～{ann.end_time:.1f} µs "
+                        f"（Δ={ann.end_time - ann.start_time:.1f} µs）<br>"
+                        f"{localize_waveform_detail(ann.details)}"
+                    ),
                     showlegend=False,
                 ),
                 row=1,
@@ -556,9 +564,9 @@ class I2CWaveformReconstructor:
                 x=waveform.time_us,
                 y=waveform.sda,
                 mode="lines",
-                line=dict(shape="hv", color="#00F0FF", width=2.5),
-                name="SDA",
-                hoverinfo="x+y",
+                    line=dict(shape="hv", color="#00F0FF", width=2.5),
+                    name="SDA",
+                    hovertemplate="時間：%{x:.1f} µs<br>邏輯電位：%{y}<extra>SDA</extra>",
             ),
             row=2,
             col=1,
@@ -570,9 +578,9 @@ class I2CWaveformReconstructor:
                 x=waveform.time_us,
                 y=waveform.scl,
                 mode="lines",
-                line=dict(shape="hv", color="#FFFF00", width=2.5),
-                name="SCL",
-                hoverinfo="x+y",
+                    line=dict(shape="hv", color="#FFFF00", width=2.5),
+                    name="SCL",
+                    hovertemplate="時間：%{x:.1f} µs<br>邏輯電位：%{y}<extra>SCL</extra>",
             ),
             row=3,
             col=1,
@@ -613,12 +621,12 @@ class I2CWaveformReconstructor:
         )
 
         fig.update_yaxes(
-            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["LOW (0)", "HIGH (1)"], row=2, col=1
+            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["低電位 LOW (0)", "高電位 HIGH (1)"], row=2, col=1
         )
         fig.update_yaxes(
-            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["LOW (0)", "HIGH (1)"], row=3, col=1
+            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["低電位 LOW (0)", "高電位 HIGH (1)"], row=3, col=1
         )
         fig.update_yaxes(showticklabels=False, showgrid=False, range=[0.0, 1.0], row=1, col=1)
-        fig.update_xaxes(title_text="Time (µs)", row=3, col=1)
+        fig.update_xaxes(title_text="時間（µs）", row=3, col=1)
 
         return fig

@@ -170,7 +170,7 @@ class I2CDriverCodeGenerator:
             "// 安全防護：確認匯流排編號與 7-bit 位址，寫入操作請置於明確的人工安全檢查之後。",
             f"// 提示：模板逾時 {spec.timeout_ms:g} ms 需由應用程式自行實作 deadline 機制。",
             f'int file = open("/dev/i2c-{spec.bus}", O_RDWR);',
-            'if (file < 0) { perror("open i2c bus"); return; }',
+            'if (file < 0) { perror("開啟 I2C 匯流排"); return; }',
         ]
         segment = spec.segments[0]
         if spec.operation == I2CTransferOperation.COMBINED_REGISTER_READ:
@@ -188,7 +188,7 @@ class I2CDriverCodeGenerator:
                     "};",
                     "struct i2c_rdwr_ioctl_data transfer = { .msgs = msgs, .nmsgs = 2 };",
                     "if (ioctl(file, I2C_RDWR, &transfer) < 0) {",
-                    '    perror("Failed to read from I2C device");',
+                    '    perror("從 I2C 裝置讀取失敗");',
                     "}",
                 ]
             )
@@ -198,13 +198,13 @@ class I2CDriverCodeGenerator:
                 [
                     "// 直接讀取 (Direct Read)：不發送暫存器位移階段。",
                     f"if (ioctl(file, I2C_SLAVE, {address}) < 0) {{",
-                    '    perror("select I2C slave");',
+                    '    perror("選取 I2C 從裝置");',
                     "    close(file);",
                     "    return;",
                     "}",
                     f"uint8_t rx_buf[{length}]; // 接收緩衝區；資料由目標裝置於執行期回傳。",
                     "if (read(file, rx_buf, sizeof(rx_buf)) != sizeof(rx_buf)) {",
-                    '    perror("Failed to read from I2C device");',
+                    '    perror("從 I2C 裝置讀取失敗");',
                     "}",
                 ]
             )
@@ -213,13 +213,13 @@ class I2CDriverCodeGenerator:
             lines.extend(
                 [
                     f"if (ioctl(file, I2C_SLAVE, {address}) < 0) {{",
-                    '    perror("select I2C slave");',
+                    '    perror("選取 I2C 從裝置");',
                     "    close(file);",
                     "    return;",
                     "}",
                     f"uint8_t tx_buf[{len(payload)}] = {{ {cls._bytes_literal(payload)} }};",
                     "if (write(file, tx_buf, sizeof(tx_buf)) != sizeof(tx_buf)) {",
-                    '    perror("Failed to write to I2C device");',
+                    '    perror("寫入 I2C 裝置失敗");',
                     "}",
                 ]
             )
@@ -296,13 +296,13 @@ class I2CDriverCodeGenerator:
                 reg_bytes = tuple(int(byte) for byte in spec.register_bytes)
                 lines.extend(
                     [
-                        "// Little-endian register phase requires sequential HAL calls to preserve Sr.",
-                        "// Place these declarations and callbacks at file scope; callbacks run after the caller returns.",
+                        "// Little-endian 暫存器階段必須使用連續 HAL 呼叫，以保留 Sr（Repeated START）。",
+                        "// 請將這些宣告與 callback 放在檔案層級；callback 會在呼叫端返回後執行。",
                         f"static uint8_t reg_buf[{len(reg_bytes)}] = {{ {cls._bytes_literal(reg_bytes)} }};",
-                        f"static uint8_t rx_buf[{length}]; // RX values are supplied by the target at runtime.",
+                        f"static uint8_t rx_buf[{length}]; // RX 值由目標裝置在執行期提供。",
                         "static volatile HAL_StatusTypeDef status;",
                         "static volatile uint8_t transfer_done;",
-                        "// Merge these callback hooks with the project's existing HAL callbacks if present.",
+                        "// 若專案已有 HAL callback dispatcher，請將這些 callback hook 合併進去。",
                         "void i2c_start_transfer(void) {",
                         "    transfer_done = 0;",
                         (
@@ -310,7 +310,7 @@ class I2CDriverCodeGenerator:
                             f"{shifted_address}, reg_buf, sizeof(reg_buf), I2C_FIRST_FRAME);"
                         ),
                         "    if (status != HAL_OK) {",
-                        "        // Handle immediate NACK, busy, or invalid HAL state.",
+                        "        // 處理立即 NACK、忙碌或無效 HAL 狀態。",
                         "    }",
                         "}",
                         "void HAL_I2C_MasterTxCpltCallback(I2C_HandleTypeDef *hi2c) {",
@@ -327,15 +327,15 @@ class I2CDriverCodeGenerator:
                         "void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c) {",
                         "    if (hi2c == &hi2c1) { status = HAL_ERROR; transfer_done = 1; }",
                         "}",
-                        f"// Application must wait for transfer_done with a {timeout} ms overall timeout.",
+                        f"// 應用程式必須等待 transfer_done，並套用 {timeout} ms 的整體逾時。",
                     ]
                 )
         elif spec.operation == I2CTransferOperation.DIRECT_READ:
             length = cls._read_length(spec)
             lines.extend(
                 [
-                    "// Direct read: no register phase is sent.",
-                    f"uint8_t rx_buf[{length}]; // RX values are supplied by the target at runtime.",
+                    "// 直接讀取：不會送出暫存器階段。",
+                    f"uint8_t rx_buf[{length}]; // RX 值由目標裝置在執行期提供。",
                     (
                         "HAL_StatusTypeDef status = HAL_I2C_Master_Receive(&hi2c1, "
                         f"{shifted_address}, rx_buf, {length}, {timeout});"
@@ -351,7 +351,7 @@ class I2CDriverCodeGenerator:
                 data = spec.data_bytes
                 lines.extend(
                     [
-                        "// Register write (HAL emits the register phase in big-endian order).",
+                        "// 暫存器寫入（HAL 會以大端序 big-endian 順序送出暫存器階段）。",
                         f"uint8_t tx_buf[{len(data)}] = {{ {cls._bytes_literal(data)} }};",
                         (
                             "HAL_StatusTypeDef status = HAL_I2C_Mem_Write(&hi2c1, "
@@ -363,7 +363,7 @@ class I2CDriverCodeGenerator:
             else:
                 lines.extend(
                     [
-                        "// Direct/canonical write payload (register bytes precede data bytes).",
+                        "// 直接／canonical 寫入 Payload（暫存器位元組在資料位元組之前）。",
                         f"uint8_t tx_buf[{len(payload)}] = {{ {cls._bytes_literal(payload)} }};",
                         (
                             "HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(&hi2c1, "
@@ -375,7 +375,7 @@ class I2CDriverCodeGenerator:
             lines.extend(
                 [
                     "if (status != HAL_OK) {",
-                    "    // Handle HAL_I2C_ERROR_AF (NACK), timeout, arbitration loss, or bus error.",
+                    "    // 處理 HAL_I2C_ERROR_AF（NACK）、逾時、仲裁遺失或匯流排錯誤。",
                     "}",
                 ]
             )
@@ -415,10 +415,10 @@ class I2CDriverCodeGenerator:
             length = cls._read_length(spec)
             lines.extend(
                 [
-                    "// Direct read: no register phase is sent.",
-                    f"uint8_t rx_buf[{length}]; // RX values are supplied by the target at runtime.",
+                    "// 直接讀取：不會送出暫存器階段。",
+                    f"uint8_t rx_buf[{length}]; // RX 值由目標裝置在執行期提供。",
                     f"uint8_t received = Wire.requestFrom({address}, {length});",
-                    f"if (received != {length}) {{ /* Handle short read; verify the board's Wire buffer limit. */ }}",
+                    f"if (received != {length}) {{ /* 處理讀取長度不足；確認目標板的 Wire buffer 上限。 */ }}",
                     "for (uint8_t i = 0; (i < received) && Wire.available(); ++i) {",
                     "    rx_buf[i] = Wire.read();",
                     "}",
@@ -428,12 +428,12 @@ class I2CDriverCodeGenerator:
             payload = tuple(int(byte) for byte in spec.segments[0].bytes)
             lines.extend(
                 [
-                    "// Verify this payload fits the target board's Wire TX buffer; split it if required.",
+                    "// 確認 Payload 符合目標板的 Wire TX buffer；必要時拆分傳送。",
                     f"Wire.beginTransmission({address});",
                     *[f"Wire.write({cls._hex(byte)});" for byte in payload],
                     "uint8_t err = Wire.endTransmission();",
                     "if (err != 0) {",
-                    "    // Handle address or data NACK.",
+                    "    // 處理位址或資料 NACK。",
                     "}",
                 ]
             )

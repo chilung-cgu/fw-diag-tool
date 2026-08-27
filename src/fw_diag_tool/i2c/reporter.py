@@ -18,9 +18,19 @@ from rich.text import Text
 from fw_diag_tool.i2c.localization import (
     format_summary_text_zh,
     localize_category,
+    localize_device_name,
+    localize_direction,
+    localize_input_format,
+    localize_issue_advice,
+    localize_issue_category,
+    localize_issue_description,
+    localize_issue_root_cause,
+    localize_issue_title,
     localize_quality_message,
     localize_semantic_summary,
+    localize_severity,
     localize_speed_mode,
+    localize_status,
 )
 from fw_diag_tool.i2c.models import I2CAnalysisReport, I2CDirection, Severity
 from fw_diag_tool.i2c.status import get_transaction_status
@@ -40,8 +50,16 @@ class I2CReporter:
             if any(i.severity in (Severity.CRITICAL, Severity.ERROR) for i in report.issues)
             else ("yellow" if report.issues or report.data_quality_issues else "green")
         )
-        title_text = Text("I2C / SMBus / PMBus Protocol Diagnostic Report", style="bold cyan")
-        subtitle_text = Text(report.summary_text, style="dim")
+        title_text = Text("I2C / SMBus / PMBus 協定診斷報告（Protocol Diagnostic Report）", style="bold cyan")
+        subtitle_text = Text(
+            format_summary_text_zh(
+                report.total_events,
+                report.total_transactions,
+                len(report.devices_detected),
+                len(report.issues),
+            ),
+            style="dim",
+        )
         console.print(
             Panel(
                 Text.assemble(title_text, "\n", subtitle_text),
@@ -52,25 +70,27 @@ class I2CReporter:
 
         # 2. Timing & Bus Health Summary Table
         timing_tbl = Table(
-            title="Bus Timing & Health Metrics", show_header=True, header_style="bold magenta"
+            title="匯流排時序與健康指標（Bus Timing & Health Metrics）",
+            show_header=True,
+            header_style="bold magenta",
         )
-        timing_tbl.add_column("Metric", style="cyan")
-        timing_tbl.add_column("Value", style="bold white")
-        timing_tbl.add_column("Standard / Evaluation", style="dim")
+        timing_tbl.add_column("指標（Metric）", style="cyan")
+        timing_tbl.add_column("數值（Value）", style="bold white")
+        timing_tbl.add_column("標準／評估（Standard / Evaluation）", style="dim")
 
         t = report.timing_stats
-        timing_tbl.add_row("Nominal Speed Mode", t.speed_mode.value, "Spec Class")
+        timing_tbl.add_row("標稱速度模式", localize_speed_mode(t.speed_mode), "規格分類（Spec Class）")
         if t.frequency_sample_count:
             timing_tbl.add_row(
-                "Avg SCL Clock Frequency",
+                "平均 SCL 時鐘頻率",
                 f"{t.avg_frequency_khz:.2f} kHz",
-                f"Min: {t.min_frequency_khz:.1f}k, Max: {t.max_frequency_khz:.1f}k",
+                f"最小：{t.min_frequency_khz:.1f} kHz；最大：{t.max_frequency_khz:.1f} kHz",
             )
         else:
             timing_tbl.add_row(
-                "Avg SCL Clock Frequency",
-                "Unavailable",
-                "No source-provided bitrate or byte duration",
+                "平均 SCL 時鐘頻率",
+                "不可用（Unavailable）",
+                "來源未提供位元率或位元組持續時間",
             )
 
         if t.frequency_sample_count:
@@ -80,25 +100,25 @@ class I2CReporter:
                 else ("yellow" if t.frequency_jitter_pct > 15 else "green")
             )
             timing_tbl.add_row(
-                "Clock Frequency Jitter",
+                "時鐘頻率抖動",
                 f"[{jitter_style}]{t.frequency_jitter_pct:.1f} %[/]",
-                "< 15% is stable; > 35% indicates high capacitance/ISR",
+                "< 15% 通常穩定；> 35% 可能表示電容過大或 ISR 干擾",
             )
             timing_tbl.add_row(
-                "Frequency Spread (peak-to-peak)",
+                "頻率分佈跨度（peak-to-peak）",
                 f"{t.frequency_spread_pct:.1f} %",
-                "Compatibility alias: Clock Frequency Jitter",
+                "相容別名：時鐘頻率抖動",
             )
         else:
             timing_tbl.add_row(
-                "Clock Frequency Jitter",
-                "Unavailable",
-                "No frequency samples",
+                "時鐘頻率抖動",
+                "不可用（Unavailable）",
+                "沒有頻率樣本",
             )
             timing_tbl.add_row(
-                "Frequency Spread (peak-to-peak)",
-                "Unavailable",
-                "No frequency samples",
+                "頻率分佈跨度（peak-to-peak）",
+                "不可用（Unavailable）",
+                "沒有頻率樣本",
             )
 
         stretch_style = (
@@ -107,31 +127,31 @@ class I2CReporter:
             else ("yellow" if t.clock_stretch_count > 0 else "green")
         )
         timing_tbl.add_row(
-            "Clock Stretching Events",
-            f"[{stretch_style}]{t.clock_stretch_count} event(s) (Max: {t.max_clock_stretch_ms:.3f} ms)[/]",
-            "SMBus limit: 25ms timeout",
+            "時鐘延展事件",
+            f"[{stretch_style}]{t.clock_stretch_count} 筆（最大：{t.max_clock_stretch_ms:.3f} ms）[/]",
+            "SMBus 門檻：25 ms 逾時",
         )
         timing_tbl.add_row(
-            "Avg Inter-byte Delay",
+            "位元組間平均延遲",
             f"{t.avg_inter_byte_delay_us:.2f} µs",
-            f"Max: {t.max_inter_byte_delay_us:.2f} µs (ISR latency)",
+            f"最大：{t.max_inter_byte_delay_us:.2f} µs（ISR 延遲）",
         )
         timing_tbl.add_row(
-            "Avg Inter-transaction Delay",
+            "交易間平均間隔",
             f"{t.avg_inter_transaction_delay_ms:.2f} ms",
-            f"Max: {t.max_inter_transaction_delay_ms:.2f} ms",
+            f"最大：{t.max_inter_transaction_delay_ms:.2f} ms",
         )
         timing_tbl.add_row(
-            "Bus Utilization",
+            "匯流排使用率",
             (
                 f"{t.bus_utilization_pct:.2f} %"
                 if t.bus_utilization_evidence != "unavailable"
-                else "Unavailable"
+                else "不可用（Unavailable）"
             ),
             (
-                "Active transfer time / measured total duration"
+                "主動傳輸時間／實測總持續時間"
                 if t.bus_utilization_evidence != "unavailable"
-                else "Total trace duration is unavailable"
+                else "總追蹤持續時間不可用"
             ),
         )
         console.print(timing_tbl)
@@ -139,14 +159,16 @@ class I2CReporter:
 
         # 3. Peripheral Device Map Table
         dev_tbl = Table(
-            title="Detected Peripheral Device Map", show_header=True, header_style="bold blue"
+            title="偵測到的週邊裝置分佈（Detected Peripheral Device Map）",
+            show_header=True,
+            header_style="bold blue",
         )
-        dev_tbl.add_column("7-bit Addr", style="yellow")
-        dev_tbl.add_column("8-bit (W/R)", style="dim")
-        dev_tbl.add_column("Identified Device / Chip Profile", style="bold white")
-        dev_tbl.add_column("Category", style="cyan")
-        dev_tbl.add_column("Protocol", style="green")
-        dev_tbl.add_column("Transactions", justify="right")
+        dev_tbl.add_column("7-bit 位址", style="yellow")
+        dev_tbl.add_column("8-bit（W/R）", style="dim")
+        dev_tbl.add_column("識別裝置／晶片設定檔", style="bold white")
+        dev_tbl.add_column("裝置類別", style="cyan")
+        dev_tbl.add_column("協定", style="green")
+        dev_tbl.add_column("交易次數", justify="right")
 
         for dev in report.devices_detected.values():
             address = dev.get("address_7bit", "unknown")
@@ -156,8 +178,8 @@ class I2CReporter:
             dev_tbl.add_row(
                 str(address),
                 str(dev.get("address_8bit", "unknown")),
-                device_name,
-                str(dev.get("category") or "General I2C Peripheral"),
+                localize_device_name(device_name),
+                localize_category(dev.get("category")),
                 str(dev.get("protocol") or "I2C"),
                 str(dev.get("transaction_count", 0)),
             )
@@ -166,24 +188,24 @@ class I2CReporter:
 
         # 4. Decoded Transaction Table
         tx_tbl = Table(
-            title="Transaction Sequence & Decoded Telemetry",
+            title="交易序列與解碼遙測（Transaction Sequence & Decoded Telemetry）",
             show_header=True,
             header_style="bold green",
         )
         tx_tbl.add_column("#", justify="right", style="dim")
-        tx_tbl.add_column("Time (s)", style="dim")
-        tx_tbl.add_column("Addr", style="yellow")
-        tx_tbl.add_column("R/W", style="bold")
-        tx_tbl.add_column("Raw Hex Bytes", style="white")
-        tx_tbl.add_column("Decoded Semantic Meaning / Telemetry", style="bold cyan")
-        tx_tbl.add_column("Status", justify="center")
+        tx_tbl.add_column("時間（s）", style="dim")
+        tx_tbl.add_column("位址", style="yellow")
+        tx_tbl.add_column("方向（R/W）", style="bold")
+        tx_tbl.add_column("原始十六進位資料", style="white")
+        tx_tbl.add_column("解碼語意／遙測資料", style="bold cyan")
+        tx_tbl.add_column("狀態", justify="center")
 
         for index, tx in enumerate(report.transactions):
             if tx.direction_available and isinstance(tx.direction, I2CDirection):
                 rw_color = "cyan" if tx.direction == I2CDirection.READ else "magenta"
-                rw_text = f"[{rw_color}]{tx.direction.value}[/]"
+                rw_text = f"[{rw_color}]{localize_direction(tx.direction)}[/]"
             else:
-                rw_text = "[yellow]UNKNOWN[/]"
+                rw_text = "[yellow]UNKNOWN（未知）[/]"
 
             next_tx = (
                 report.transactions[index + 1] if index + 1 < len(report.transactions) else None
@@ -199,16 +221,16 @@ class I2CReporter:
                 "NO STOP": "bold red",
                 "ABORTED": "bold red",
             }.get(status, "white")
-            status_text = f"[{status_style}]{status}[/]"
+            status_text = f"[{status_style}]{localize_status(status)}[/]"
 
-            summary_str = tx.semantic_summary or "-"
+            summary_str = localize_semantic_summary(tx.semantic_summary) or "-"
             if tx.decoded_values.get("rollover_hazard"):
                 summary_str = f"[bold red]⚠️ {summary_str}[/]"
 
             tx_tbl.add_row(
                 str(tx.id),
-                f"{tx.start_time:.6f}" if tx.timestamp_available else "n/a",
-                f"0x{tx.address_7bit:02X}" if tx.address_available else "n/a",
+                f"{tx.start_time:.6f}" if tx.timestamp_available else "不可用",
+                f"0x{tx.address_7bit:02X}" if tx.address_available else "不可用",
                 rw_text,
                 tx.hex_dump,
                 summary_str,
@@ -222,7 +244,7 @@ class I2CReporter:
             console.print(
                 Panel(
                     Text(
-                        "Diagnostic Anomalies & Step-by-Step Debugging Advice",
+                        "異常診斷與逐步排查建議（Diagnostic Anomalies & Debugging Advice）",
                         style="bold white on red",
                     ),
                     expand=False,
@@ -237,47 +259,54 @@ class I2CReporter:
                 }.get(issue.severity, "white")
 
                 header = Text(
-                    f"[{issue.severity.value}] {issue.code}: {issue.title}", style=sev_color
+                    f"[{localize_severity(issue.severity)}] {issue.code}: "
+                    f"{localize_issue_title(issue.code, issue.title)}",
+                    style=sev_color,
                 )
 
                 body = Text()
-                body.append(f"\n● 異常現象描述:\n  {issue.description}\n", style="white")
                 body.append(
-                    "\n● 可能原因假設 (Hypotheses; not proven root cause):\n", style="bold yellow"
+                    f"\n● 異常現象描述：\n  {localize_issue_description(issue.description)}\n",
+                    style="white",
                 )
-                for rc_line in issue.root_cause_analysis.split("\n"):
+                body.append(
+                    "\n● 可能原因假設（Hypotheses；不是已證明的根因）：\n",
+                    style="bold yellow",
+                )
+                for rc_line in localize_issue_root_cause(issue.root_cause_analysis).split("\n"):
                     if rc_line.strip():
                         body.append(f"  {rc_line.strip()}\n", style="yellow")
 
-                body.append("\n● 新手排查行動清單 (Actionable Checklist):\n", style="bold green")
+                body.append("\n● 新手排查行動清單（Actionable Checklist）：\n", style="bold green")
                 for advice in issue.actionable_advice:
-                    body.append(f"  ✔ {advice}\n", style="green")
+                    body.append(f"  ✔ {localize_issue_advice(advice)}\n", style="green")
 
                 console.print(
                     Panel(body, title=header.plain, title_align="left", border_style=sev_color)
                 )
         if report.data_quality_issues:
             quality_lines = [
-                "[bold yellow]Source evidence limitations (these are not protocol findings):[/]"
+                "[bold yellow]來源證據與限制（不是協定異常）：[/]"
             ]
             quality_lines.extend(
-                f"• {issue.code} ({issue.count}): {issue.message}"
+                f"• {issue.code}（{issue.count} 筆）："
+                f"{localize_quality_message(issue.code, issue.message)}"
                 for issue in report.data_quality_issues
             )
-            console.print(Panel("\n".join(quality_lines), title="Data Quality Limitations"))
+            console.print(Panel("\n".join(quality_lines), title="資料證據與品質限制（Data Quality Limitations）"))
 
         if not report.issues and report.data_quality_issues:
             console.print(
                 Panel(
-                    "[bold yellow]⚠ No protocol anomaly was proven, but source evidence is incomplete. "
-                    "Review the Data Quality Limitations before calling the trace clean.[/]",
+                    "[bold yellow]⚠ 在現有證據下未證明有協定異常，但來源證據不完整；"
+                    "宣稱追蹤記錄正常前，請先檢視資料證據與品質限制。[/]",
                     border_style="yellow",
                 )
             )
         elif not report.issues:
             console.print(
                 Panel(
-                    "[bold green]✔ No Protocol or Timing Anomalies Detected. All Transactions Passed Cleanly.[/]",
+                    "[bold green]✔ 未偵測到協定或時序異常；所有交易均通過目前可用的證據檢查。[/]",
                     border_style="green",
                 )
             )
@@ -290,7 +319,7 @@ class I2CReporter:
     ) -> str:
         """Generate comprehensive Markdown diagnostic report."""
         lines: list[str] = []
-        lines.append("# I2C / SMBus / PMBus Protocol Diagnostic Report (協定診斷報告)")
+        lines.append("# I2C / SMBus / PMBus 協定診斷報告（Protocol Diagnostic Report）")
         lines.append("")
         summary_zh = format_summary_text_zh(
             report.total_events,
@@ -298,32 +327,32 @@ class I2CReporter:
             len(report.devices_detected),
             len(report.issues),
         )
-        lines.append(f"> **總結摘要 (Summary)**: {summary_zh}")
+        lines.append(f"> **總結摘要（Summary）**：{summary_zh}")
         lines.append("")
 
         if metadata:
             if not isinstance(metadata, Mapping):
                 to_dict = getattr(metadata, "to_dict", None)
                 metadata = to_dict() if callable(to_dict) else vars(metadata)
-            lines.append("## 詮釋資料 (Metadata)")
+            lines.append("## 詮釋資料（Metadata）")
             lines.append("")
             metadata_values = {
-                "分析工具 (Tool)": metadata.get("tool", metadata.get("tool_name", "-")),
-                "輸入檔名 (Input name)": metadata.get("input_name", "-"),
-                "輸入 SHA-256 雜湊 (Input SHA-256)": metadata.get(
+                "分析工具（Tool）": metadata.get("tool", metadata.get("tool_name", "-")),
+                "輸入檔名（Input name）": metadata.get("input_name", "-"),
+                "輸入 SHA-256 雜湊（Input SHA-256）": metadata.get(
                     "input_sha256", metadata.get("input_hash", metadata.get("capture_sha256", "-"))
                 ),
-                "輸入格式 (Input format)": metadata.get(
-                    "input_format", metadata.get("input_mode", "-")
+                "輸入格式（Input format）": localize_input_format(
+                    metadata.get("input_format", metadata.get("input_mode", "-"))
                 ),
-                "SMBus 逾時門檻 (SMBus timeout ms)": metadata.get(
+                "SMBus 逾時門檻（SMBus timeout ms）": metadata.get(
                     "smbus_timeout_ms", metadata.get("timeout_ms", metadata.get("timeout", "-"))
                 ),
-                "板級設定檔 (Board profile)": metadata.get(
+                "板級設定檔（Board profile）": metadata.get(
                     "board_profile",
                     metadata.get("profile", metadata.get("board_profile_name", "-")),
                 ),
-                "時序證據樣本數 (Evidence sample count)": metadata.get(
+                "時序證據樣本數（Evidence sample count）": metadata.get(
                     "evidence_sample_count",
                     metadata.get(
                         "evidence_samples",
@@ -331,57 +360,60 @@ class I2CReporter:
                     ),
                 ),
             }
+            if str(metadata_values["板級設定檔（Board profile）"]).lower() in {"none", "null", "-"}:
+                metadata_values["板級設定檔（Board profile）"] = "未套用（none）"
             for label, value in metadata_values.items():
                 lines.append(f"- **{label}**: `{value}`")
             lines.append("")
 
         # Summary Card
-        lines.append("## 1. 匯流排時序與交易健康啟發評等 (Bus Timing & Health)")
+        lines.append("## 1. 匯流排時序與交易健康啟發評等（Bus Timing & Health）")
         lines.append("")
         lines.append("> 本健康度摘要為協定層證據之啟發式統計，非實體電氣特性或晶片良率之通過判定。")
         lines.append("")
         t = report.timing_stats
         lines.append(
-            f"- **標準速度模式 (Nominal Speed Mode)**: `{localize_speed_mode(t.speed_mode)}`"
+            f"- **標準速度模式（Nominal Speed Mode）**：`{localize_speed_mode(t.speed_mode)}`"
         )
         if t.frequency_sample_count:
             lines.append(
-                f"- **Average Clock Frequency**: `{t.avg_frequency_khz:.2f} kHz` (Min: `{t.min_frequency_khz:.1f} kHz`, Max: `{t.max_frequency_khz:.1f} kHz`)"
+                f"- **平均 SCL 時鐘頻率（Average Clock Frequency）**: `{t.avg_frequency_khz:.2f} kHz` "
+                f"（最小：`{t.min_frequency_khz:.1f} kHz`；最大：`{t.max_frequency_khz:.1f} kHz`）"
             )
             lines.append(
-                f"- **時鐘頻率抖動 (Clock Frequency Jitter)**: `{t.frequency_jitter_pct:.1f} %`"
+                f"- **時鐘頻率抖動（Clock Frequency Jitter）**：`{t.frequency_jitter_pct:.1f} %`"
             )
             lines.append(
-                f"- **頻率分佈跨度 (Frequency Spread p-p)**: `{t.frequency_spread_pct:.1f} %`"
+                f"- **頻率分佈跨度（Frequency Spread p-p）**：`{t.frequency_spread_pct:.1f} %`"
             )
         else:
             lines.append(
-                "- **平均 SCL 時鐘頻率 (Average Clock Frequency)**: `不可用 (Unavailable)` (來源無每位元組時序或位元率證據)"
+                "- **平均 SCL 時鐘頻率（Average Clock Frequency）**: `不可用（Unavailable）`（來源沒有每位元組時序或位元率證據）"
             )
-            lines.append("- **時鐘頻率抖動 (Clock Frequency Jitter)**: `不可用 (Unavailable)`")
-            lines.append("- **頻率分佈跨度 (Frequency Spread p-p)**: `不可用 (Unavailable)`")
+            lines.append("- **時鐘頻率抖動（Clock Frequency Jitter）**: `不可用（Unavailable）`")
+            lines.append("- **頻率分佈跨度（Frequency Spread p-p）**: `不可用（Unavailable）`")
         lines.append(
-            f"- **時鐘延展事件 (Clock Stretching Events)**: `{t.clock_stretch_count}` 筆 (最大持續時間: `{t.max_clock_stretch_ms:.3f} ms`)"
+            f"- **時鐘延展事件（Clock Stretching Events）**：`{t.clock_stretch_count}` 筆（最大持續時間：`{t.max_clock_stretch_ms:.3f} ms`）"
         )
         lines.append(
-            f"- **位元組間平均延遲 (Avg Inter-byte Delay)**: `{t.avg_inter_byte_delay_us:.2f} µs` (最大值: `{t.max_inter_byte_delay_us:.2f} µs`)"
+            f"- **位元組間平均延遲（Avg Inter-byte Delay）**：`{t.avg_inter_byte_delay_us:.2f} µs`（最大值：`{t.max_inter_byte_delay_us:.2f} µs`）"
         )
         lines.append(
-            f"- **交易間平均間隔 (Avg Inter-transaction Delay)**: `{t.avg_inter_transaction_delay_ms:.2f} ms`"
+            f"- **交易間平均間隔（Avg Inter-transaction Delay）**：`{t.avg_inter_transaction_delay_ms:.2f} ms`"
         )
         if t.bus_utilization_evidence != "unavailable":
-            lines.append(f"- **匯流排使用率 (Bus Utilization)**: `{t.bus_utilization_pct:.2f} %`")
+            lines.append(f"- **匯流排使用率（Bus Utilization）**：`{t.bus_utilization_pct:.2f} %`")
         else:
             lines.append(
-                "- **匯流排使用率 (Bus Utilization)**: `不可用 (Unavailable)` (總捕捉時間不可用)"
+                "- **匯流排使用率（Bus Utilization）**：`不可用（Unavailable）`（總捕捉時間不可用）"
             )
         lines.append("")
 
         # Device Map Table
-        lines.append("## 2. 偵測之從裝置分佈表 (Detected Peripheral Device Map)")
+        lines.append("## 2. 偵測到的從裝置分佈表（Detected Peripheral Device Map）")
         lines.append("")
         lines.append(
-            "| 7-bit 位址 | 8-bit 位址 (W/R) | 識別晶片型號 (Device Profile) | 裝置類別 (Category) | 協定 (Protocol) | 交易次數 |"
+            "| 7-bit 位址 | 8-bit 位址（W/R） | 識別晶片型號（Device Profile） | 裝置類別（Category） | 協定（Protocol） | 交易次數 |"
         )
         lines.append("|---|---|---|---|---|---|")
         for dev in report.devices_detected.values():
@@ -390,15 +422,16 @@ class I2CReporter:
             if dev.get("identity_confidence") == "ambiguous":
                 device_name = "Possible: " + "; ".join(dev.get("candidates", []))
             lines.append(
-                f"| `{address}` | `{dev.get('address_8bit', 'unknown')}` | **{device_name}** | {localize_category(dev.get('category'))} | {dev.get('protocol') or 'I2C'} | {dev.get('transaction_count', 0)} |"
+                f"| `{address}` | `{dev.get('address_8bit', 'unknown')}` | **{localize_device_name(device_name)}** | "
+                f"{localize_category(dev.get('category'))} | {dev.get('protocol') or 'I2C'} | {dev.get('transaction_count', 0)} |"
             )
         lines.append("")
 
         # Transaction Sequence Table
-        lines.append("## 3. 封包交易序列與解碼明細 (Transaction Sequence & Decoded Telemetry)")
+        lines.append("## 3. 封包交易序列與解碼明細（Transaction Sequence & Decoded Telemetry）")
         lines.append("")
         lines.append(
-            "| # | 時間 Time (s) | 位址 Addr | 方向 R/W | 原始資料 (Raw Hex) | 協定語意與遙測解碼 (Decoded Telemetry) | 狀態 (Status) |"
+            "| # | 時間（s） | 位址 | 方向（R/W） | 原始資料（Raw Hex） | 協定語意與遙測解碼（Decoded Telemetry） | 狀態（Status） |"
         )
         lines.append("|---|---|---|---|---|---|---|")
         for index, tx in enumerate(report.transactions):
@@ -411,22 +444,20 @@ class I2CReporter:
             if tx.decoded_values.get("rollover_hazard"):
                 summary = f"⚠️ **{summary}**"
 
-            addr_text = f"0x{tx.address_7bit:02X}" if tx.address_available else "n/a"
-            direction_text = (
-                tx.direction.value
-                if tx.direction_available and isinstance(tx.direction, I2CDirection)
-                else "UNKNOWN"
+            addr_text = f"0x{tx.address_7bit:02X}" if tx.address_available else "不可用"
+            direction_text = localize_direction(
+                tx.direction if tx.direction_available and isinstance(tx.direction, I2CDirection) else None
             )
 
             lines.append(
-                f"| {tx.id} | {tx.start_time:.6f} | `{addr_text}` | `{direction_text}` | `{tx.hex_dump}` | {summary} | {status} |"
+                f"| {tx.id} | {tx.start_time:.6f} | `{addr_text}` | `{direction_text}` | `{tx.hex_dump}` | {summary} | {localize_status(status)} |"
                 if tx.timestamp_available
-                else f"| {tx.id} | n/a | `{addr_text}` | `{direction_text}` | `{tx.hex_dump}` | {summary} | {status} |"
+                else f"| {tx.id} | 不可用 | `{addr_text}` | `{direction_text}` | `{tx.hex_dump}` | {summary} | {localize_status(status)} |"
             )
         lines.append("")
 
         if report.data_quality_issues:
-            lines.append("## ⚠ 資料證據與品質限制 (Data Quality Limitations)")
+            lines.append("## ⚠ 資料證據與品質限制（Data Quality Limitations）")
             lines.append("")
             for quality_issue in report.data_quality_issues:
                 zh_msg = localize_quality_message(quality_issue.code, quality_issue.message)
@@ -434,7 +465,7 @@ class I2CReporter:
             lines.append("")
 
         # Diagnostic Issues & Advice
-        lines.append("## 4. 異常診斷與排查行動建議 (Diagnostic Issues & Debugging Advice)")
+        lines.append("## 4. 異常診斷與排查行動建議（Diagnostic Issues & Debugging Advice）")
         lines.append("")
         if not report.issues and report.data_quality_issues:
             lines.append(
@@ -445,24 +476,28 @@ class I2CReporter:
         else:
             for idx, diagnostic_issue in enumerate(report.issues, 1):
                 lines.append(
-                    f"### 4.{idx} [{diagnostic_issue.severity.value}] {diagnostic_issue.code}: {diagnostic_issue.title}"
+                    f"### 4.{idx} [{localize_severity(diagnostic_issue.severity)}] "
+                    f"{diagnostic_issue.code}: {localize_issue_title(diagnostic_issue.code, diagnostic_issue.title)}"
                 )
                 lines.append("")
-                lines.append(f"- **異常分類 (Category)**: `{diagnostic_issue.category}`")
+                lines.append(f"- **異常分類（Category）**: `{localize_issue_category(diagnostic_issue.category)}`")
                 if diagnostic_issue.address_7bit is not None:
                     lines.append(
-                        f"- **從裝置位址 (Device Address)**: `0x{diagnostic_issue.address_7bit:02X}`"
+                        f"- **從裝置位址（Device Address）**：`0x{diagnostic_issue.address_7bit:02X}`"
                     )
-                lines.append(f"- **現象描述 (Description)**: {diagnostic_issue.description}")
+                lines.append(
+                    f"- **現象描述（Description）**: "
+                    f"{localize_issue_description(diagnostic_issue.description)}"
+                )
                 lines.append("")
                 lines.append("**可能原因假設（Hypotheses；不是已證明的根因）**:")
-                for rc_line in diagnostic_issue.root_cause_analysis.split("\n"):
+                for rc_line in localize_issue_root_cause(diagnostic_issue.root_cause_analysis).split("\n"):
                     if rc_line.strip():
                         lines.append(f"- {rc_line.strip()}")
                 lines.append("")
-                lines.append("**新手排查行動建議 (Actionable Debug Checklist)**:")
+                lines.append("**新手排查行動建議（Actionable Debug Checklist）**：")
                 for advice in diagnostic_issue.actionable_advice:
-                    lines.append(f"- [ ] {advice}")
+                    lines.append(f"- [ ] {localize_issue_advice(advice)}")
                 lines.append("")
 
         return "\n".join(lines)

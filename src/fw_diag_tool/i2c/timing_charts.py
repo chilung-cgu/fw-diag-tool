@@ -6,9 +6,22 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+from .localization import localize_device_name, localize_direction, localize_status
 from .models import AckType, I2CAnalysisReport, I2CDirection
 from .status import TransactionStatus, get_transaction_status
 from .timing import frequency_samples_khz
+
+HEALTH_SUMMARY_COLUMNS = (
+    "Slave Address",
+    "Device Name",
+    "Category",
+    "Total Transactions",
+    "NACK Count",
+    "Unknown ACK Count",
+    "Success Rate",
+    "Clock Stretches",
+    "Health Grade",
+)
 
 
 class I2CTimingCharts:
@@ -21,13 +34,13 @@ class I2CTimingCharts:
         if not bitrates:
             fig = go.Figure()
             fig.update_layout(
-                title="<b>SCL Clock Frequency Distribution</b> (unavailable)",
+                title="<b>SCL 時鐘頻率分佈（SCL Clock Frequency Distribution）</b>（不可用／unavailable）",
                 template="plotly_dark",
                 height=320,
                 margin=dict(l=40, r=20, t=50, b=30),
             )
             fig.add_annotation(
-                text="No source-provided bitrate or byte-duration evidence",
+                text="來源未提供位元率或位元組持續時間證據（bitrate／byte-duration evidence）",
                 x=0.5,
                 y=0.5,
                 xref="paper",
@@ -42,15 +55,18 @@ class I2CTimingCharts:
             x="SCL Clock Frequency (kHz)",
             nbins=30,
             title=(
-                "<b>SCL Clock Frequency Distribution</b> "
-                f"(Avg: {report.timing_stats.avg_frequency_khz:.1f} kHz, "
-                f"Spread: {report.timing_stats.frequency_spread_pct:.1f}% "
-                f"(Jitter: {report.timing_stats.frequency_jitter_pct:.1f}%), "
-                f"Samples: {len(bitrates)})"
+                "<b>SCL 時鐘頻率分佈（SCL Clock Frequency Distribution）</b> "
+                f"（平均：{report.timing_stats.avg_frequency_khz:.1f} kHz；"
+                f"跨度：{report.timing_stats.frequency_spread_pct:.1f}%（抖動："
+                f"{report.timing_stats.frequency_jitter_pct:.1f}%）；樣本數：{len(bitrates)}）"
             ),
             template="plotly_dark",
             color_discrete_sequence=["#00CC96"],
+            labels={"SCL Clock Frequency (kHz)": "SCL 時鐘頻率（kHz）"},
         )
+        for trace in fig.data:
+            trace.hovertemplate = "SCL 時鐘頻率（kHz）=%{x}<br>筆數=%{y}<extra></extra>"
+        fig.update_yaxes(title_text="筆數")
         fig.update_layout(height=320, margin=dict(l=40, r=20, t=50, b=30))
         return fig
 
@@ -64,25 +80,25 @@ class I2CTimingCharts:
                 else None
             )
             status = get_transaction_status(tx, next_transaction=next_tx).value
+            device_label = (
+                localize_device_name(tx.device_name)
+                if tx.device_name
+                else (
+                    f"0x{tx.address_7bit:02X}"
+                    if tx.address_available
+                    else "位址不可用（Address unavailable）"
+                )
+            )
             data.append(
                 {
                     "Transaction ID": f"#{tx.id}",
-                    "Device": (
-                        tx.device_name
-                        or (
-                            f"0x{tx.address_7bit:02X}"
-                            if tx.address_available
-                            else "Address unavailable"
-                        )
-                    ),
+                    "Device": device_label,
                     "Start Time (s)": tx.start_time if tx.timestamp_available else None,
                     "Duration (ms)": tx.duration_us / 1000.0 if tx.timestamp_available else None,
-                    "Direction": (
-                        tx.direction.value
-                        if tx.direction_available and isinstance(tx.direction, I2CDirection)
-                        else "UNKNOWN"
+                    "Direction": localize_direction(
+                        tx.direction if tx.direction_available and isinstance(tx.direction, I2CDirection) else None
                     ),
-                    "Status": status,
+                    "Status": localize_status(status),
                     "Bytes": len(tx.data_bytes),
                 }
             )
@@ -90,20 +106,24 @@ class I2CTimingCharts:
         df = pd.DataFrame(data)
         if df.empty:
             fig = go.Figure()
-            fig.update_layout(title="No transactions to display", template="plotly_dark")
+            fig.update_layout(
+                title="沒有可顯示的交易（No transactions to display）", template="plotly_dark"
+            )
             return fig
 
         timestamp_count = sum(1 for tx in report.transactions if tx.timestamp_available)
         if timestamp_count == 0:
             timeline_title = (
-                "<b>Bus Transaction Timeline & Active Device Map</b> (timestamps unavailable)"
+                "<b>匯流排交易時間軸與裝置活動圖（Bus Transaction Timeline & Active Device Map）</b> "
+                "（時間戳記不可用／timestamps unavailable）"
             )
         elif timestamp_count < len(report.transactions):
             timeline_title = (
-                "<b>Bus Transaction Timeline & Active Device Map</b> (partial timestamps)"
+                "<b>匯流排交易時間軸與裝置活動圖（Bus Transaction Timeline & Active Device Map）</b> "
+                "（時間戳記不完整／partial timestamps）"
             )
         else:
-            timeline_title = "<b>Bus Transaction Timeline & Active Device Map</b>"
+            timeline_title = "<b>匯流排交易時間軸與裝置活動圖（Bus Transaction Timeline & Active Device Map）</b>"
 
         scatter_args: dict[str, Any] = {
             "data_frame": df,
@@ -111,18 +131,27 @@ class I2CTimingCharts:
             "y": "Device",
             "color": "Status",
             "color_discrete_map": {
-                "ACK": "#00CC96",
-                "ADDR NAK": "#EF553B",
-                "DATA NAK": "#FFA15A",
-                "READ END NAK": "#636EFA",
-                "ACK UNKNOWN": "#7F7F7F",
-                "EVIDENCE INCOMPLETE": "#7F7F7F",
-                "NO STOP": "#EF553B",
-                "ABORTED": "#AB63FA",
+                localize_status("ACK"): "#00CC96",
+                localize_status("ADDR NAK"): "#EF553B",
+                localize_status("DATA NAK"): "#FFA15A",
+                localize_status("READ END NAK"): "#636EFA",
+                localize_status("ACK UNKNOWN"): "#7F7F7F",
+                localize_status("EVIDENCE INCOMPLETE"): "#7F7F7F",
+                localize_status("NO STOP"): "#EF553B",
+                localize_status("ABORTED"): "#AB63FA",
             },
             "hover_data": ["Transaction ID", "Direction", "Bytes", "Duration (ms)"],
             "title": timeline_title,
             "template": "plotly_dark",
+            "labels": {
+                "Transaction ID": "交易 ID",
+                "Device": "裝置",
+                "Start Time (s)": "開始時間（s）",
+                "Duration (ms)": "持續時間（ms）",
+                "Direction": "方向",
+                "Status": "狀態",
+                "Bytes": "位元組數",
+            },
         }
         if any(tx.timestamp_available and tx.duration_us > 0 for tx in report.transactions):
             scatter_args["size"] = "Duration (ms)"
@@ -194,4 +223,4 @@ class I2CTimingCharts:
                 }
             )
 
-        return pd.DataFrame(summary_rows)
+        return pd.DataFrame(summary_rows, columns=HEALTH_SUMMARY_COLUMNS)

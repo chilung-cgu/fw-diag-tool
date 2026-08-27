@@ -41,11 +41,23 @@ from fw_diag_tool.gui.uploads import (
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.input import I2CInputFormat, normalize_i2c_input_format
 from fw_diag_tool.i2c.localization import (
+    localize_ack,
     localize_category,
+    localize_device_name,
     localize_direction,
+    localize_evidence,
+    localize_explanatory_text,
     localize_health_grade,
+    localize_input_format,
+    localize_issue_advice,
+    localize_issue_description,
+    localize_issue_root_cause,
+    localize_issue_title,
+    localize_platform,
+    localize_preset,
     localize_quality_message,
     localize_semantic_summary,
+    localize_severity,
     localize_status,
 )
 from fw_diag_tool.i2c.models import I2CDirection
@@ -122,9 +134,9 @@ def render_guide_expander(
             st.markdown(prepare_guide_markdown(markdown, chapter_rel_path))
 
 
-st.set_page_config(page_title="FW Diagnostic Toolkit", page_icon="⚡", layout="wide")
-st.title("⚡ Firmware Signal & Protocol Diagnostic Suite")
-st.caption("Local I2C/PMBus protocol diagnostics and firmware learning workstation")
+st.set_page_config(page_title="韌體訊號與協定診斷套件", page_icon="⚡", layout="wide")
+st.title("⚡ 韌體訊號與協定診斷套件")
+st.caption("本機 I2C/PMBus 協定診斷與韌體學習工作台")
 
 menu = st.sidebar.radio(
     "功能導覽",
@@ -249,22 +261,22 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                     )
                     st.json(loaded_session.report, expanded=False)
     sample_specs = {
-        "Packaged decoded analyzer（18 筆）": (
+        "套件解碼分析器（18 筆）": (
             "builtin-decoded",
             I2CInputFormat.DECODED_CSV,
             "saleae_normal_pmbus_eeprom.csv",
         ),
-        "Per-byte decoded（5 筆，含 ACK/語意）": (
+        "逐位元組解碼（5 筆，含 ACK／語意）": (
             "split-decoded",
             I2CInputFormat.DECODED_CSV,
             "i2c_split_decoded.csv",
         ),
-        "Raw digital measured 100 kHz（1 筆）": (
+        "原始數位量測（100 kHz、1 筆）": (
             "raw-100khz",
             I2CInputFormat.RAW_DIGITAL,
             "i2c_raw_100khz.csv",
         ),
-        "Text trace（2 筆）": (
+        "文字追蹤記錄（2 筆）": (
             "text-trace",
             I2CInputFormat.TEXT_TRACE,
             "i2c_text_trace.log",
@@ -283,14 +295,10 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
     input_mode = st.radio(
         "輸入資料型態（必須與檔案格式一致）",
         [fmt.value for fmt in I2CInputFormat],
-        format_func=lambda value: {
-            I2CInputFormat.DECODED_CSV.value: "Decoded Analyzer CSV",
-            I2CInputFormat.TEXT_TRACE.value: "Text trace（S/Sr/P、0xNN）",
-            I2CInputFormat.RAW_DIGITAL.value: "Raw digital CSV（Time、SCL、SDA）",
-        }[value],
+        format_func=localize_input_format,
         horizontal=True,
         key="i2c_input_format",
-        help="Decoded CSV 解析交易欄位；Text trace 解析文字 token；Raw digital 才會量測 SCL/SDA 頻率。",
+        help="解碼 CSV 解析交易欄位；文字追蹤記錄解析 S/Sr/P 與 0xNN token；原始數位 CSV 才會量測 SCL/SDA 頻率。",
     )
     if st.session_state.get("i2c_sample_active"):
         active_sample_key = st.session_state.get("i2c_sample_key")
@@ -310,7 +318,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
     col1, col2 = st.columns([2, 1])
     with col1:
         uploaded_file = st.file_uploader(
-            "選擇或拖放 Saleae CSV / Trace 檔案",
+            "選擇或拖放 Saleae CSV／追蹤記錄檔案",
             type=["csv", "txt", "log"],
             max_upload_size=MAX_UPLOAD_MIB,
         )
@@ -318,7 +326,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
         if "i2c_smbus_timeout" not in st.session_state:
             st.session_state["i2c_smbus_timeout"] = DEFAULT_I2C_TIMEOUT_MS
         smbus_timeout = st.number_input(
-            "SMBus Clock Stretching Timeout (ms)",
+            "SMBus 時鐘延展逾時（ms）",
             min_value=1.0,
             max_value=100.0,
             step=1.0,
@@ -374,7 +382,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                         st.success("Session SHA-256 與 capture 相符，已套用保存的分析設定。")
                     else:
                         st.warning(
-                            "Session SHA-256 與 capture 相符，但目前輸入格式、timeout 或 Board Profile "
+                            "Session SHA-256 與 capture 相符，但目前輸入格式、逾時設定或板級設定檔 "
                             "已被修改；本次分析不宣稱是原設定的重播。"
                         )
                         loaded_session = None
@@ -398,10 +406,11 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
 
     board_profile_yaml = None
     with st.expander(
-        "Board Profile（選填；貼上 YAML 以啟用 device name / PMBus 解碼）", expanded=False
+        "板級設定檔（Board Profile；選填，貼上 YAML 以啟用裝置名稱／PMBus 解碼）",
+        expanded=False,
     ):
         profile_text = st.text_area(
-            "Board Profile YAML（留空則不套用）",
+            "板級設定檔 YAML（Board Profile；留空則不套用）",
             height=100,
             key="i2c_board_profile_yaml",
         )
@@ -421,52 +430,55 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
         kpi2.metric(
             "已證實協定異常",
             len(report.issues),
-            help="只計入有足夠證據的 anomaly；資料缺口另列在品質面板。",
+            help="只計入有足夠證據的異常；資料缺口另列在品質面板。",
         )
         timing = report.timing_stats
         if timing.frequency_sample_count:
             kpi3.metric(
                 "平均時鐘頻率",
                 f"{timing.avg_frequency_khz:.1f} kHz",
-                help="由來源提供的 bitrate 或 byte duration 推算；不是從 analyzer table 的交易時間臆測。",
+                help="由來源提供的位元率或位元組持續時間推算；不是從解碼表的交易時間臆測。",
             )
             kpi4.metric(
-                "時鐘抖動 (Jitter)",
+                "時鐘抖動（Jitter）",
                 f"{timing.frequency_jitter_pct:.1f} %",
-                help="僅對有來源 timing evidence 的頻率樣本計算。",
+                help="僅對有來源時序證據的頻率樣本計算。",
             )
         else:
             kpi3.metric(
                 "平均時鐘頻率",
                 "不可用",
-                help="目前檔案沒有 per-byte bitrate/duration；請匯出 raw digital SCL/SDA transition 才能量測。",
+                help="目前檔案沒有逐位元組位元率／持續時間；請匯出原始數位 SCL/SDA 轉態資料才能量測。",
             )
             kpi4.metric(
-                "時鐘抖動 (Jitter)",
+                "時鐘抖動（Jitter）",
                 "不可用",
                 help="沒有頻率樣本，因此不顯示 0% 這種容易誤解的數字。",
             )
         st.caption(
-            f"時鐘頻率證據 (Frequency Evidence): {timing.frequency_evidence}；有效時序樣本數: {timing.frequency_sample_count}。"
-            f"匯流排使用率證據: {timing.bus_utilization_evidence}。"
+            f"時鐘頻率證據（Frequency Evidence）：{localize_evidence(timing.frequency_evidence)}；"
+            f"有效時序樣本數：{timing.frequency_sample_count}。"
+            f"匯流排使用率證據：{localize_evidence(timing.bus_utilization_evidence)}。"
         )
         if report.data_quality_issues:
             with st.expander("⚠ 資料證據與限制（先看這裡）", expanded=True):
                 st.caption(
-                    "診斷結果只代表檔案中實際提供的欄位；缺少 timestamp、ACK 或 SCL/SDA edge 時，工具不會把未知值當成正常。"
+                    "診斷結果只代表檔案中實際提供的欄位；缺少時間戳記、ACK 或 SCL/SDA 邊緣時，工具不會把未知值當成正常。"
                 )
                 for quality in report.data_quality_issues:
-                    zh_quality_msg = localize_quality_message(quality.code, quality.message)
+                    zh_quality_msg = localize_explanatory_text(
+                        localize_quality_message(quality.code, quality.message)
+                    )
                     st.markdown(f"- **{quality.code}**（{quality.count} 筆）：{zh_quality_msg}")
         st.divider()
 
         tab_tx, tab_wave, tab_anom, tab_timing, tab_md = st.tabs(
             [
-                "📜 封包交易列表 (Transactions)",
-                "📈 數位方波與協定軌 (Waveform)",
-                "🚨 異常診斷 (Anomalies)",
-                "📊 匯流排時序與健康圖表 (Bus Timing & Health)",
-                "📝 Markdown 診斷報告 (Markdown Report)",
+                "📜 封包交易列表（Transactions）",
+                "📈 數位方波與協定軌（Waveform）",
+                "🚨 異常診斷（Anomalies）",
+                "📊 匯流排時序與健康圖表（Bus Timing & Health）",
+                "📝 Markdown 診斷報告（Markdown Report）",
             ]
         )
 
@@ -485,13 +497,13 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             )
 
         with tab_wave:
-            st.subheader("I2C 互動式數位方波與協定疊加 (SCL / SDA / Protocol Overlay)")
+            st.subheader("I2C 互動式數位方波與協定疊加（SCL／SDA／Protocol Overlay）")
             if report.transactions:
                 selected_tx = report.transactions[selected_idx]
                 if raw_capture_result is not None:
                     st.success(
-                        "這是 Logic Analyzer raw digital transition 的實測 0/1 數位波形；"
-                        "請注意：此為邏輯訊號轉態，非類比電壓或上升時間 (Rise Time) 量測。"
+                        "這是邏輯分析儀原始數位轉態的實測 0/1 波形；"
+                        "請注意：此為邏輯訊號轉態，不是類比電壓或上升時間（Rise Time）量測。"
                     )
                     raw_wave = raw_decode_to_waveform(
                         raw_capture_result,
@@ -501,14 +513,14 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                     st.plotly_chart(
                         I2CWaveformReconstructor.create_plotly_figure(
                             raw_wave,
-                            title="實測 Logic Analyzer 數位波形與協定疊加 (Measured Raw Digital I2C Waveform)",
+                            title="實測邏輯分析儀數位波形與協定疊加（Measured Raw Digital I2C Waveform）",
                         ),
                         width="stretch",
                     )
                     st.caption(
                         f"目前選取 Tx #{selected_tx.id}；來源轉態數 {raw_wave.source_transition_count} 個、"
                         f"繪製轉態數 {raw_wave.rendered_transition_count} 個。"
-                        f"{'（已執行確定性降取樣 Deterministic Downsample）' if raw_wave.downsampled else ''}"
+                        f"{'（已執行確定性降取樣）' if raw_wave.downsampled else ''}"
                     )
                 else:
                     selected_frequency_samples = frequency_samples_khz([selected_tx])
@@ -520,7 +532,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                     if measured_clock_khz is None:
                         st.info(
                             "目前顯示的是根據解碼數據重建之理想數位波形（Reconstructed），非邏輯分析儀實測電壓波形。"
-                            "此 CSV 缺少 SCL/SDA 轉態邊緣；若要觀察真實實體時序，請匯出 Raw Digital Transition CSV。"
+                            "此 CSV 缺少 SCL/SDA 轉態邊緣；若要觀察真實實體時序，請匯出原始數位轉態 CSV。"
                         )
                     else:
                         st.caption(
@@ -548,13 +560,13 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                         )
                         fig = reconstructor.create_plotly_figure(
                             wave_data,
-                            title=f"理想重建 Tx #{selected_tx.id} 數位波形 (Reconstructed Waveform): {address_text} {direction_text}",
+                            title=f"理想重建 Tx #{selected_tx.id} 數位波形（Reconstructed Waveform）：{address_text} {direction_text}",
                         )
                         st.plotly_chart(fig, width="stretch")
                     except ResourceLimitError as exc:
                         st.warning(
                             f"這筆交易太大，已完成分析但略過波形繪圖：{exc}。"
-                            "請改選較短的 transaction，或先分段匯出 capture。"
+                            "請改選較短的交易，或先分段匯出 capture。"
                         )
                     except (TypeError, ValueError) as exc:
                         st.warning(f"此交易缺少可重建數位波形所需的證據：{exc}")
@@ -573,28 +585,34 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                 )
                 for idx, issue in enumerate(report.issues[:50], 1):
                     addr_str = (
-                        f"0x{issue.address_7bit:02X}" if issue.address_7bit is not None else "N/A"
+                        f"0x{issue.address_7bit:02X}" if issue.address_7bit is not None else "未知"
                     )
+                    issue_title = localize_issue_title(issue.code, issue.title)
+                    issue_description = localize_issue_description(issue.description)
+                    issue_root_cause = localize_issue_root_cause(issue.root_cause_analysis)
                     with st.expander(
-                        f"[{issue.severity.value}] #{idx}: {issue.code} - {issue.title} (Addr: {addr_str})",
+                        f"[{localize_severity(issue.severity)}] #{idx}：{issue.code} - {issue_title}（位址：{addr_str}）",
                         expanded=(idx == 1),
                     ):
-                        st.markdown(f"**現象描述**: {issue.description}")
+                        st.markdown(f"**現象描述**：{issue_description}")
                         st.markdown(
-                            f"**可能原因（Hypotheses；不是已證明的根因）**:\n{issue.root_cause_analysis}"
+                            f"**可能原因（Hypotheses；不是已證明的根因）**：\n{issue_root_cause}"
                         )
-                        st.markdown("**排查行動清單**:")
+                        st.markdown("**排查行動清單**：")
                         for adv in issue.actionable_advice:
-                            st.markdown(f"- ✔ {adv}")
+                            st.markdown(f"- ✔ {localize_issue_advice(adv)}")
 
         with tab_timing:
-            st.subheader("匯流排交易／協定健康啟發式評等 (Bus Health Heuristic)")
+            st.subheader("匯流排交易／協定健康啟發式評等（Bus Health Heuristic）")
             st.caption(
-                "健康評等僅根據已知 ACK/NACK 與時序計算；主機讀取最後 1 Byte 的 NACK 為標準正常結束條件。"
-                "缺少 ACK 數據時顯示 N/A，嚴格避免把未知狀態誤導為通過。"
+                "健康評等僅根據已知 ACK/NACK 與時序計算；主機讀取最後 1 個位元組的 NACK 為標準正常結束條件。"
+                "缺少 ACK 資料時顯示 N/A，嚴格避免把未知狀態誤導為通過。"
             )
             health_df = I2CTimingCharts.get_device_health_summary(report)
             display_health_df = health_df.copy()
+            display_health_df["Device Name"] = display_health_df["Device Name"].map(
+                lambda name: localize_device_name(str(name))
+            )
             display_health_df["Category"] = display_health_df["Category"].map(
                 lambda c: localize_category(str(c))
             )
@@ -603,15 +621,15 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             )
             display_health_df = display_health_df.rename(
                 columns={
-                    "Slave Address": "從裝置 7-bit 位址 (Slave Address)",
-                    "Device Name": "識別晶片型號 (Device Profile)",
-                    "Category": "裝置類別 (Category)",
+                    "Slave Address": "從裝置 7-bit 位址（Slave Address）",
+                    "Device Name": "識別晶片型號（Device Profile）",
+                    "Category": "裝置類別（Category）",
                     "Total Transactions": "總傳輸次數",
                     "NACK Count": "NACK 失敗數",
                     "Unknown ACK Count": "未知 ACK 數",
-                    "Success Rate": "通訊成功率 (Success Rate)",
+                    "Success Rate": "通訊成功率（Success Rate）",
                     "Clock Stretches": "時鐘延展次數",
-                    "Health Grade": "健康等級 (Health Grade)",
+                    "Health Grade": "健康等級（Health Grade）",
                 }
             )
             st.table(display_health_df)
@@ -629,13 +647,13 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
             tx_data = [
                 {
                     "交易 ID": t.id,
-                    "時間 Time (s)": f"{t.start_time:.6f}" if t.timestamp_available else "n/a",
-                    "7-bit 位址": f"0x{t.address_7bit:02X}" if t.address_available else "n/a",
-                    "傳輸方向 (R/W)": localize_direction(
+                    "時間（s）": f"{t.start_time:.6f}" if t.timestamp_available else "不可用",
+                    "7-bit 位址": f"0x{t.address_7bit:02X}" if t.address_available else "不可用",
+                    "傳輸方向（R/W）": localize_direction(
                         t.direction if t.direction_available else None
                     ),
-                    "位址應答 (Address ACK)": t.address_ack.value,
-                    "整體狀態 (Overall Status)": localize_status(
+                    "位址應答（Address ACK）": localize_ack(t.address_ack),
+                    "整體狀態（Overall Status）": localize_status(
                         get_transaction_status(
                             t,
                             next_transaction=(
@@ -645,17 +663,17 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
                             ),
                         )
                     ),
-                    "多工拓撲 (Topology)": t.mux_topology or "-",
-                    "資料長度 (Bytes)": len(t.data_bytes),
-                    "原始資料 (Hex Dump)": t.hex_dump,
-                    "解碼語意 (Semantic Meaning)": localize_semantic_summary(t.semantic_summary),
+                    "多工拓撲（Topology）": localize_explanatory_text(t.mux_topology or "-"),
+                    "資料長度（位元組）": len(t.data_bytes),
+                    "原始資料（Hex Dump）": t.hex_dump,
+                    "解碼語意（Semantic Meaning）": localize_semantic_summary(t.semantic_summary),
                 }
                 for index, t in enumerate(report.transactions)
             ]
             st.dataframe(pd.DataFrame(tx_data), width="stretch")
 
         with tab_md:
-            board_profile_metadata = "none"
+            board_profile_metadata = "未套用（none）"
             if board_profile_yaml:
                 profile_for_metadata = load_board_profile(board_profile_yaml)
                 board_profile_metadata = (
@@ -699,7 +717,7 @@ if menu == "📊 I2C / PMBus 診斷與波形檢視":
 elif menu == "🎨 I2C 封包模擬器與驅動產生":
     st.header("I2C 封包自訂建構、理想波形生成與多平台 C 驅動產出")
     st.caption(
-        "這一頁由同一份已驗證的 transfer spec 產生協定示意與程式碼模板；"
+        "這一頁由同一份已驗證的傳輸規格（transfer spec）產生協定示意與程式碼模板；"
         "它不會連線或執行硬體命令，也不是硬體量測。"
     )
     render_guide_expander(
@@ -715,9 +733,10 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
     preset_col, apply_col = st.columns([3, 1])
     with preset_col:
         selected_preset_name = st.selectbox(
-            "教學 Preset",
+            "教學預設組（Preset）",
             list(I2C_BUILDER_PRESETS),
-            help="Preset 只填入可重現的範例值；仍須以目標裝置 datasheet 核對。",
+            format_func=localize_preset,
+            help="預設組只填入可重現的範例值；仍須以目標裝置 datasheet 核對。",
         )
     with apply_col:
         if st.button("套用 Preset", key="i2c_builder_apply_preset"):
@@ -727,30 +746,30 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
                 st.session_state[state_key] = state_value
 
     operation_labels = {
-        I2CTransferOperation.REGISTER_WRITE.value: "Register Write（暫存器寫入）",
+        I2CTransferOperation.REGISTER_WRITE.value: "暫存器寫入（Register Write）",
         I2CTransferOperation.COMBINED_REGISTER_READ.value: (
-            "Combined Register Read（Repeated START）"
+            "複合暫存器讀取（Combined Register Read；Repeated START）"
         ),
-        I2CTransferOperation.DIRECT_WRITE.value: "Direct Write（無 register phase）",
-        I2CTransferOperation.DIRECT_READ.value: "Direct Read（無 register phase）",
+        I2CTransferOperation.DIRECT_WRITE.value: "直接寫入（Direct Write；無暫存器階段）",
+        I2CTransferOperation.DIRECT_READ.value: "直接讀取（Direct Read；無暫存器階段）",
     }
     b_col1, b_col2, b_col3 = st.columns(3)
     with b_col1:
         builder_operation_value = st.selectbox(
-            "操作類型 (Operation)",
+            "操作類型（Operation）",
             list(operation_labels),
             format_func=lambda value: operation_labels[value],
             key="i2c_builder_operation",
         )
     with b_col2:
         builder_addr_str = st.text_input(
-            "從裝置 7-bit 位址 (Slave 7-bit Address)",
+            "從裝置 7-bit 位址（Slave 7-bit Address）",
             key="i2c_builder_address",
             help="合法範圍 0x08～0x77。",
         )
     with b_col3:
         builder_bus_num = st.number_input(
-            "I2C 匯流排編號 (I2C Bus Number)",
+            "I2C 匯流排編號（I2C Bus Number）",
             min_value=0,
             max_value=0xFFFF,
             step=1,
@@ -773,14 +792,14 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         reg_col, width_col, endian_col = st.columns(3)
         with reg_col:
             builder_reg_str = st.text_input(
-                "暫存器位移 (Register Offset)",
+                "暫存器位移（Register Offset）",
                 key="i2c_builder_register",
                 help="例如 0x10 或 0x1234。",
             )
         with width_col:
             builder_register_width = int(
                 st.selectbox(
-                    "暫存器寬度 Register Width (bits)",
+                    "暫存器寬度（Register Width，bits）",
                     [8, 16],
                     key="i2c_builder_register_width",
                 )
@@ -788,15 +807,17 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         with endian_col:
             if builder_register_width == 16:
                 builder_endianness = st.selectbox(
-                    "暫存器位元組順序 Register Byte Order",
+                    "暫存器位元組順序（Register Byte Order）",
                     [Endianness.BIG.value, Endianness.LITTLE.value],
                     format_func=lambda value: (
-                        "Big-endian / MSB first" if value == "big" else "Little-endian / LSB first"
+                        "大端序（Big-endian；MSB first）"
+                        if value == "big"
+                        else "小端序（Little-endian；LSB first）"
                     ),
                     key="i2c_builder_endianness",
                 )
             else:
-                st.caption("8-bit register 只有一個 byte，不受 byte order 影響。")
+                st.caption("8-bit 暫存器只有一個位元組，不受 byte order 影響。")
 
     builder_data_str = ""
     builder_read_length: int | None = None
@@ -806,7 +827,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         with read_col:
             builder_read_length = int(
                 st.number_input(
-                    "讀取長度 Read Length (bytes)",
+                    "讀取長度（Read Length；位元組）",
                     min_value=1,
                     max_value=255,
                     step=1,
@@ -815,10 +836,10 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
             )
         with expected_col:
             builder_expected_read = st.text_input(
-                "預期讀回資料 Expected Read Bytes（選填、僅假設）",
+                "預期讀回資料（Expected Read Bytes；選填、僅假設）",
                 key="i2c_builder_expected_read_data",
                 max_chars=MAX_PACKET_HEX_CHARS,
-                help="若填寫，byte 數必須等於 Read Length；只標在波形上，不會送到裝置。",
+                help="若填寫，位元組數必須等於 Read Length；只標在波形上，不會送到裝置。",
             )
     else:
         write_data_limit = max_write_data_bytes(
@@ -826,19 +847,19 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
             register_width=builder_register_width,
         )
         builder_data_str = st.text_input(
-            "寫入資料位元組 Write Data Bytes (Hex)",
+            "寫入資料位元組（Write Data Bytes；Hex）",
             key="i2c_builder_write_data",
             max_chars=MAX_PACKET_HEX_CHARS,
             help=(
-                f"此 operation/width 最多 {write_data_limit} data bytes（總 payload parser 上限 "
-                f"{MAX_BUILDER_DATA_BYTES}；waveform 點數上限 {MAX_BUILDER_WAVEFORM_POINTS}）。"
+                    f"此操作／寬度最多 {write_data_limit} 個資料位元組（總 Payload 解析器上限 "
+                f"{MAX_BUILDER_DATA_BYTES}；波形點數上限 {MAX_BUILDER_WAVEFORM_POINTS}）。"
             ),
         )
 
     clock_col, timeout_col = st.columns(2)
     with clock_col:
         builder_clock_khz = st.number_input(
-            "理想時鐘頻率 Ideal Clock (kHz)",
+            "理想時鐘頻率（Ideal Clock；kHz）",
             min_value=1.0,
             max_value=1000.0,
             step=10.0,
@@ -846,7 +867,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         )
     with timeout_col:
         builder_timeout_ms = st.number_input(
-            "模板逾時門檻 Template Timeout (ms)",
+            "模板逾時門檻（Template Timeout；ms）",
             min_value=0.001,
             max_value=60_000.0,
             step=1.0,
@@ -855,13 +876,13 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         )
 
     try:
-        b_addr = parse_hex_integer(builder_addr_str, label="Slave 7-bit Address")
+        b_addr = parse_hex_integer(builder_addr_str, label="從裝置 7-bit 位址（Slave 7-bit Address）")
         b_reg = (
-            parse_hex_integer(builder_reg_str, label="Register Offset") if is_register_op else None
+            parse_hex_integer(builder_reg_str, label="暫存器位移（Register Offset）") if is_register_op else None
         )
         b_data = parse_hex_bytes(
             builder_data_str,
-            label="Write Data Bytes",
+            label="寫入資料位元組（Write Data Bytes）",
             required=not is_read_op,
             max_bytes=(
                 max_write_data_bytes(
@@ -874,7 +895,7 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         )
         expected_read_data = parse_hex_bytes(
             builder_expected_read,
-            label="Expected Read Bytes",
+            label="預期讀回資料（Expected Read Bytes）",
             max_bytes=255,
         )
         spec = I2CTransferSpec(
@@ -893,34 +914,37 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
             max_waveform_points=MAX_BUILDER_WAVEFORM_POINTS,
         )
 
-        st.subheader("標準交易預覽 (Canonical Transaction Preview)")
+        st.subheader("標準交易預覽（Canonical Transaction Preview）")
         preview_rows = []
         for index, segment in enumerate(spec.segments, 1):
             payload_labels = [
-                byte.value if hasattr(byte, "value") else f"0x{byte:02X}" for byte in segment.bytes
+                ("未知值" if str(getattr(byte, "value", "")).lower() == "unknown" else byte.value)
+                if hasattr(byte, "value")
+                else f"0x{byte:02X}"
+                for byte in segment.bytes
             ]
             if segment.is_read and spec.expected_read_data:
                 payload_labels = [
-                    f"Expected 0x{byte:02X}（assumed）" for byte in spec.expected_read_data
+                    f"預期 0x{byte:02X}（假設）" for byte in spec.expected_read_data
                 ]
             preview_rows.append(
                 {
-                    "段落 (Segment)": index,
-                    "起始 (Start)": "Repeated START (Sr)" if segment.repeated_start else "START",
-                    "方向 (Direction)": segment.direction.value.upper(),
-                    "7-bit 位址 (Address)": f"0x{spec.address_7bit:02X}",
-                    "線路位址 (Wire Byte)": (
+                    "段落（Segment）": index,
+                    "起始（Start）": "重複 START（Sr）" if segment.repeated_start else "START",
+                    "方向（Direction）": localize_direction(segment.direction),
+                    "7-bit 位址（Address）": f"0x{spec.address_7bit:02X}",
+                    "線路位址（Wire Byte）": (
                         f"0x{((spec.address_7bit << 1) | int(segment.is_read)):02X}"
                     ),
-                    "負載資料 (Payload)": " ".join(payload_labels) or "(none)",
+                    "負載資料（Payload）": " ".join(payload_labels) or "無（none）",
                     "最終 ACK Slot": (
-                        "主機 NACK (Controller NACK; 正常讀取結束)"
+                        "主機 NACK（Controller NACK；正常讀取結束）"
                         if segment.final_controller_nack
-                        else "ACK (理想應答假設)"
+                        else "ACK（理想應答假設）"
                     ),
-                    "結束 (End)": "STOP 結束條件"
+                    "結束（End）": "STOP 結束條件"
                     if index == len(spec.segments)
-                    else "保持連線至 Repeated START (Sr)",
+                    else "保持連線至 Repeated START（Sr）",
                 }
             )
         st.dataframe(pd.DataFrame(preview_rows), width="stretch", hide_index=True)
@@ -940,30 +964,30 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         if is_read_op:
             if spec.expected_read_data:
                 st.caption(
-                    "Expected bytes 只以 assumed 標籤顯示，不是裝置回傳值，也不會寫入生成程式碼。"
+                    "預期位元組只以假設（assumed）標籤顯示，不是裝置回傳值，也不會寫入生成程式碼。"
                 )
             else:
                 st.caption(
-                    "Read payload 顯示 Unknown；長度已知，但回傳值必須由硬體或 capture 提供。"
+                    "讀取 Payload 顯示 Unknown；長度已知，但回傳值必須由硬體或 capture 提供。"
                 )
 
-        st.subheader("多平台程式碼模板")
+        st.subheader("多平台程式碼模板（Driver Templates）")
         st.info(
             "GUI 只產生與下載模板，不會執行任何命令。使用前需補齊 include、handle、"
-            "error handling、ownership 與目標平台初始化。"
+            "錯誤處理、資源歸屬（ownership）與目標平台初始化。"
         )
         if spec.operation in {
             I2CTransferOperation.REGISTER_WRITE,
             I2CTransferOperation.DIRECT_WRITE,
         }:
             st.warning(
-                "Write 可能改變 PMBus 電源設定、GPIO、sensor configuration 或 EEPROM。"
-                "複製後執行前，必須再次確認 bus、7-bit address、register、byte order、data、"
-                "device power/reset 狀態與 kernel driver ownership。"
+                "寫入操作可能改變 PMBus 電源設定、GPIO、感測器設定（sensor configuration）或 EEPROM。"
+                "複製後執行前，必須再次確認匯流排、7-bit address、register、byte order、data、"
+                "裝置電源／重設（power/reset）狀態與核心驅動程式資源歸屬（kernel driver ownership）。"
             )
         snippets = I2CDriverCodeGenerator.generate_from_spec(spec)
         for plat, code_txt in snippets.items():
-            with st.expander(f"💻 {plat}", expanded=False):
+            with st.expander(f"💻 {localize_platform(plat)}", expanded=False):
                 st.code(
                     code_txt,
                     language=("bash" if "CLI" in plat else ("cpp" if "Arduino" in plat else "c")),
@@ -972,12 +996,12 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         hash_col, download_col = st.columns([3, 1])
         with hash_col:
             st.code(
-                f"Spec SHA-256:   {spec_sha256}\nBundle SHA-256: {bundle_sha256}",
+                f"規格 Spec SHA-256：{spec_sha256}\n套件 Bundle SHA-256：{bundle_sha256}",
                 language="text",
             )
         with download_col:
             st.download_button(
-                "下載 spec + templates (.zip)",
+                "下載傳輸規格與程式碼模板（.zip）",
                 bundle,
                 file_name="i2c_transfer_bundle.zip",
                 mime="application/zip",
