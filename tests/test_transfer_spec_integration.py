@@ -28,7 +28,7 @@ def test_register_write_golden_segments_and_all_platforms() -> None:
         "OpenBMC / Linux CLI (i2c-tools)"
     ]
     assert "-y" not in snippets["OpenBMC / Linux CLI (i2c-tools)"]
-    assert "TEMPLATE" in snippets["STM32 HAL C Driver"]
+    assert "程式碼模板" in snippets["STM32 HAL C Driver"]
     assert "Wire.write(0xAA);" in snippets["Arduino / Wire.h"]
 
 
@@ -203,7 +203,7 @@ def test_linux_direct_read_checks_slave_selection_and_arduino_short_read() -> No
     linux = snippets["Linux Userspace (i2c-dev)"]
     arduino = snippets["Arduino / Wire.h"]
     assert 'if (ioctl(file, I2C_SLAVE, 0x48) < 0)' in linux
-    assert "Handle short read" in arduino
+    assert "讀取長度不足" in arduino
 
 
 def test_stm32_fractional_timeout_rounds_up_to_integer_milliseconds() -> None:

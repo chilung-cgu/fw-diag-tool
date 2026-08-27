@@ -154,6 +154,11 @@ def test_gui_builtin_sample_runs_from_package_resource():
     assert not at.exception
     assert any(info.value == "已載入內建範例 CSV！" for info in at.info)
     assert any(metric.label == "總傳輸次數" and metric.value == "18" for metric in at.metric)
+    assert any(
+        "I2C / SMBus / PMBus 協定診斷報告（Protocol Diagnostic Report）" in item.value
+        for item in at.markdown
+    )
+    assert not any("No byte duration or bitrate evidence" in item.value for item in at.markdown)
 
 
 def test_gui_builtin_sample_survives_configuration_rerun():
@@ -181,12 +186,12 @@ def test_gui_builtin_sample_is_cleared_when_input_format_changes():
 def test_gui_teaching_selector_routes_text_and_raw_samples_to_declared_parsers():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
 
-    at.selectbox[0].set_value("Text trace（2 筆）").run()
+    at.selectbox[0].set_value("文字追蹤記錄（2 筆）").run()
     at.button[0].click().run()
     assert not at.exception
     assert any(metric.label == "總傳輸次數" and metric.value == "2" for metric in at.metric)
 
-    at.selectbox[0].set_value("Raw digital measured 100 kHz（1 筆）").run()
+    at.selectbox[0].set_value("原始數位量測（100 kHz、1 筆）").run()
     at.button[0].click().run()
     assert not at.exception
     assert any(metric.label == "總傳輸次數" and metric.value == "1" for metric in at.metric)
@@ -344,7 +349,7 @@ def test_gui_session_replacement_resets_missing_saved_settings():
     assert not at.error
     assert at.radio[0].value == "decoded_csv"
     assert at.number_input[0].value == 25.0
-    assert any("- **Board profile**: `none`" in item.value for item in at.markdown)
+    assert any("- **板級設定檔（Board profile）**: `未套用（none）`" in item.value for item in at.markdown)
 
 
 def test_gui_invalid_session_settings_clear_previous_state():
@@ -443,8 +448,8 @@ def test_gui_packet_builder_supports_direct_read_without_register_field():
     at.button[0].click().run()
 
     assert not at.exception
-    assert not any(field.label == "Register Offset" for field in at.text_input)
-    assert any("Direct read: no register phase" in block.value for block in at.code)
+    assert not any(field.label == "暫存器位移（Register Offset）" for field in at.text_input)
+    assert any("直接讀取：不會送出暫存器階段。" in block.value for block in at.code)
     assert any("i2ctransfer 1 r2@0x40" in block.value for block in at.code)
 
 
@@ -458,7 +463,7 @@ def test_gui_packet_builder_uses_little_endian_register_bytes_and_safe_cli():
     assert not at.exception
     assert any("0x34 0x12 0xAA" in block for block in cli_blocks)
     assert all("i2ctransfer -y" not in block for block in cli_blocks)
-    assert any("Write 可能改變" in warning.value for warning in at.warning)
+    assert any("寫入操作可能改變" in warning.value for warning in at.warning)
 
 
 def test_gui_packet_builder_validates_before_rendering_or_codegen():

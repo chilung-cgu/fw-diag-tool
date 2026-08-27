@@ -56,7 +56,7 @@ def test_cli_i2c_text_trace_requires_explicit_format(tmp_path: Path):
 
     explicit = runner.invoke(app, ["i2c", "analyze", str(trace), "--text-trace"])
     assert explicit.exit_code == 0
-    assert "grouped into 1 logical transaction" in explicit.output
+    assert "歸納為 1 筆邏輯交易" in explicit.output
 
     ambiguous = runner.invoke(app, ["i2c", "analyze", str(trace)])
     assert ambiguous.exit_code == 2

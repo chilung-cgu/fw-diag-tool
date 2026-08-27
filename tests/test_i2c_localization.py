@@ -8,6 +8,7 @@ from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.localization import (
     localize_category,
     localize_direction,
+    localize_explanatory_text,
     localize_health_grade,
     localize_quality_message,
     localize_semantic_summary,
@@ -37,11 +38,11 @@ def test_ch01_contains_step_by_step_golden_guide() -> None:
 def test_ch01_contains_five_tabs_detailed_teaching() -> None:
     ch01 = (DOCS / "ch01_i2c_pmbus.md").read_text(encoding="utf-8")
     assert "## 4. 五大功能分頁（Tabs）：細項使用與輸出判讀教學" in ch01
-    assert "### 4.1 `📜 封包交易列表 (Transactions)`" in ch01
-    assert "### 4.2 `📈 數位方波與協定軌 (Waveform)`" in ch01
-    assert "### 4.3 `🚨 異常診斷 (Anomalies)`" in ch01
-    assert "### 4.4 `📊 匯流排時序與健康圖表 (Bus Timing & Health)`" in ch01
-    assert "### 4.5 `📝 Markdown 診斷報告 (Markdown Report)`" in ch01
+    assert "### 4.1 `📜 封包交易列表（Transactions）`" in ch01
+    assert "### 4.2 `📈 數位方波與協定軌（Waveform）`" in ch01
+    assert "### 4.3 `🚨 異常診斷（Anomalies）`" in ch01
+    assert "### 4.4 `📊 匯流排時序與健康圖表（Bus Timing & Health）`" in ch01
+    assert "### 4.5 `📝 Markdown 診斷報告（Markdown Report）`" in ch01
 
 
 def test_i2c_builder_presets_and_operations_are_intact() -> None:
@@ -55,7 +56,7 @@ def test_i2c_builder_presets_and_operations_are_intact() -> None:
 def test_localization_helpers_preserve_tokens_and_provide_zh_tw() -> None:
     assert "ACK（正常應答）" == localize_status(TransactionStatus.ACK)
     assert "ACK UNKNOWN（ACK 證據未知/未提供）" == localize_status(TransactionStatus.ACK_UNKNOWN)
-    assert "Standard-mode（標準模式 100 kHz）" == localize_speed_mode(I2CSpeedMode.STANDARD_100K)
+    assert "標準模式（Standard-mode，100 kHz）" == localize_speed_mode(I2CSpeedMode.STANDARD_100K)
     assert "一般 I2C 週邊裝置" == localize_category("General I2C Peripheral")
     assert "A（優良：通訊完全正常）" == localize_health_grade("A (Excellent)")
     assert "WRITE（寫入）" == localize_direction(I2CDirection.WRITE)
@@ -71,15 +72,54 @@ def test_semantic_summary_localization() -> None:
         "I2C MUX 0x70 Channel Switch -> [2] (aggregate ACK; per-byte attribution unavailable)"
     )
     assert (
-        "I2C 多工器 0x70 通道切換 -> [2] (Aggregate ACK；未提供單 Byte 歸屬)"
+        "I2C 多工器 0x70 通道切換 -> [2]（彙總 ACK；未提供逐位元組歸屬）"
         == localize_semantic_summary(mux_summary)
     )
 
 
 def test_quality_message_localization() -> None:
     zh_msg = localize_quality_message("I2C_ACK_AGGREGATE_UNATTRIBUTABLE")
-    assert "Aggregate" in zh_msg
+    assert "彙總格式" in zh_msg
     assert "保留語意解碼" in zh_msg
+
+
+def test_explanatory_localization_does_not_corrupt_unexpected_tokens() -> None:
+    text = "Unexpected data NACK; payload was not fully accepted; semantic decoding withheld"
+
+    localized = localize_explanatory_text(text)
+
+    assert "un預期" not in localized
+    assert localized == "資料 NACK；Payload 未完整接受；保留語意解碼"
+
+
+def test_sensor_and_pmbus_semantic_summaries_are_chinese_first() -> None:
+    assert localize_semantic_summary("Temperature data unavailable") == "溫度資料不可用"
+    assert (
+        localize_semantic_summary(
+            "Sensor response contains 3 byte(s); expected one 16-bit register"
+        )
+        == "感測器回應包含 3 個位元組；預期一個 16 位元暫存器"
+    )
+    assert (
+        localize_semantic_summary("BUS_VOLTAGE = 12.500 V (INA226) / 5.000 V (INA219)")
+        == "匯流排電壓（BUS_VOLTAGE） = 12.500 V (INA226) / 5.000 V (INA219)"
+    )
+    assert (
+        localize_semantic_summary(
+            "STATUS_BYTE=0x22 -> VOUT_OV (Output Over-Voltage Fault), "
+            "CML (Comm/Memory/Logic Error)"
+        )
+        == "STATUS_BYTE（狀態位元組）=0x22 -> VOUT_OV（輸出過電壓故障）, "
+        "CML（通訊／記憶體／邏輯錯誤）"
+    )
+    assert (
+        localize_semantic_summary("WRITE_PROTECT = 0x80 (Entire memory protected)")
+        == "WRITE_PROTECT（寫入保護） = 0x80（整個記憶體已保護）"
+    )
+    assert (
+        localize_semantic_summary("MFR_MODEL: block count mismatch (declared 3, received 2)")
+        == "MFR_MODEL：Block Read 的 Byte Count 不一致（宣告 3，收到 2）"
+    )
 
 
 def test_markdown_report_localization_contains_mandated_sections() -> None:
@@ -88,13 +128,26 @@ def test_markdown_report_localization_contains_mandated_sections() -> None:
     report = engine.analyze_csv_file(str(csv_path))
     md = I2CReporter.generate_markdown(report)
 
-    assert "# I2C / SMBus / PMBus Protocol Diagnostic Report (協定診斷報告)" in md
-    assert "> **總結摘要 (Summary)**:" in md
-    assert "## 1. 匯流排時序與交易健康啟發評等 (Bus Timing & Health)" in md
-    assert "## 2. 偵測之從裝置分佈表 (Detected Peripheral Device Map)" in md
-    assert "## 3. 封包交易序列與解碼明細 (Transaction Sequence & Decoded Telemetry)" in md
-    assert "## ⚠ 資料證據與品質限制 (Data Quality Limitations)" in md
-    assert "## 4. 異常診斷與排查行動建議 (Diagnostic Issues & Debugging Advice)" in md
+    assert "# I2C / SMBus / PMBus 協定診斷報告（Protocol Diagnostic Report）" in md
+    assert "> **總結摘要（Summary）**：" in md
+    assert "## 1. 匯流排時序與交易健康啟發評等（Bus Timing & Health）" in md
+    assert "## 2. 偵測到的從裝置分佈表（Detected Peripheral Device Map）" in md
+    assert "## 3. 封包交易序列與解碼明細（Transaction Sequence & Decoded Telemetry）" in md
+    assert "## ⚠ 資料證據與品質限制（Data Quality Limitations）" in md
+    assert "## 4. 異常診斷與排查行動建議（Diagnostic Issues & Debugging Advice）" in md
+
+
+def test_markdown_report_translates_anomaly_prose_but_keeps_issue_tokens() -> None:
+    engine = I2CDiagnosticEngine(smbus_timeout_ms=25.0)
+    csv_path = Path(__file__).parents[1] / "tests" / "data" / "saleae_anomaly_addr_nack.csv"
+    report = engine.analyze_csv_file(str(csv_path))
+    md = I2CReporter.generate_markdown(report)
+
+    assert "I2C_ADDR_NACK" in md
+    assert "7-bit 位址 0x3A" in md
+    assert "位址 NACK" in md
+    assert "did NOT acknowledge" not in md
+    assert "No byte duration or bitrate evidence" not in md
 
 
 def test_generated_driver_templates_contain_zh_tw_comments() -> None:

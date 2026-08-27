@@ -38,8 +38,8 @@ def test_waveform_reconstruction_and_plotly():
     assert len(fig.data) >= 3
     legend_names = {trace.name for trace in fig.data if trace.showlegend}
     assert {"START", "ADDRESS", "ACK", "DATA", "STOP"} <= legend_names
-    assert tuple(fig.layout.yaxis2.ticktext) == ("LOW (0)", "HIGH (1)")
-    assert tuple(fig.layout.yaxis3.ticktext) == ("LOW (0)", "HIGH (1)")
+    assert tuple(fig.layout.yaxis2.ticktext) == ("低電位 LOW (0)", "高電位 HIGH (1)")
+    assert tuple(fig.layout.yaxis3.ticktext) == ("低電位 LOW (0)", "高電位 HIGH (1)")
 
 
 def test_decoded_waveform_rejects_expansion_before_allocating_over_limit():

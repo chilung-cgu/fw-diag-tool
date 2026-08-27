@@ -224,7 +224,7 @@ def test_normal_saleae_csv_analysis():
 
     # Check terminal rendering and markdown generation work without error
     md = I2CReporter.generate_markdown(report)
-    assert "# I2C / SMBus / PMBus Protocol Diagnostic Report" in md
+    assert "# I2C / SMBus / PMBus 協定診斷報告（Protocol Diagnostic Report）" in md
     assert "READ_VIN" in md
 
 
