@@ -6,17 +6,17 @@
 
 | GUI 欄位 | 範例 | 契約 |
 |---|---|---|
-| `Slave 7-bit Address` | `0x50` | 7-bit address；generator 接受 `0x08`～`0x77`，不是 8-bit wire address `0xA0`。 |
-| `Operation`（新版 GUI） | `register_write`／`combined_register_read`／`direct_write`／`direct_read` | 明確選擇 canonical operation，不再由 R/W 與 register 是否留空推測。 |
-| `Register Offset` | `0x10`／`0x1234` | 8-bit 或 16-bit register/command offset；值域依 register width。 |
-| `Write Data Bytes (Hex)` | `0xAA 0xBB` | 每個 token 是 0～255 的一個 byte；只在 Write 使用。GUI 會依 operation/width 限制 data bytes：Direct Write 最多 3702、8-bit register 最多 3701、16-bit register 最多 3700（總理想波形上限 100,000 points）；parser 的絕對上限仍是 4096 bytes。 |
-| `Read Length (bytes)` | `2` | 1～255 bytes；Read template 只配置 buffer，資料仍須由 hardware/capture 提供。 |
-| `I2C Bus Number` | `1` | Linux `/dev/i2c-1` 與 `i2ctransfer 1` 的 bus number；不是 address。模板刻意不自動加 `-y`。 |
-| `Register Width (bits)` | `8`／`16` | 決定 register offset 在 bus 上佔 1 或 2 bytes；不改變 payload data endian。 |
-| `Register Byte Order`（16-bit only） | `Big-endian / MSB first`／`Little-endian / LSB first` | 決定 register offset 兩個 byte 在 wire 上的順序；payload data bytes 不重排。 |
-| `Expected Read Bytes（選填）` | `0x12 0x34` | 只標示 assumed waveform；byte 數必須等於 Read Length，不會進入生成程式碼或送出裝置。 |
-| `Ideal Clock (kHz)` | `100` | 只影響 ideal waveform 時間軸；不是實測頻率。 |
-| `Template Timeout (ms)` | `25`／`100` | 目前只注入 STM32 HAL API 的 timeout 參數（向上取整為整數 ms）；Linux `i2c-dev`、i2c-tools 與 Arduino 模板需由呼叫端自行加入 timeout／取消策略；它不是 SMBus tTIMEOUT 量測或 datasheet 值。 |
+| `從裝置 7-bit 位址（Slave 7-bit Address）` | `0x50` | 7-bit address；generator 接受 `0x08`～`0x77`，不是 8-bit wire address `0xA0`。 |
+| `操作類型（Operation）`（新版 GUI） | `register_write`／`combined_register_read`／`direct_write`／`direct_read` | 明確選擇 canonical operation，不再由 R/W 與 register 是否留空推測。 |
+| `暫存器位移（Register Offset）` | `0x10`／`0x1234` | 8-bit 或 16-bit register/command offset；值域依 register width。 |
+| `寫入資料位元組（Write Data Bytes，Hex）` | `0xAA 0xBB` | 每個 token 是 0～255 的一個 byte；只在 Write 使用。GUI 會依 operation/width 限制 data bytes：Direct Write 最多 3702、8-bit register 最多 3701、16-bit register 最多 3700（總理想波形上限 100,000 points）；parser 的絕對上限仍是 4096 bytes。 |
+| `讀取長度（Read Length，bytes）` | `2` | 1～255 bytes；Read template 只配置 buffer，資料仍須由 hardware/capture 提供。 |
+| `I2C 匯流排編號（I2C Bus Number）` | `1` | Linux `/dev/i2c-1` 與 `i2ctransfer 1` 的 bus number；不是 address。模板刻意不自動加 `-y`。 |
+| `暫存器寬度（Register Width，bits）` | `8`／`16` | 決定 register offset 在 bus 上佔 1 或 2 bytes；不改變 payload data endian。 |
+| `暫存器位元組順序（Register Byte Order）`（僅 16-bit） | `Big-endian / MSB first`／`Little-endian / LSB first` | 決定 register offset 兩個 byte 在 wire 上的順序；payload data bytes 不重排。 |
+| `預期讀回資料（Expected Read Bytes；選填）` | `0x12 0x34` | 只標示 assumed waveform；byte 數必須等於 Read Length，不會進入生成程式碼或送出裝置。 |
+| `理想時鐘頻率（Ideal Clock，kHz）` | `100` | 只影響 ideal waveform 時間軸；不是實測頻率。 |
+| `模板逾時門檻（Template Timeout，ms）` | `25`／`100` | 目前只注入 STM32 HAL API 的 timeout 參數（向上取整為整數 ms）；Linux `i2c-dev`、i2c-tools 與 Arduino 模板需由呼叫端自行加入 timeout／取消策略；它不是 SMBus tTIMEOUT 量測或 datasheet 值。 |
 
 ## 2. 四個 canonical operations
 
@@ -155,7 +155,7 @@ GUI 可下載 deterministic ZIP：`transfer_spec.json`、四平台 snippets、`S
 
 ## 7. 硬體安全與 review gate
 
-生成程式碼不代表可以立即在板上執行。尤其 Write 可能改變 PMBus 電源設定、GPIO output、sensor configuration 或 EEPROM 內容。
+生成程式碼不代表可以立即在板上執行。尤其寫入操作可能改變 PMBus 電源設定、GPIO 輸出、感測器設定（sensor configuration）或 EEPROM 內容。
 
 執行前逐項確認：
 

@@ -1,8 +1,8 @@
-# 附錄 A：I2C 圖表、status、threshold 與 evidence 判讀
+# 附錄 A：I2C 圖表、狀態、門檻與證據判讀
 
-本附錄是 GUI 第 1 頁圖表的唯一詳細定義。第 1 章只保留操作摘要；本檔負責 axes、單位、status、threshold、issue code 與 evidence semantics。任何圖表結論都必須先回到原始輸入欄位與 sample count。
+本附錄是 GUI 第 1 頁圖表的唯一詳細定義。第 1 章只保留操作摘要；本檔負責圖表軸線（axes）、單位、狀態（status）、門檻（threshold）、異常代碼（issue code）與證據語意（evidence semantics）。任何圖表結論都必須先回到原始輸入欄位與樣本數（sample count）。
 
-## A.0 Evidence labels：先決定數字能不能回答問題
+## A.0 證據標籤（Evidence labels）：先決定數字能不能回答問題
 
 | Label | 來源 | 可以回答 | 不能回答 |
 |---|---|---|---|
@@ -15,7 +15,7 @@
 
 **Aggregate ACK contract**：一列多個 data byte 只有一個 ACK/NACK 時，工具保留 `I2C_ACK_AGGREGATE_UNATTRIBUTABLE`、ACK unknown，並 withheld per-byte semantic。這也是 `i2c_golden.csv` 與 `i2c_failing_nack.csv` 不產 protocol issue 的原因；它們不是 per-byte failure proof。
 
-**Timing units**：`Duration`／`duration_s` 一律是秒；`Bit Rate`／`bit_rate`／`bitrate`／`frequency` 建議使用 kHz。為相容部分 analyzer export，數值大於 `10000` 會被視為 Hz 並轉成 kHz；同一檔案不要混用單位。`Duration` 是整個 byte 的時間，只能支援 frequency estimate；aggregate（一列多 byte）不會把單一 `Duration` 猜分給各 byte，請拆成 per-byte rows 或提供 `Bit Rate`。若 aggregate row 只有一個 `Bit Rate`，解析器會把同一來源值帶到展開的 address/data slots，`Samples: N` 代表展開 slot 數，不代表原始 row 數；需要可追溯的每筆樣本時請拆成 per-byte rows。沒有 SCL-low/edge evidence 時，不可把 `Duration` 當成 clock stretch。若來源明確輸出 `Clock Stretch [s]`／`clock_stretch_s`，工具才會把該欄位標記為 source-backed stretch。
+**時序單位（Timing units）**：`Duration`／`duration_s` 一律是秒；`Bit Rate`／`bit_rate`／`bitrate`／`frequency` 建議使用 kHz。為相容部分 analyzer export，數值大於 `10000` 會被視為 Hz 並轉成 kHz；同一檔案不要混用單位。`Duration` 是整個 byte 的時間，只能支援 frequency estimate；aggregate（一列多 byte）不會把單一 `Duration` 猜分給各 byte，請拆成 per-byte rows 或提供 `Bit Rate`。若 aggregate row 只有一個 `Bit Rate`，解析器會把同一來源值帶到展開的 address/data slots，`樣本數：N（Samples: N）` 代表展開 slot 數，不代表原始 row 數；需要可追溯的每筆樣本時請拆成 per-byte rows。沒有 SCL-low/edge evidence 時，不可把 `Duration` 當成 clock stretch。若來源明確輸出 `Clock Stretch [s]`／`clock_stretch_s`，工具才會把該欄位標記為 source-backed stretch。
 
 **Read-final NACK contract**：Read 的最後一個 data byte 由 controller 發 NACK 再 STOP，是正常 termination。它在 timeline 顯示 `READ END NAK`，不產 `I2C_DATA_NACK`，也不降低 health success rate。
 
@@ -25,7 +25,7 @@
 
 **X 軸：** `SCL Clock Frequency (kHz)`；由 source-provided bitrate、byte duration 或 raw digital SCL period 計算。`100 kHz`、`400 kHz` 是常見模式標記，不是工具替硬體指定的設定。
 
-**Y 軸：** `count`，落在該 bin 的有效 frequency samples 數。標題應同時顯示平均值、jitter 與 `Samples: N`；`N=0` 時顯示 `unavailable` 與「No source-provided bitrate or byte-duration evidence」，不可畫一根假 0 kHz 柱。
+**Y 軸：** `count`，落在該 bin 的有效 frequency samples 數。標題應同時顯示平均值、jitter 與 `樣本數：N（Samples: N）`；`N=0` 時顯示 `不可用（unavailable）` 與「來源未提供位元率或位元組持續時間證據」，不可畫一根假 0 kHz 柱。
 
 **判讀規則：**
 
@@ -101,7 +101,7 @@ Data quality code 不是 protocol issue。常見例子：`I2C_SOURCE_EMPTY`、`I
 看到任何圖表或 status 時，固定回答：
 
 1. X/Y 軸的欄位與單位是什麼？
-2. `Samples: N`、timestamp count、unknown ACK count 在哪裡？
+2. `樣本數：N（Samples: N）`、timestamp count、unknown ACK count 在哪裡？
 3. 這個值是 Measured、Source-provided、Reconstructed、Inferred、Hypothesis，還是 Unavailable？
 4. NACK 是 address、write data、premature read，還是 normal read termination？
 5. 下一個能區分假說的 raw capture、driver log、datasheet 或 board profile 證據是什麼？

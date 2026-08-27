@@ -10,10 +10,10 @@
 uv run fw-diag gui
 ```
 
-1. 選左側第 1 頁，在「教學範例」先選 `Packaged decoded analyzer（18 筆）`，輸入模式會是 `Decoded Analyzer CSV`。
+1. 選左側第 1 頁，在「教學範例」先選 `套件解碼分析器（18 筆）`，輸入模式會是 `解碼分析器 CSV（decoded_csv）`。
 2. 按 **載入內建測試波形**；要練習 raw 或 text，改選對應範例後再按同一按鈕。
 3. 先讀「資料證據與限制」，再看 KPI；不要把綠色狀態當成硬體已驗證。
-4. 依序開啟封包交易列表、Waveform、Anomalies、匯流排時序與健康圖表、Markdown 診斷報告五個 tabs；先選交易，Waveform 才會聚焦同一筆。
+4. 依序開啟封包交易列表、數位方波與協定軌、異常診斷、匯流排時序與健康圖表、Markdown 診斷報告五個分頁（tabs）；先選交易，波形才會聚焦同一筆。
 5. 另用本章的 raw digital fixture 重跑一次，確認哪些數字是 measured、哪些仍是 unavailable。
 
 內建按鈕載入的是套件資源 `builtin:saleae_normal_pmbus_eeprom.csv`，不是 `examples/data/i2c_golden.csv`。目前可驗證的結果是 **18 transactions、53 physical events、0 protocol issues**。資料品質仍會列出：
@@ -28,7 +28,7 @@ uv run fw-diag gui
 
 先在檔案來源上做分類。工具不會把缺少的欄位補成 0、ACK 或預設頻率。
 
-### 契約 A：Decoded Analyzer CSV（aggregate 或 per-byte）
+### 契約 A：解碼分析器 CSV（Decoded Analyzer CSV；aggregate 或 per-byte）
 
 | 欄位 | 單位／值域 | 契約與限制 |
 |---|---|---|
@@ -49,7 +49,7 @@ Time [s],Packet ID,Address,Data,Read/Write,ACK/NAK
 
 **資源邊界**：GUI 仍會先依 `AnalysisLimits` 限制輸入（records 50,000、raw transitions 50,000）；選取的 decoded transaction 另有 100,000 個理想 waveform points 上限。超過時，交易列表、異常、時序與報告仍可用，只有該筆重建波形會顯示「略過繪圖」並保留限制原因，不會把大型輸入一次展開到瀏覽器。
 
-### 契約 B：Raw digital transition CSV
+### 契約 B：原始數位轉態 CSV（Raw digital transition CSV）
 
 ```csv
 Time [s],SCL,SDA
@@ -58,7 +58,7 @@ Time [s],SCL,SDA
 0.000010,0,0
 ```
 
-上面 3 行只展示欄位名稱與 `0/1` 值域，**刻意不是可完成解碼的 capture**；它沒有完整的 9-bit byte、ACK 與 STOP。要直接執行分析，請使用完整的 `examples/data/i2c_raw_100khz.csv`（或 GUI 的 `Raw digital measured 100 kHz（1 筆）` 範例）。
+上面 3 行只展示欄位名稱與 `0/1` 值域，**刻意不是可完成解碼的 capture**；它沒有完整的 9-bit byte、ACK 與 STOP。要直接執行分析，請使用完整的 `examples/data/i2c_raw_100khz.csv`（或 GUI 的 `原始數位量測（100 kHz、1 筆）` 範例）。
 
 | 欄位 | 單位／值域 | 工具能回答什麼 |
 |---|---|---|
@@ -84,7 +84,7 @@ Time [s],SCL,SDA
 
 ### 3.1 匯入 i2c_golden.csv 的 Step-by-Step 操作與關鍵觀察
 
-當你在 GUI 選擇 `Decoded Analyzer CSV` 並上傳 `examples/data/i2c_golden.csv` 後，請依以下步驟進行觀察與學習：
+當你在 GUI 選擇 `解碼分析器 CSV（decoded_csv）` 並上傳 `examples/data/i2c_golden.csv` 後，請依以下步驟進行觀察與學習：
 
 **步驟 1：檢視上方 KPI 摘要與資料證據面板**
 - **總傳輸次數（Total Transactions）**：顯示 `5` 筆交易。
@@ -138,14 +138,14 @@ Time [s],SCL,SDA
 上傳 `examples/data/i2c_split_decoded.csv`，預期 **5 transactions**。0x48 的 read 會顯示：
 
 ```text
-Temperature = 25.50 °C (LM75/TMP102, raw 0x1980)
+溫度 = 25.50 °C（LM75/TMP102，原始值 0x1980）
 ```
 
 最後一個 read byte 的 `NACK` 是 controller 的正常讀取終止，因此不產 `I2C_DATA_NACK`。0x50 的 EEPROM profile 未指定時，報告會保留 read bytes、但對 write offset/page semantic 顯示 profile unavailable。
 
 ### 3.4 Raw digital：`i2c_raw_100khz.csv`
 
-這個 fixture 有 **46 行（header 加 45 筆 transition samples）**。切換到 `Raw digital transition (Time, SCL, SDA)` 後上傳它，預期：
+這個 fixture 有 **46 行（header 加 45 筆 transition samples）**。切換到 `原始數位 CSV（raw_digital；Time、SCL、SDA）` 後上傳它，預期：
 
 - average SCL frequency 約 **100.0 kHz**，frequency sample count > 0。
 - quality panel **不會顯示資料品質 issue**；這只表示這份 raw CSV 通過 schema/timing 契約。
@@ -166,21 +166,21 @@ Temperature = 25.50 °C (LM75/TMP102, raw 0x1980)
 
 ## 4. 五大功能分頁（Tabs）：細項使用與輸出判讀教學
 
-### 4.1 `📜 封包交易列表 (Transactions)`
+### 4.1 `📜 封包交易列表（Transactions）`
 
 **【如何使用】**：
 1. 上傳檔案後，直接在列表中按交易序號（ID）瀏覽所有解析完成的封包。
 2. 搭配上方下拉選單 `目前交易`，可讓下一個 Waveform 分頁同步聚焦於特定封包。
 
 **【欄位意義與輸出判讀】**：
-- **時間 Time (s)**：交易開始時間戳記；若檔案無時間欄位則顯示 `n/a`。
-- **從機位址 Address**：7-bit 十六進位位址（如 `0x58`）。保留位址會顯示警示。
-- **讀寫方向 Direction**：`WRITE` 或 `READ`；方向不明時顯示 `UNKNOWN`。
-- **位址確認 Address ACK**：從機對位址的應答（`ACK` 或 `NACK`）。
-- **整體狀態 Overall Status**：整筆交易的綜合健康狀態（`ACK`、`ADDR NAK`、`DATA NAK`、`READ END NAK`、`ACK UNKNOWN`、`NO STOP`、`ABORTED`、`EVIDENCE INCOMPLETE`）。
-- **解碼語意 Semantic Meaning**：自動解碼的工程數據（如 PMBus 電壓 `READ_VIN = 32.0 V`、溫度 `25.50 °C`）。若資料品質不足則標註 `withheld`（保留不猜測）。
+- **時間（s；Time）**：交易開始時間戳記；若檔案無時間欄位則顯示 `不可用`。
+- **從裝置位址（Address）**：7-bit 十六進位位址（如 `0x58`）。保留位址會顯示警示。
+- **讀寫方向（Direction）**：`WRITE` 或 `READ`；方向不明時顯示 `UNKNOWN`。
+- **位址應答（Address ACK）**：從裝置對位址的應答（`ACK` 或 `NACK`）。
+- **整體狀態（Overall Status）**：整筆交易的綜合健康狀態（`ACK`、`ADDR NAK`、`DATA NAK`、`READ END NAK`、`ACK UNKNOWN`、`NO STOP`、`ABORTED`、`EVIDENCE INCOMPLETE`）。
+- **解碼語意（Semantic Meaning）**：自動解碼的工程資料（如 PMBus 電壓 `READ_VIN 讀取值 = 32.0 V`、溫度 `25.50 °C`）。若資料品質不足則標註 `withheld`（保留不猜測）。
 
-### 4.2 `📈 數位方波與協定軌 (Waveform)`
+### 4.2 `📈 數位方波與協定軌（Waveform）`
 
 **【如何使用】**：
 1. 先在上方下拉選單選取欲聚焦的交易（例如 Tx #1）。
@@ -192,7 +192,7 @@ Temperature = 25.50 °C (LM75/TMP102, raw 0x1980)
   - 若顯示 **Reconstructed**：代表根據解碼資料重建的理想時序模型，非真實類比電壓波形，不能拿來推論 Pull-up 電阻或上升時間（Rise time）。
 - **Read 終止識別**：讀取交易最後一個位元組由主控端（Controller）送出 NACK（標示為 Controller NACK），隨後發送 STOP，這是標準正常終止，切勿誤判為硬體異常。
 
-### 4.3 `🚨 異常診斷 (Anomalies)`
+### 4.3 `🚨 異常診斷（Anomalies）`
 
 **【如何使用】**：
 1. 檢視系統過濾後的前 50 筆異常事件，展開卡片查看細節。
@@ -202,7 +202,7 @@ Temperature = 25.50 °C (LM75/TMP102, raw 0x1980)
 - **嚴格區分 Issue Code**：如 `I2C_ADDR_NACK`（從機不存在/未上電）、`I2C_DATA_NACK`（寫入被拒）、`I2C_MISSING_STOP`（通訊中斷/匯流排鎖死）、`I2C_LONG_CLOCK_STRETCH`（從機處理延遲 >100 µs）、`I2C_SMBUS_TIMEOUT`（延長逾時 ≥25 ms）。
 - **原因非定論**：報告中的原因文字為「待驗證假說（Hypotheses）」，非已證明的單一根因。必須搭配排查清單以示波器、Driver 日誌進一步區分。
 
-### 4.4 `📊 匯流排時序與健康圖表 (Bus Timing & Health)`
+### 4.4 `📊 匯流排時序與健康圖表（Bus Timing & Health）`
 
 **【如何使用】**：
 1. 觀察左側「時鐘頻率分佈直方圖 (Frequency Distribution)」。
@@ -213,7 +213,7 @@ Temperature = 25.50 °C (LM75/TMP102, raw 0x1980)
 - **頻率散布 (Frequency Spread / Jitter)**：以 `(max-min)/avg` 計算樣本散布度。若大於 35% 會列為高抖動。
 - **裝置健康評等 (Health Grade)**：計算公式為 `成功率 = (有效交易 - NACK數) / 有效交易`。A 為優秀、B 為輕微重試/延遲、D 為高 NACK 率、F 為嚴重故障、N/A 為 ACK 證據不足。**特別強調：此評等純為除錯排查優先順序之啟發式摘要，絕非晶片良率或實體電氣品質的通過宣告。**
 
-### 4.5 `📝 Markdown 診斷報告 (Markdown Report)`
+### 4.5 `📝 Markdown 診斷報告（Markdown Report）`
 
 **【如何使用】**：
 1. 在畫面直接閱讀產出的結構化 Markdown 診斷報告。
