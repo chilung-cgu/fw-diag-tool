@@ -393,10 +393,10 @@ def test_gui_invalid_session_settings_clear_previous_state():
 
 def test_gui_respects_pcie_mode_and_rejects_invalid_register_value():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🚀 PCIe Config & AER 診斷").run()
+    at.sidebar.radio[0].set_value("🚀 PCIe Config Space 與 AER 診斷").run()
     at.radio[0].set_value("貼上 Linux dmesg AER Error Log")
     at.text_area[0].input("AER: Corrected error received: 0000:00:1c.0")
-    at.button[0].click().run()
+    next(button for button in at.button if button.label == "執行 PCIe 分析").click().run()
 
     assert not at.exception
     assert any("Kernel dmesg AER 診斷結果" in item.value for item in at.subheader)
@@ -411,9 +411,9 @@ def test_gui_respects_pcie_mode_and_rejects_invalid_register_value():
 
 def test_gui_pcie_invalid_dump_is_reported_without_streamlit_exception():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🚀 PCIe Config & AER 診斷").run()
+    at.sidebar.radio[0].set_value("🚀 PCIe Config Space 與 AER 診斷").run()
     at.text_area[0].input("not a config dump").run()
-    at.button[0].click().run()
+    next(button for button in at.button if button.label == "執行 PCIe 分析").click().run()
 
     assert not at.exception
     assert any("PCIe 輸入錯誤" in error.value for error in at.error)
@@ -478,7 +478,7 @@ def test_gui_packet_builder_validates_before_rendering_or_codegen():
 
 def test_gui_dts_generator_requires_and_renders_explicit_device_topology():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🌲 Device Tree (.dts) 產生器").run()
+    at.sidebar.radio[0].set_value("🌲 Device Tree（.dts）產生器").run()
     at.button[0].click().run()
 
     assert not at.exception
@@ -490,7 +490,7 @@ def test_gui_dts_generator_requires_and_renders_explicit_device_topology():
 
 def test_gui_sop_page_explains_all_layers_and_evidence_terms():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("📚 韌體除錯指南 & SOP").run()
+    at.sidebar.radio[0].set_value("📚 韌體除錯指南與 SOP").run()
 
     assert not at.exception
     assert any("L1" in item.value and "L7" in item.value for item in at.subheader)
@@ -505,30 +505,36 @@ def test_gui_spi_flash_page_sample_runs_without_exception():
     assert not at.exception
     assert any(metric.label == "總傳輸次數" and metric.value == "4" for metric in at.metric)
     assert any("Winbond W25Q128" in info.value for info in at.info)
+    assert any(field.label == "Page Size（頁面大小；bytes）" for field in at.number_input)
+    assert any(button.label == "下載 SPI Markdown 診斷報告" for button in at.download_button)
 
 
 def test_gui_uart_crash_page_sample_runs_without_exception():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("📟 UART Crash & HardFault 分析").run()
+    at.sidebar.radio[0].set_value("📟 UART 崩潰轉儲與 HardFault 分析（Crash Dump）").run()
     at.radio[0].set_value("載入範例 Linux Kernel Panic Log").run()
     at.button[0].click().run()
 
     assert not at.exception
     assert any("nvme_pci_complete_rq" in item.value for item in at.markdown)
+    assert any(button.label.startswith("下載此 UART 範例") for button in at.download_button)
+    assert any(button.label == "下載 UART Markdown 診斷報告" for button in at.download_button)
 
 
 def test_gui_mctp_page_sample_runs_without_exception():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🌐 MCTP / IPMB 伺服器協定解析").run()
+    at.sidebar.radio[0].set_value("🌐 MCTP／IPMB 伺服器管理協定解析").run()
     at.button[0].click().run()
 
     assert not at.exception
     assert any("MCTP Packets" in item.value for item in at.markdown)
+    assert any(button.label == "下載內建 MCTP／IPMB 範例" for button in at.download_button)
+    assert any(button.label == "下載 MCTP／IPMB Markdown 診斷報告" for button in at.download_button)
 
 
 def test_gui_mctp_protocol_mode_is_visible_before_execute_and_persists():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🌐 MCTP / IPMB 伺服器協定解析").run()
+    at.sidebar.radio[0].set_value("🌐 MCTP／IPMB 伺服器管理協定解析").run()
 
     assert not at.exception
     assert len(at.selectbox) == 1
@@ -542,7 +548,7 @@ def test_gui_mctp_protocol_mode_is_visible_before_execute_and_persists():
 
 def test_gui_fault_arena_mctp_cases_render_protocol_reports():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🏆 Junior FW 實戰除錯實驗室 (Fault Arena)").run()
+    at.sidebar.radio[0].set_value("🏆 初階 Firmware 實戰除錯實驗室（Fault Arena）").run()
 
     at.selectbox[0].set_value("Case 19: MCTP PLDM 感測器數值傳輸異常與封包順序錯亂").run()
     at.button[0].click().run()
@@ -557,14 +563,14 @@ def test_gui_fault_arena_mctp_cases_render_protocol_reports():
 
 def test_gui_pcie_dmesg_event_shows_captured_tlp_header():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🚀 PCIe Config & AER 診斷").run()
+    at.sidebar.radio[0].set_value("🚀 PCIe Config Space 與 AER 診斷").run()
     at.radio[0].set_value("貼上 Linux dmesg AER Error Log")
     at.text_area[0].input(
         "[  124.582910] pcieport 0000:00:01.0: AER: Uncorrected (Fatal) error received: 0000:01:00.0\n"
         "[  124.582922] pcieport 0000:00:01.0:    [18] MalformedTLP           (First)\n"
         "[  124.582925] pcieport 0000:00:01.0:   TLP Header: 00000001 0100000f fe000000 00000000"
     )
-    at.button[0].click().run()
+    next(button for button in at.button if button.label == "執行 PCIe 分析").click().run()
 
     assert not at.exception
     assert any("擷取到的 TLP Header" in item.value for item in at.markdown)
@@ -573,7 +579,7 @@ def test_gui_pcie_dmesg_event_shows_captured_tlp_header():
 
 def test_gui_fault_arena_runs_without_exception():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🏆 Junior FW 實戰除錯實驗室 (Fault Arena)").run()
+    at.sidebar.radio[0].set_value("🏆 初階 Firmware 實戰除錯實驗室（Fault Arena）").run()
 
     assert not at.exception
     assert any("案例分析" in item.value for item in at.info)

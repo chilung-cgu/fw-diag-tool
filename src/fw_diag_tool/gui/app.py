@@ -69,12 +69,24 @@ from fw_diag_tool.i2c.timing_charts import I2CTimingCharts
 from fw_diag_tool.i2c.transfer_spec import Endianness, I2CTransferOperation, I2CTransferSpec
 from fw_diag_tool.i2c.waveform import I2CWaveformReconstructor
 from fw_diag_tool.i2c.waveform_diff import WaveformDiffEngine
+from fw_diag_tool.i2c.waveform_diff_report import (
+    format_waveform_diff_markdown,
+    localize_diff_description,
+    localize_diff_hint,
+    localize_diff_summary,
+    localize_diff_type,
+)
 from fw_diag_tool.limits import AnalysisLimits
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
-from fw_diag_tool.resources import load_i2c_sample, load_spi_sample
+from fw_diag_tool.resources import (
+    load_i2c_sample,
+    load_pcie_dmesg_sample,
+    load_spi_sample,
+    load_waveform_diff_samples,
+)
 from fw_diag_tool.session.session_manager import SessionManager
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.spi.reporter import SPIReporter
@@ -121,8 +133,57 @@ def analyze_i2c_input(
 
 
 @st.cache_data(show_spinner=False)
-def analyze_spi_input(csv_content: str) -> Any:
-    return SPIDiagnosticEngine().analyze_csv_content(csv_content)
+def analyze_spi_input(csv_content: str, max_page_size: int = 256) -> Any:
+    return SPIDiagnosticEngine(max_page_size=max_page_size).analyze_csv_content(csv_content)
+
+
+_REGISTER_MEANING_ZH = {
+    "OK": "正常（OK）",
+    "Normal": "正常（Normal）",
+    "Ready": "就緒（Ready）",
+    "Busy": "忙碌（Busy）",
+    "Unit On": "裝置開啟（Unit On）",
+    "Unit Off": "裝置關閉（Unit Off）",
+    "Unit is Outputting Power": "裝置正在輸出電力（Unit is Outputting Power）",
+    "Unit is Off": "裝置已關閉（Unit is Off）",
+    "Vout Overvoltage Fault": "輸出過電壓故障（Vout Overvoltage Fault）",
+    "Iout Overcurrent Fault": "輸出過電流故障（Iout Overcurrent Fault）",
+    "Vin Undervoltage Fault": "輸入欠電壓故障（Vin Undervoltage Fault）",
+    "Overtemperature Alarm": "過溫警報（Overtemperature Alarm）",
+    "CML Error": "CML 通訊／記憶體／邏輯錯誤（CML Error）",
+    "VOUT Fault/Warning occurred": "發生 VOUT 故障／警告（VOUT Fault/Warning occurred）",
+    "IOUT Fault/Warning occurred": "發生 IOUT 故障／警告（IOUT Fault/Warning occurred）",
+    "Input Voltage/Current/Power Fault occurred": "發生輸入電壓／電流／功率故障（Input Voltage/Current/Power Fault occurred）",
+    "Manufacturer Specific Fault": "製造商專屬故障（Manufacturer Specific Fault）",
+    "POWER_GOOD Asserted (Normal)": "POWER_GOOD 有效（正常）（POWER_GOOD Asserted）",
+    "POWER_GOOD Negated (Power Rail Down)": "POWER_GOOD 無效（電源軌關閉）（POWER_GOOD Negated）",
+    "Overtemperature Fault/Warning occurred": "發生過溫故障／警告（Overtemperature Fault/Warning occurred）",
+    "Communication, Memory or Logic (CML) Fault": "通訊／記憶體／邏輯（CML）故障（Communication, Memory or Logic Fault）",
+    "Device Busy / Packet Rejected": "裝置忙碌／封包被拒絕（Device Busy / Packet Rejected）",
+    "Data Link Protocol Error (Active)": "Data Link Protocol 錯誤（作用中）（Data Link Protocol Error）",
+    "Surprise Down Error (Active)": "Surprise Down 錯誤（作用中）（Surprise Down Error）",
+    "Poisoned TLP Received (Active)": "收到 Poisoned TLP（作用中）（Poisoned TLP Received）",
+    "Flow Control Protocol Error (Active)": "Flow Control Protocol 錯誤（作用中）（Flow Control Protocol Error）",
+    "Completion Timeout (Active)": "Completion Timeout（作用中）（Completion Timeout）",
+    "Completer Abort (Active)": "Completer Abort（作用中）（Completer Abort）",
+    "Unexpected Completion (Active)": "非預期 Completion（作用中）（Unexpected Completion）",
+    "Receiver Overflow (Active)": "Receiver Overflow（作用中）（Receiver Overflow）",
+    "Malformed TLP (Active)": "Malformed TLP（作用中）（Malformed TLP）",
+    "ECRC Error (Active)": "ECRC 錯誤（作用中）（ECRC Error）",
+    "Unsupported Request (Active)": "Unsupported Request（作用中）（Unsupported Request）",
+    "ACS Violation (Active)": "ACS 違規（作用中）（ACS Violation）",
+    "Uncorrectable Internal Error (Active)": "不可修正內部錯誤（作用中）（Uncorrectable Internal Error）",
+}
+
+
+def _localize_register_meaning(value: object) -> str:
+    """Make built-in YAML meanings readable while preserving source wording."""
+    text = str(value)
+    if text in _REGISTER_MEANING_ZH:
+        return _REGISTER_MEANING_ZH[text]
+    if text.startswith("Raw value: "):
+        return f"原始值：{text.removeprefix('Raw value: ')}（Raw value）"
+    return text
 
 
 def render_guide_expander(
@@ -143,16 +204,16 @@ menu = st.sidebar.radio(
     [
         "📊 I2C / PMBus 診斷與波形檢視",
         "🎨 I2C 封包模擬器與驅動產生",
-        "⚖️ 雙波形對比檢視 (Waveform Diff)",
-        "📟 UART Crash & HardFault 分析",
-        "🌐 MCTP / IPMB 伺服器協定解析",
-        "🌲 Device Tree (.dts) 產生器",
-        "🚀 PCIe Config & AER 診斷",
+        "⚖️ 雙波形對比檢視（Waveform Diff）",
+        "📟 UART 崩潰轉儲與 HardFault 分析（Crash Dump）",
+        "🌐 MCTP／IPMB 伺服器管理協定解析",
+        "🌲 Device Tree（.dts）產生器",
+        "🚀 PCIe Config Space 與 AER 診斷",
         "⚡ SPI Flash 協定診斷",
         "🎛 晶片暫存器 Bitfield 解碼器",
         "🛠 C 語言 Register 巨集產生器",
-        "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)",
-        "📚 韌體除錯指南 & SOP",
+        "🏆 初階 Firmware 實戰除錯實驗室（Fault Arena）",
+        "📚 韌體除錯指南與 SOP",
     ],
 )
 
@@ -1012,31 +1073,88 @@ elif menu == "🎨 I2C 封包模擬器與驅動產生":
         st.error(f"輸入格式錯誤：{exc}")
 
 # 3. Waveform Diff
-elif menu == "⚖️ 雙波形對比檢視 (Waveform Diff)":
-    st.header("Golden (正常板卡) vs Failing (故障板卡) 雙波形差分對比")
+elif menu == "⚖️ 雙波形對比檢視（Waveform Diff）":
+    st.header("Golden（正常板卡）與 Failing（故障板卡）雙波形差分對比（Waveform Diff）")
     render_guide_expander(
-        "chapters/ch03_waveform_diff.md", "📖 點擊展開：Golden vs Failing 雙波形差分比對教學"
+        "chapters/ch03_waveform_diff.md", "📖 點擊展開：Golden 與 Failing 雙波形差分比對教學"
     )
+    use_diff_sample = st.button(
+        "載入內建 Golden/Failing 範例",
+        key="waveform_diff_load_sample",
+        help="載入套件內建的最小 decoded CSV pair，可立即重現文件中的 NACK_MISMATCH。",
+    )
+    if use_diff_sample:
+        golden_sample, failing_sample = load_waveform_diff_samples()
+        st.session_state["waveform_diff_sample_active"] = True
+        st.session_state["waveform_diff_golden_sample"] = golden_sample
+        st.session_state["waveform_diff_failing_sample"] = failing_sample
+        # A built-in pair is an explicit replacement for previously uploaded
+        # files.  Clear the uploader state before recreating those widgets.
+        st.session_state.pop("waveform_diff_golden_file", None)
+        st.session_state.pop("waveform_diff_failing_file", None)
+
+    sample_golden = st.session_state.get("waveform_diff_golden_sample")
+    sample_failing = st.session_state.get("waveform_diff_failing_sample")
+    sample_active = (
+        st.session_state.get("waveform_diff_sample_active") is True
+        and isinstance(sample_golden, str)
+        and isinstance(sample_failing, str)
+    )
+    if sample_active:
+        st.info("已載入內建 Golden/Failing 範例；可直接查看差分，或下載 CSV 後替換成自己的 capture。")
+        sample_download_col1, sample_download_col2 = st.columns(2)
+        with sample_download_col1:
+            st.download_button(
+                "下載 Golden 範例 CSV",
+                data=sample_golden,
+                file_name="i2c_golden.csv",
+                mime="text/csv",
+                key="waveform_diff_download_golden",
+            )
+        with sample_download_col2:
+            st.download_button(
+                "下載 Failing 範例 CSV",
+                data=sample_failing,
+                file_name="i2c_failing_nack.csv",
+                mime="text/csv",
+                key="waveform_diff_download_failing",
+            )
     d_col1, d_col2 = st.columns(2)
     with d_col1:
         golden_file = st.file_uploader(
             "上傳 Golden (正常) Trace CSV",
             type=["csv", "txt"],
             max_upload_size=MAX_UPLOAD_MIB,
+            key="waveform_diff_golden_file",
         )
     with d_col2:
         failing_file = st.file_uploader(
             "上傳 Failing (故障) Trace CSV",
             type=["csv", "txt"],
             max_upload_size=MAX_UPLOAD_MIB,
+            key="waveform_diff_failing_file",
         )
-    if golden_file and failing_file:
+    g_text = None
+    f_text = None
+    if use_diff_sample or (sample_active and not golden_file and not failing_file):
+        g_text = sample_golden
+        f_text = sample_failing
+    elif golden_file or failing_file:
+        # Any user upload supersedes the built-in pair, even when only one
+        # side has been selected so the next run cannot mix two sources.
+        st.session_state["waveform_diff_sample_active"] = False
+        st.session_state.pop("waveform_diff_golden_sample", None)
+        st.session_state.pop("waveform_diff_failing_sample", None)
+        if not golden_file or not failing_file:
+            st.info("請同時提供 Golden 與 Failing 兩份 trace，才能執行差分。")
+    if golden_file and failing_file and not use_diff_sample:
         try:
             g_text = decode_uploaded_text(golden_file, allowed_extensions={".csv", ".txt"})
             f_text = decode_uploaded_text(failing_file, allowed_extensions={".csv", ".txt"})
         except ValueError as exc:
             st.error(f"無法讀取比較 trace：{exc}")
             st.stop()
+    if g_text is not None and f_text is not None:
         try:
             eng = I2CDiagnosticEngine()
             g_rep = eng.analyze_csv_content(g_text)
@@ -1045,21 +1163,54 @@ elif menu == "⚖️ 雙波形對比檢視 (Waveform Diff)":
         except (OSError, UnicodeError, TypeError, ValueError) as exc:
             st.error(f"無法分析比較 trace：{exc}")
             st.stop()
+        golden_name = (
+            "i2c_golden.csv"
+            if sample_active
+            else (golden_file.name if golden_file is not None else "Golden trace")
+        )
+        failing_name = (
+            "i2c_failing_nack.csv"
+            if sample_active
+            else (failing_file.name if failing_file is not None else "Failing trace")
+        )
+        st.caption(
+            "證據範圍：此處比較解碼後 transaction；若要確認實際 SCL/SDA edge、電壓或雜訊，"
+            "請改用原始數位 capture 與示波器／邏輯分析儀。"
+        )
         if diff_res.is_identical:
             st.success("🎉 Golden 與 Failing 兩份波形在協定層完全一致！")
         else:
-            st.error(f"🚨 {diff_res.summary}")
+            st.error(f"🚨 {localize_diff_summary(diff_res.summary)}")
             for dp in diff_res.divergence_points:
                 with st.expander(
-                    f"分歧點: 交易 #{dp.tx_index} ({dp.mismatch_type})", expanded=True
+                    f"分歧點：交易 #{dp.tx_index}（{localize_diff_type(dp.mismatch_type)}）",
+                    expanded=True,
                 ):
-                    st.markdown(f"**現象描述**: {dp.description}")
-                    st.markdown(f"**排查建議**: {dp.root_cause_hint}")
-            st.plotly_chart(WaveformDiffEngine.create_comparison_figure(diff_res), width="stretch")
+                    st.markdown(
+                        f"**現象描述**：{localize_diff_description(dp.description)}"
+                    )
+                    st.markdown(f"**排查建議**：{localize_diff_hint(dp.root_cause_hint)}")
+            st.plotly_chart(
+                WaveformDiffEngine.create_comparison_figure(
+                    diff_res,
+                    title="Golden（正常）與 Failing（故障）波形比較（Waveform Comparison）",
+                ),
+                width="stretch",
+            )
+        diff_md = format_waveform_diff_markdown(
+            diff_res, golden_name=golden_name, failing_name=failing_name
+        )
+        st.download_button(
+            "下載差分 Markdown 報告",
+            data=diff_md,
+            file_name="i2c_waveform_diff_report.md",
+            mime="text/markdown",
+            key="waveform_diff_download_report",
+        )
 
 # 4. UART Crash Dump
-elif menu == "📟 UART Crash & HardFault 分析":
-    st.header("UART Serial Crash Dump & ARM Cortex-M HardFault 智慧診斷")
+elif menu == "📟 UART 崩潰轉儲與 HardFault 分析（Crash Dump）":
+    st.header("UART 序列埠崩潰轉儲與 ARM Cortex-M HardFault 智慧診斷")
     render_guide_expander(
         "chapters/ch04_uart_crash.md", "📖 點擊展開：UART 崩潰與 ARM HardFault 診斷教學"
     )
@@ -1072,31 +1223,66 @@ elif menu == "📟 UART Crash & HardFault 分析":
         ],
     )
     u_raw = ""
+    u_example_name: str | None = None
     if u_mode == "貼上 UART Log / Crash Dump":
-        u_raw = st.text_area("請貼上 UART 輸出內容：", height=200, max_chars=MAX_TEXT_BYTES)
+        u_raw = st.text_area(
+            "請貼上 UART 輸出內容（UART Log／Crash Dump）：",
+            height=200,
+            max_chars=MAX_TEXT_BYTES,
+        )
     elif u_mode == "載入範例 Linux Kernel Panic Log":
+        u_example_name = "uart_kernel_panic_minimal.log"
         u_raw = """BUG: unable to handle page fault for address: 0000000000000010\nRIP: 0010:nvme_pci_complete_rq+0x38/0x120 [nvme]\nRAX: 0000000000000000 RBX: ffff888102345000 RCX: 0000000000000000\nCR2: 0000000000000010\nCall Trace:\n <TASK>\n [ffff888100123450] blk_mq_complete_request+0x24/0x50\n [ffff8881001234a0] nvme_irq_handler+0x8c/0x100 [nvme]\n </TASK>"""
     else:
+        u_example_name = "uart_hardfault_minimal.log"
         u_raw = """HardFault Exception Occurred!\nHFSR: 0x40000000 (FORCED)\nCFSR: 0x02000000 (DIVBYZERO)\nStacked R0: 0x00000000\nStacked R1: 0x0000000A\nStacked PC: 0x08001234\nStacked LR: 0x08000456\nStacked xPSR: 0x61000000"""
-    if st.button("執行 UART Crash 分析") and u_raw.strip():
+    if u_example_name is not None:
+        st.download_button(
+            f"下載此 UART 範例（{u_example_name}）",
+            data=u_raw,
+            file_name=u_example_name,
+            mime="text/plain",
+            key="uart_download_example",
+        )
+    if st.button("執行 UART 崩潰轉儲分析（Crash Dump）") and u_raw.strip():
         try:
             u_report = UARTCrashParser.parse_log_text(validate_pasted_text(u_raw, label="UART log"))
         except (TypeError, ValueError) as exc:
             st.error(f"UART 輸入錯誤：{exc}")
         else:
-            st.markdown(UARTReporter.to_markdown(u_report))
+            st.caption(
+                "證據範圍：報告只整理輸入 log 中可解析的 fault 欄位；請用 matching ELF、"
+                "symbol、kernel source 與目標板重現確認根因。"
+            )
+            uart_md = UARTReporter.to_markdown(u_report)
+            st.markdown(uart_md)
+            st.download_button(
+                "下載 UART Markdown 診斷報告",
+                data=uart_md,
+                file_name="uart_crash_report.md",
+                mime="text/markdown",
+                key="uart_download_report",
+            )
 
 # 5. MCTP / IPMB
-elif menu == "🌐 MCTP / IPMB 伺服器協定解析":
+elif menu == "🌐 MCTP／IPMB 伺服器管理協定解析":
     st.header("MCTP (DSP0236/PLDM/SPDM) 與 IPMB 伺服器管理協定解碼")
     render_guide_expander(
         "chapters/ch05_mctp_ipmb.md", "📖 點擊展開：MCTP 與 IPMB 伺服器協定解析教學"
     )
+    m_sample = "01 08 00 C0 01 00 02 01 00\n20 18 C8 81 00 01 7E"
     m_raw = st.text_area(
-        "請輸入 MCTP 或 IPMB 封包 Hex Dump (每行一封包)：",
+        "請輸入 MCTP 或 IPMB 封包十六進位資料（Hex Dump；每行一封包）：",
         height=150,
         max_chars=MAX_TEXT_BYTES,
-        value="01 08 00 C0 01 00 02 01 00\n20 18 C8 81 00 01 7E",
+        value=m_sample,
+    )
+    st.download_button(
+        "下載內建 MCTP／IPMB 範例",
+        data=m_sample,
+        file_name="mctp_ipmb_minimal.hex",
+        mime="text/plain",
+        key="mctp_download_example",
     )
     m_protocol_mode = st.selectbox(
         "協定模式（Protocol mode）",
@@ -1123,20 +1309,34 @@ elif menu == "🌐 MCTP / IPMB 伺服器協定解析":
                     "並保留原始 capture/協定標頭以便人工核對。"
                 )
             else:
-                st.markdown(ServerMgmtReporter.to_markdown(m_report))
+                mctp_md = ServerMgmtReporter.to_markdown(m_report)
+                st.markdown(mctp_md)
+                st.download_button(
+                    "下載 MCTP／IPMB Markdown 診斷報告",
+                    data=mctp_md,
+                    file_name="mctp_ipmb_report.md",
+                    mime="text/markdown",
+                    key="mctp_download_report",
+                )
 
 # 6. Device Tree Generator
-elif menu == "🌲 Device Tree (.dts) 產生器":
-    st.header("Linux Kernel & OpenBMC Device Tree Source (.dts) 自動生成")
+elif menu == "🌲 Device Tree（.dts）產生器":
+    st.header("Linux Kernel／OpenBMC Device Tree Source（.dts）自動產生")
     render_guide_expander("chapters/ch06_dts_generator.md", "📖 點擊展開：Device Tree 產生器教學")
     dt_b1, dt_b2, dt_b3 = st.columns(3)
     with dt_b1:
-        dts_bus = st.number_input("I2C Bus Number (&i2c...)", min_value=0, max_value=32, value=1)
+        dts_bus = st.number_input(
+            "I2C 匯流排編號（Bus Number；&i2c...）", min_value=0, max_value=65535, value=1
+        )
     with dt_b2:
-        dts_mux = st.text_input("PCA9548A MUX Address", value="0x70")
+        dts_mux = st.text_input("PCA9548A MUX 位址（MUX Address）", value="0x70")
     with dt_b3:
-        dts_clock = st.number_input("clock-frequency (Hz)", min_value=1, value=400000, step=10000)
-    dts_mux_compatible = st.text_input("MUX compatible", value="nxp,pca9548")
+        dts_clock = st.number_input(
+            "時鐘頻率（clock-frequency；Hz）", min_value=1, value=400000, step=10000
+        )
+    dts_mux_compatible = st.text_input(
+        "多工器相容字串（MUX compatible）", value="nxp,pca9548"
+    )
     dts_devices_text = st.text_area(
         "裝置清單（YAML；每個 device 必須有 addr/channel/name/compatible）",
         value="""- addr: 0x50
@@ -1151,7 +1351,7 @@ elif menu == "🌲 Device Tree (.dts) 產生器":
         height=180,
         max_chars=MAX_TEXT_BYTES,
     )
-    if st.button("產生 Device Tree"):
+    if st.button("產生 Device Tree（.dts）"):
         try:
             devices = (
                 yaml.safe_load(validate_pasted_text(dts_devices_text, label="Device Tree YAML"))
@@ -1165,39 +1365,77 @@ elif menu == "🌲 Device Tree (.dts) 產生器":
                 mux_compatible=dts_mux_compatible,
             )
             st.code(dts_code, language="dts")
-            st.download_button("下載 i2c_bus.dtsi", dts_code, file_name=f"i2c_bus{dts_bus}.dtsi")
+            st.download_button(
+                "下載 i2c_bus.dtsi",
+                dts_code,
+                file_name=f"i2c_bus{int(dts_bus)}.dtsi",
+                mime="text/plain",
+            )
         except (TypeError, ValueError, yaml.YAMLError) as exc:
             st.error(f"DTS 輸入錯誤：{exc}")
 
 # 7. PCIe
-elif menu == "🚀 PCIe Config & AER 診斷":
+elif menu == "🚀 PCIe Config Space 與 AER 診斷":
     st.header("PCIe 配置空間、Capability 鏈表與 AER 嚴重錯誤診斷")
     render_guide_expander(
         "chapters/ch07_pcie_aer.md", "📖 點擊展開：PCIe Config Space 與 AER 診斷教學"
     )
+    dmesg_mode = "貼上 Linux dmesg AER Error Log"
+    if st.button(
+        "載入內建 dmesg AER 範例",
+        key="pcie_dmesg_load_sample",
+        help="載入套件內建的最小 Linux AER log，方便先確認輸出欄位與 TLP Header。",
+    ):
+        st.session_state["pcie_input_mode"] = dmesg_mode
+        st.session_state["pcie_dmesg_sample_active"] = True
+        st.session_state["pcie_dmesg_sample_content"] = load_pcie_dmesg_sample()
+        st.session_state["pcie_raw_input"] = st.session_state["pcie_dmesg_sample_content"]
     input_mode = st.radio(
-        "輸入方式", ["貼上 lspci -xxxx / Hex Dump", "貼上 Linux dmesg AER Error Log"]
+        "輸入方式", ["貼上 lspci -xxxx / Hex Dump", dmesg_mode], key="pcie_input_mode"
     )
-    raw_input = st.text_area("輸入 Log 或 Dump 內容：", height=200, max_chars=MAX_TEXT_BYTES)
+    if input_mode != dmesg_mode and st.session_state.get("pcie_dmesg_sample_active"):
+        st.session_state["pcie_dmesg_sample_active"] = False
+        st.session_state.pop("pcie_dmesg_sample_content", None)
+        st.session_state["pcie_raw_input"] = ""
+    dmesg_sample = st.session_state.get("pcie_dmesg_sample_content")
+    if (
+        input_mode == dmesg_mode
+        and st.session_state.get("pcie_dmesg_sample_active") is True
+        and isinstance(dmesg_sample, str)
+    ):
+        st.info("已載入內建 dmesg AER 範例；可直接分析，或下載檔案後保存到自己的除錯紀錄。")
+        st.download_button(
+            "下載 dmesg AER 範例",
+            data=dmesg_sample,
+            file_name="pcie_aer_dmesg.log",
+            mime="text/plain",
+            key="pcie_dmesg_download_sample",
+        )
+    raw_input = st.text_area(
+        "輸入 Log 或 Dump 內容：", height=200, max_chars=MAX_TEXT_BYTES, key="pcie_raw_input"
+    )
     if st.button("執行 PCIe 分析") and raw_input.strip():
         try:
             raw_input = validate_pasted_text(raw_input, label="PCIe log/dump")
         except (TypeError, ValueError) as exc:
             st.error(f"PCIe 輸入錯誤：{exc}")
             st.stop()
-        if input_mode == "貼上 Linux dmesg AER Error Log":
+        if input_mode == dmesg_mode:
             events = PCIeAnalyzer.parse_dmesg_aer(raw_input)
-            st.subheader(f"Kernel dmesg AER 診斷結果 (共 {len(events)} 個事件)")
+            st.subheader(
+                f"Linux 核心 dmesg AER 診斷結果（Kernel dmesg AER 診斷結果；共 {len(events)} 個事件）"
+            )
             if not events:
                 st.warning("沒有找到可解析的 AER 事件；請確認貼上的內容包含完整 kernel dmesg。")
-            for idx, ev in enumerate(events, 1):
-                with st.expander(
-                    f"事件 #{idx}: {ev.bdf} - {ev.error_name} ({ev.severity})", expanded=True
-                ):
-                    st.markdown(f"**原始日誌**: `{ev.raw_line}`")
-                    if ev.tlp_header:
-                        st.markdown(f"**擷取到的 TLP Header**: `{ev.tlp_header}`")
-                    st.markdown("**Root Cause 排查 SOP**:\n" + ev.root_cause_guide)
+            pcie_dmesg_md = PCIeReporter.format_dmesg_events(events)
+            st.markdown(pcie_dmesg_md)
+            st.download_button(
+                "下載 PCIe dmesg Markdown 診斷報告",
+                data=pcie_dmesg_md,
+                file_name="pcie_dmesg_aer_report.md",
+                mime="text/markdown",
+                key="pcie_dmesg_download_report",
+            )
         else:
             try:
                 devices = PCIeAnalyzer.parse_multi_lspci_text(raw_input)
@@ -1212,16 +1450,28 @@ elif menu == "🚀 PCIe Config & AER 診斷":
                     "PCIe 輸入錯誤：部分裝置無法乾淨解碼；請先檢查 Data Quality "
                     "Limitations，不要把空欄位當成有效 Config Space。"
                 )
-            for cfg in devices:
+            for cfg_index, cfg in enumerate(devices, 1):
                 c1, c2, c3 = st.columns(3)
-                c1.metric("Vendor / Device ID", f"0x{cfg.vendor_id:04X} / 0x{cfg.device_id:04X}")
-                c2.metric("Header Type", cfg.header_type.name)
+                c1.metric(
+                    "廠商／裝置 ID（Vendor / Device ID）",
+                    f"0x{cfg.vendor_id:04X} / 0x{cfg.device_id:04X}",
+                )
+                c2.metric("標頭類型（Header Type）", cfg.header_type.name)
                 c3.metric(
-                    "Capabilities", len(cfg.standard_capabilities) + len(cfg.extended_capabilities)
+                    "Capabilities 數量（Capabilities）",
+                    len(cfg.standard_capabilities) + len(cfg.extended_capabilities),
                 )
                 if cfg.link_info and cfg.link_info.is_degraded:
-                    st.error(f"🚨 {cfg.link_info.degradation_reason}")
-                st.markdown(PCIeReporter.to_markdown(cfg))
+                    st.error(f"🚨 {PCIeReporter.localize_link_reason(cfg.link_info.degradation_reason)}")
+                pcie_cfg_md = PCIeReporter.to_markdown(cfg)
+                st.markdown(pcie_cfg_md)
+                st.download_button(
+                    f"下載 PCIe 診斷報告 #{cfg_index}",
+                    data=pcie_cfg_md,
+                    file_name=f"pcie_config_report_{cfg_index}.md",
+                    mime="text/markdown",
+                    key=f"pcie_config_download_{cfg_index}",
+                )
 
 # 8. SPI Flash
 elif menu == "⚡ SPI Flash 協定診斷":
@@ -1238,6 +1488,14 @@ elif menu == "⚡ SPI Flash 協定診斷":
         )
     with spi_col2:
         use_spi_sample = st.button("載入內建 SPI 測試波形")
+    spi_page_size = st.number_input(
+        "Page Size（頁面大小；bytes）",
+        min_value=1,
+        max_value=4096,
+        value=256,
+        step=1,
+        help="請依實際 Flash datasheet 設定；這會影響 Page Program 跨頁風險判定。",
+    )
     csv_text = None
     if uploaded_spi is not None:
         try:
@@ -1254,15 +1512,24 @@ elif menu == "⚡ SPI Flash 協定診斷":
         sample_text = st.session_state.get("spi_sample_content")
         if isinstance(sample_text, str):
             csv_text = sample_text
+    if st.session_state.get("spi_sample_active") and isinstance(csv_text, str):
+        st.download_button(
+            "下載內建 SPI 範例 CSV",
+            data=csv_text,
+            file_name="spi_w25q128_sample.csv",
+            mime="text/csv",
+            key="spi_download_example",
+        )
     if csv_text is not None:
         try:
-            rep = analyze_spi_input(csv_text)
+            rep = analyze_spi_input(csv_text, int(spi_page_size))
         except (TypeError, ValueError) as exc:
             st.error(f"無法解析 SPI trace：{exc}")
         else:
             st.caption(
                 "此頁分析的是 analyzer 已解碼的 MOSI/MISO/CS transaction；沒有 raw SCLK edge 時，"
-                "不能證明 CPOL/CPHA、bit timing 或 signal integrity。"
+                "不能證明 CPOL/CPHA、bit timing 或 signal integrity。Page Size 只用於規則判定，"
+                "不會自動取代 datasheet。"
             )
             s1, s2, s3, s4 = st.columns(4)
             s1.metric("總傳輸次數", rep.summary.total_transactions)
@@ -1271,7 +1538,15 @@ elif menu == "⚡ SPI Flash 協定診斷":
             s4.metric("異常事件", rep.summary.anomaly_count)
             if rep.summary.detected_flash_chip:
                 st.info(f"識別晶片型號: {rep.summary.detected_flash_chip}")
-            st.markdown(SPIReporter.to_markdown(rep))
+            spi_md = SPIReporter.to_markdown(rep)
+            st.markdown(spi_md)
+            st.download_button(
+                "下載 SPI Markdown 診斷報告",
+                data=spi_md,
+                file_name="spi_flash_report.md",
+                mime="text/markdown",
+                key="spi_download_report",
+            )
 
 # 9. Register Decoder
 elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
@@ -1309,23 +1584,38 @@ elif menu == "🎛 晶片暫存器 Bitfield 解碼器":
                 st.error(f"暫存器值無法解碼：{exc}")
             else:
                 st.subheader(f"{res.reg_name} (0x{cur_val:08X})")
+                if res.description:
+                    st.caption(f"暫存器說明（Description）：{_localize_register_meaning(res.description)}")
                 st.table(
                     pd.DataFrame(
                         [
                             {
-                                "Bit Range": f.bit_range,
-                                "Field": f.name,
-                                "Value": f.hex_val,
-                                "Meaning": f"⚠ {f.meaning}" if f.is_warning else f.meaning,
+                                "位元範圍（Bit Range）": f.bit_range,
+                                "欄位（Field）": f.name,
+                                "值（Value）": f.hex_val,
+                                "存取權限（Access）": f.access,
+                                "意義（Meaning）": (
+                                    f"⚠ {_localize_register_meaning(f.meaning)}"
+                                    if f.is_warning
+                                    else _localize_register_meaning(f.meaning)
+                                ),
                             }
                             for f in res.fields
                         ]
                     )
                 )
+                unmapped_text = f"0x{res.unmapped_bits:08X}"
+                if res.unmapped_bits:
+                    st.warning(
+                        f"有未對應位元（Unmapped bits）：{unmapped_text}；"
+                        "這些位元沒有出現在目前 YAML 定義，請回到 datasheet 確認。"
+                    )
+                else:
+                    st.caption("未對應位元（Unmapped bits）：0x00000000")
 
 # 10. C Codegen
 elif menu == "🛠 C 語言 Register 巨集產生器":
-    st.header("YAML 暫存器定義檔 -> C 語言 Header (#define / RMW 巨集) 自動生成")
+    st.header("YAML 暫存器定義檔轉換為 C 語言標頭檔（Header；#define／RMW 巨集）")
     render_guide_expander(
         "chapters/ch09_register_codegen.md", "📖 點擊展開：C 語言 Register 巨集產生器教學"
     )
@@ -1333,7 +1623,7 @@ elif menu == "🛠 C 語言 Register 巨集產生器":
     builtin_yamls = list(data_dir.glob("*.yaml"))
     choice_yaml = st.selectbox("選擇 YAML 範本", [y.name for y in builtin_yamls])
     mod_name = st.text_input(
-        "模組名稱 (Module Name)", value=choice_yaml.replace(".yaml", "").upper()
+        "模組名稱（Module Name）", value=choice_yaml.replace(".yaml", "").upper()
     )
     try:
         gen = CHeaderGenerator.from_yaml_file(data_dir / choice_yaml)
@@ -1341,14 +1631,22 @@ elif menu == "🛠 C 語言 Register 巨集產生器":
     except (OSError, TypeError, ValueError) as exc:
         st.error(f"C header 輸入錯誤：{exc}")
     else:
+        st.info(
+            "這是可編輯的 C header 起始模板；套用到 driver 前，請依 datasheet、"
+            "register access policy、compiler warning 與 MISRA checker 重新驗證。"
+        )
         st.code(c_header, language="c")
+        header_filename = CHeaderGenerator.header_filename(mod_name)
         st.download_button(
-            f"下載 {mod_name.lower()}.h", c_header, file_name=f"{mod_name.lower()}.h"
+            f"下載 {header_filename}",
+            c_header,
+            file_name=header_filename,
+            mime="text/x-c",
         )
 
 # 11. Fault Arena
-elif menu == "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)":
-    st.header("Junior Firmware 工程師 20 大經典硬韌體故障演練場")
+elif menu == "🏆 初階 Firmware 實戰除錯實驗室（Fault Arena）":
+    st.header("初階 Firmware 工程師 20 大經典硬韌體故障演練場（Fault Arena）")
     render_guide_expander("chapters/ch10_fault_arena.md", "📖 點擊展開：Fault Arena 實戰除錯手冊")
     arena_cases = [
         "Case 01: I2C Address NACK (Slave 未上電 / Address Pin 浮接)",
@@ -1374,30 +1672,44 @@ elif menu == "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)":
     ]
     sel_case = st.selectbox("選擇實戰演練案例", arena_cases)
     st.info(f"【案例分析】{sel_case}")
+    st.caption(
+        "案例資料是可重現的 synthetic training artifact（合成教學資料），用來練習觀察、"
+        "假設與驗證步驟；不代表真實公司 capture，也不保證單一根因。"
+    )
     case_idx = arena_cases.index(sel_case) + 1
     fixture = FaultArenaFixtures.get_case(f"{case_idx:02d}")
     if st.button("🚀 載入此案例模擬資料並自動分析", key=f"run_arena_{case_idx}"):
         data_content = fixture.builder()
         with st.expander("📄 檢視案例合成測試資料", expanded=False):
             st.code(data_content, language="csv" if ".csv" in fixture.filename else "text")
-        st.markdown("### 🔍 自動診斷分析結果")
+        st.markdown("### 🔍 自動診斷分析結果（Automated Diagnostic Result）")
+        arena_report_md: str | None = None
         if fixture.kind == "i2c":
             rep_i2c = I2CDiagnosticEngine().analyze_csv_content(data_content)
-            st.markdown(I2CReporter.generate_markdown(rep_i2c))
+            arena_report_md = I2CReporter.generate_markdown(rep_i2c)
         elif fixture.kind == "spi":
             rep_spi = SPIDiagnosticEngine().analyze_csv_content(data_content)
-            st.markdown(SPIReporter.to_markdown(rep_spi))
+            arena_report_md = SPIReporter.to_markdown(rep_spi)
         elif fixture.kind == "pcie":
             bdf, raw_bytes = PCIeAnalyzer.parse_lspci_text(data_content)
             cfg = PCIeAnalyzer.decode_config_space(raw_bytes, bdf=bdf)
-            st.markdown(PCIeReporter.to_markdown(cfg))
+            arena_report_md = PCIeReporter.to_markdown(cfg)
         elif fixture.kind == "uart":
             rep_uart = UARTCrashParser.parse_log_text(data_content)
-            st.markdown(UARTReporter.to_markdown(rep_uart))
+            arena_report_md = UARTReporter.to_markdown(rep_uart)
         elif fixture.kind in {"server_mgmt", "mctp"}:
             rep_mctp = ServerMgmtParser.parse_text_dump(data_content)
-            st.markdown(ServerMgmtReporter.to_markdown(rep_mctp))
-    st.markdown("**【標準排查 SOP & Root Cause 診斷】**:")
+            arena_report_md = ServerMgmtReporter.to_markdown(rep_mctp)
+        if arena_report_md is not None:
+            st.markdown(arena_report_md)
+            st.download_button(
+                "下載案例 Markdown 診斷報告",
+                data=arena_report_md,
+                file_name=f"fault_arena_case_{case_idx:02d}.md",
+                mime="text/markdown",
+                key=f"arena_download_report_{case_idx}",
+            )
+    st.markdown("**【標準排查 SOP 與根因（Root Cause）診斷】**：")
     if "01:" in sel_case:
         st.markdown(
             "1. 檢查 Slave 晶片供電 (3.3V/1.8V)。\n2. 檢查硬體 A0/A1/A2 位址設定腳位。\n3. 檢查 7-bit 位址是否未左移。"
@@ -1420,8 +1732,8 @@ elif menu == "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)":
         )
 
 # 12. SOP
-elif menu == "📚 韌體除錯指南 & SOP":
-    st.header("Junior Firmware 工程師韌體除錯指南與心智模型")
+elif menu == "📚 韌體除錯指南與 SOP":
+    st.header("Firmware 工程師韌體除錯指南與心智模型（SOP／Mental Model）")
     render_guide_expander(
         "chapters/appendix_gui_reading_guide.md", "🧭 點擊展開：附錄 B 12 個 GUI 頁面第一輪閱讀地圖"
     )
@@ -1435,39 +1747,39 @@ elif menu == "📚 韌體除錯指南 & SOP":
         pd.DataFrame(
             [
                 {
-                    "Layer": "L1 物理 / 電氣",
-                    "先問什麼": "電源、接地、pull-up、線路電平與 clock 是否真的存在？",
-                    "本工具能做什麼": "Raw I2C 的 digital 0/1 edge、tHIGH/tLOW；不能量類比電壓或 PCIe eye。",
+                    "層次（Layer）": "L1 物理／電氣（Physical / Electrical）",
+                    "先問什麼（Question）": "電源、接地、pull-up、線路電平與 clock 是否真的存在？",
+                    "本工具能提供的證據（Evidence）": "Raw I2C 的 digital 0/1 edge、tHIGH/tLOW；不能量類比電壓或 PCIe eye。",
                 },
                 {
-                    "Layer": "L2 Link / Framing",
-                    "先問什麼": "CS/START/STOP、ACK/NACK、stretch 或 frame boundary 是否合理？",
-                    "本工具能做什麼": "I2C/SPI analyzer decode、raw I2C bit decode、PCIe AER/config 欄位。",
+                    "層次（Layer）": "L2 連結／框架（Link / Framing）",
+                    "先問什麼（Question）": "CS/START/STOP、ACK/NACK、stretch 或 frame boundary 是否合理？",
+                    "本工具能提供的證據（Evidence）": "I2C/SPI analyzer decode、raw I2C bit decode、PCIe AER/config 欄位。",
                 },
                 {
-                    "Layer": "L3 Protocol",
-                    "先問什麼": "opcode、command、register offset、checksum 或 message type 是否正確？",
-                    "本工具能做什麼": "PMBus、EEPROM、SPI opcode、MCTP/IPMB、PCIe capability 解碼。",
+                    "層次（Layer）": "L3 協定（Protocol）",
+                    "先問什麼（Question）": "opcode、command、register offset、checksum 或 message type 是否正確？",
+                    "本工具能提供的證據（Evidence）": "PMBus、EEPROM、SPI opcode、MCTP/IPMB、PCIe capability 解碼。",
                 },
                 {
-                    "Layer": "L4 Driver / Transport",
-                    "先問什麼": "Linux i2c-dev、SPI driver、MCTP transport 或 DMA 是否送出預期序列？",
-                    "本工具能做什麼": "把 capture/log 對回交易順序；不會直接檢查 live kernel state。",
+                    "層次（Layer）": "L4 驅動／傳輸（Driver / Transport）",
+                    "先問什麼（Question）": "Linux i2c-dev、SPI driver、MCTP transport 或 DMA 是否送出預期序列？",
+                    "本工具能提供的證據（Evidence）": "把 capture/log 對回交易順序；不會直接檢查 live kernel state。",
                 },
                 {
-                    "Layer": "L5 Retry / State",
-                    "先問什麼": "是否有 retry、timeout、WREN/Busy、MUX channel 或 reset 狀態機問題？",
-                    "本工具能做什麼": "列出已觀察的重試、NACK、clock stretch、SPI WREN/Busy 證據。",
+                    "層次（Layer）": "L5 重試／狀態（Retry / State）",
+                    "先問什麼（Question）": "是否有 retry、timeout、WREN/Busy、MUX channel 或 reset 狀態機問題？",
+                    "本工具能提供的證據（Evidence）": "列出已觀察的重試、NACK、clock stretch、SPI WREN/Busy 證據。",
                 },
                 {
-                    "Layer": "L6 Platform / Board",
-                    "先問什麼": "board wiring、Device Tree binding、power/reset/ownership 是否吻合？",
-                    "本工具能做什麼": "產生 DTS/driver 起始模板；必須用 schematic、datasheet、dtc/dt-schema 驗證。",
+                    "層次（Layer）": "L6 平台／板級（Platform / Board）",
+                    "先問什麼（Question）": "board wiring、Device Tree binding、power/reset/ownership 是否吻合？",
+                    "本工具能提供的證據（Evidence）": "產生 DTS/driver 起始模板；必須用 schematic、datasheet、dtc/dt-schema 驗證。",
                 },
                 {
-                    "Layer": "L7 Application / Meaning",
-                    "先問什麼": "這個 register/telemetry 值對產品行為代表什麼？",
-                    "本工具能做什麼": "Bitfield/PMBus/sensor 候選解碼；需要正確 device profile 才能下語意結論。",
+                    "層次（Layer）": "L7 應用／語意（Application / Meaning）",
+                    "先問什麼（Question）": "這個 register/telemetry 值對產品行為代表什麼？",
+                    "本工具能提供的證據（Evidence）": "Bitfield/PMBus/sensor 候選解碼；需要正確 device profile 才能下語意結論。",
                 },
             ]
         )
@@ -1488,11 +1800,11 @@ elif menu == "📚 韌體除錯指南 & SOP":
     st.table(
         pd.DataFrame(
             [
-                {"詞": "Measured", "意思": "直接由輸入 timestamp/edge/value 計算。"},
-                {"詞": "Inferred", "意思": "由多個觀察欄位推論，仍可能有替代解釋。"},
-                {"詞": "Reconstructed", "意思": "依 decoded bytes 畫出的理想示意，不是實測波形。"},
-                {"詞": "Hypothesis", "意思": "排查方向，不是已證明的 root cause。"},
-                {"詞": "Unavailable", "意思": "輸入缺少必要證據；工具不補 0 或猜測。"},
+                {"詞（Term）": "實測（Measured）", "意思（Meaning）": "直接由輸入 timestamp/edge/value 計算。"},
+                {"詞（Term）": "推論（Inferred）", "意思（Meaning）": "由多個觀察欄位推論，仍可能有替代解釋。"},
+                {"詞（Term）": "協定重建（Reconstructed）", "意思（Meaning）": "依 decoded bytes 畫出的理想示意，不是實測波形。"},
+                {"詞（Term）": "假設（Hypothesis）", "意思（Meaning）": "排查方向，不是已證明的 root cause。"},
+                {"詞（Term）": "不可用（Unavailable）", "意思（Meaning）": "輸入缺少必要證據；工具不補 0 或猜測。"},
             ]
         )
     )

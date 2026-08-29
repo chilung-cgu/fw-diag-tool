@@ -9,6 +9,13 @@ _I2C_SAMPLE_FILES = {
     "text-trace": "i2c_text_trace.log",
 }
 
+_WAVEFORM_DIFF_SAMPLE_FILES = {
+    "golden": "i2c_golden.csv",
+    "failing": "i2c_failing_nack.csv",
+}
+
+_PCIE_DMESG_SAMPLE_FILE = "pcie_aer_dmesg.log"
+
 
 def load_i2c_sample(sample: str = "builtin-decoded") -> str:
     """Return a packaged I2C teaching capture."""
@@ -25,4 +32,23 @@ def load_spi_sample() -> str:
     return files(__package__).joinpath("spi_w25q128_sample.csv").read_text(encoding="utf-8")
 
 
-__all__ = ["load_i2c_sample", "load_spi_sample"]
+def load_waveform_diff_samples() -> tuple[str, str]:
+    """Return the packaged Golden and Failing traces used by Page 3."""
+    resource_files = files(__package__)
+    return (
+        resource_files.joinpath(_WAVEFORM_DIFF_SAMPLE_FILES["golden"]).read_text(encoding="utf-8"),
+        resource_files.joinpath(_WAVEFORM_DIFF_SAMPLE_FILES["failing"]).read_text(encoding="utf-8"),
+    )
+
+
+def load_pcie_dmesg_sample() -> str:
+    """Return the packaged Linux dmesg AER teaching sample."""
+    return files(__package__).joinpath(_PCIE_DMESG_SAMPLE_FILE).read_text(encoding="utf-8")
+
+
+__all__ = [
+    "load_i2c_sample",
+    "load_pcie_dmesg_sample",
+    "load_spi_sample",
+    "load_waveform_diff_samples",
+]
