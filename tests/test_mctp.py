@@ -1,5 +1,5 @@
 
-from fw_diag_tool.mctp.models import ProtocolMode
+from fw_diag_tool.mctp.models import ProtocolMode, ServerMgmtReport
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
 
@@ -17,6 +17,7 @@ def test_mctp_dsp0236_header_version_and_pldm():
     assert "Platform Monitoring" in (pkt.pldm_command or "")
     md = ServerMgmtReporter.to_markdown(report)
     assert "MCTP Packets" in md
+    assert "已解碼 1 個 MCTP 封包與 0 個 IPMB 框架" in md
     assert "回應（Response）" in md
     assert "完成碼（CC）" in md
 
@@ -126,6 +127,34 @@ def test_mctp_multi_packet_sequence_mismatch_detected():
     assert msg.is_complete is False
     assert msg.error is not None
     assert "sequence mismatch" in msg.error
+    assert "序號不一致" in ServerMgmtReporter.to_markdown(report)
+
+
+def test_reporter_localizes_unknown_mctp_type_and_ipmb_tokens():
+    mctp_report = ServerMgmtParser.parse_text_dump("01 08 00 C0 09 AA")
+    mctp_markdown = ServerMgmtReporter.to_markdown(mctp_report)
+    assert "未知訊息類型（Type 0x09）" in mctp_markdown
+    assert "0x09" in mctp_markdown
+
+    ipmb_report = ServerMgmtParser.parse_text_dump(
+        "20 3C 00 81 00 99 00", protocol_mode=ProtocolMode.IPMB
+    )
+    ipmb_markdown = ServerMgmtReporter.to_markdown(ipmb_report)
+    assert "未知網路功能（NetFn 0x0F）" in ipmb_markdown
+    assert "未知命令（Cmd 0x99）" in ipmb_markdown
+
+
+def test_reporter_localizes_summary_and_unknown_source_error_fallback():
+    report = ServerMgmtReport(
+        summary_text="Decoded 1 MCTP, 1 IPMB",
+        unparsed_lines=["bad-input"],
+        source_errors=["line 3 error"],
+    )
+
+    markdown = ServerMgmtReporter.to_markdown(report)
+
+    assert "已解碼 1 個 MCTP 封包與 1 個 IPMB 框架" in markdown
+    assert "來源解析錯誤：line 3 error" in markdown
 
 
 def test_ipmb_checksum_only_classification():

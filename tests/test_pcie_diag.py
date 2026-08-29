@@ -2,6 +2,14 @@ import struct
 import unittest
 
 from fw_diag_tool.pcie import HeaderType, PCIeAnalyzer, PCIeReporter
+from fw_diag_tool.pcie.reporter import (
+    _localize_capability_name,
+    _localize_class_name,
+    _localize_data_quality_issue,
+    _localize_error_name,
+    _localize_root_cause,
+    _localize_tlp_type,
+)
 
 
 class TestPCIeAnalyzer(unittest.TestCase):
@@ -99,6 +107,56 @@ class TestPCIeAnalyzer(unittest.TestCase):
         self.assertIn("Completion Timeout", md)
         self.assertIn("記憶體讀取 3DW（MRd", md)
         self.assertIn("BAR0", md)
+
+    def test_markdown_report_uses_zh_tw_first_labels_and_keeps_pcie_tokens(self):
+        cfg = PCIeAnalyzer.decode_config_space(self.raw_bytes, bdf="0000:01:00.0")
+        md = PCIeReporter.to_markdown(cfg)
+
+        self.assertIn("**廠商 ID／裝置 ID（Vendor ID／Device ID）**", md)
+        self.assertIn("**標頭類型（Header Type）**", md)
+        self.assertIn("致命（Fatal）", md)
+        self.assertIn("流量類別（Traffic Class；TC）", md)
+        self.assertIn("摘要（Digest；TD）", md)
+        self.assertIn("毒化（Poisoned；EP）", md)
+
+    def test_reporter_dynamic_fallbacks_localize_and_retain_source_tokens(self):
+        self.assertEqual(
+            _localize_class_name("Unknown Class 0xFE"),
+            "未知類別（Unknown Class 0xFE）",
+        )
+        self.assertEqual(
+            _localize_capability_name("Extended Cap 0x1234"),
+            "未知延伸 Capability（Extended Cap 0x1234）",
+        )
+        self.assertEqual(
+            _localize_tlp_type("TLP Fmt:0x7 Type:0x1F"),
+            "未知 TLP 類型（TLP Fmt:0x7 Type:0x1F）",
+        )
+        self.assertEqual(
+            _localize_error_name("Receiver ID"),
+            "未知 AER 錯誤（Receiver ID）",
+        )
+        self.assertIn("MysteryFlag", _localize_root_cause("Specific error flag: MysteryFlag"))
+        quality = _localize_data_quality_issue("Future parser quality token")
+        self.assertIn("資料品質問題", quality)
+        self.assertIn("Future parser quality token", quality)
+
+    def test_reporter_exposes_chinese_first_class_and_header_labels(self):
+        self.assertEqual(
+            PCIeReporter.localize_class_name("Processing Accelerator"),
+            "處理加速器（Processing Accelerator）",
+        )
+        self.assertEqual(
+            PCIeReporter.localize_header_type(HeaderType.TYPE_0_ENDPOINT),
+            "端點裝置（TYPE_0_ENDPOINT）",
+        )
+
+    def test_reporter_localizes_multiline_unknown_root_cause_without_dropping_raw_text(self):
+        guide = "First diagnostic sentence.\nSecond diagnostic sentence."
+        localized = _localize_root_cause(guide)
+        self.assertIn("根因排查指引", localized)
+        self.assertIn("First diagnostic sentence.", localized)
+        self.assertIn("Second diagnostic sentence.", localized)
 
 
 if __name__ == "__main__":

@@ -5,13 +5,13 @@ import re
 from .models import DmesgAEREvent, HeaderType, PCIeConfigSpace
 
 _ROOT_CAUSE_GUIDE_ZH = {
-    "Completion Timeout (CTO): Requester did not receive completion in time.": "Completion Timeout（CTO）：Requester 未在期限內收到 completion。",
-    "Unsupported Request (UR): Target received unsupported or out-of-range TLP.": "Unsupported Request（UR）：Target 收到不支援或超出範圍的 TLP。",
-    "Malformed TLP: Violation of Transaction Layer packet framing or length.": "Malformed TLP：違反 Transaction Layer 封包框架或長度規則。",
-    "Poisoned TLP: Data parity or error bit EP is set in received TLP.": "Poisoned TLP：收到的 TLP 設定了資料同位元或 EP 錯誤位元。",
-    "Surprise Down: PCIe Link went down unexpectedly without software handshake.": "Surprise Down：PCIe Link 未經軟體交握便意外中斷。",
-    "Receiver Error: Physical layer 8b/10b or 128b/130b decode error or framing error.": "Receiver Error：Physical Layer 8b/10b 或 128b/130b 解碼／框架錯誤。",
-    "Bad TLP: LCRC check failed in Data Link layer, triggering replay.": "Bad TLP：Data Link Layer 的 LCRC 檢查失敗，觸發 replay。",
+    "Completion Timeout (CTO): Requester did not receive completion in time.": "完成逾時（Completion Timeout；CTO）：請求端（Requester）未在期限內收到 completion。",
+    "Unsupported Request (UR): Target received unsupported or out-of-range TLP.": "不支援請求（Unsupported Request；UR）：目標端（Target）收到不支援或超出範圍的 TLP。",
+    "Malformed TLP: Violation of Transaction Layer packet framing or length.": "格式錯誤 TLP（Malformed TLP）：違反 Transaction Layer 封包框架或長度規則。",
+    "Poisoned TLP: Data parity or error bit EP is set in received TLP.": "毒化 TLP（Poisoned TLP）：收到的 TLP 設定資料同位元或 EP 錯誤位元。",
+    "Surprise Down: PCIe Link went down unexpectedly without software handshake.": "意外斷線（Surprise Down）：PCIe Link 未經軟體交握便意外中斷。",
+    "Receiver Error: Physical layer 8b/10b or 128b/130b decode error or framing error.": "接收器錯誤（Receiver Error）：Physical Layer 發生 8b/10b 或 128b/130b 解碼／框架錯誤。",
+    "Bad TLP: LCRC check failed in Data Link layer, triggering replay.": "錯誤 TLP（Bad TLP）：Data Link Layer 的 LCRC 檢查失敗，已觸發 replay。",
 }
 _LINK_DEGRADED_RE = re.compile(
     r"^PCIe Link Degraded: Operating at (?P<current>.+) x(?P<current_width>\d+) "
@@ -21,30 +21,40 @@ _AER_TRUNCATED_RE = re.compile(
     r"^AER capability at (?P<offset>0x[0-9A-Fa-f]+) is truncated: "
     r"the (?P<size>0x[0-9A-Fa-f]+)-byte AER structure is not fully present in the source dump$"
 )
+_DEVICE_DUMP_RE = re.compile(
+    r"^Device dump could not be decoded: (?P<detail>.+?) "
+    r"The source bytes were not interpreted as a clean config space\.?$"
+)
+_COMMAND_REGISTER_BIT_RE = re.compile(
+    r"^Command Register Bit (?P<bit>\d+) \((?P<field>[A-Za-z0-9_.]+)\) is 0\.?$"
+)
+_TLP_FALLBACK_RE = re.compile(
+    r"^TLP Fmt:(?P<fmt>0x[0-9A-Fa-f]+) Type:(?P<type>0x[0-9A-Fa-f]+)$"
+)
 _SEVERITY_PAIR_RE = re.compile(r"^(?P<outer>[^()]+) \((?P<inner>[^()]+)\)$")
 
 _ERROR_NAME_ZH = {
-    "Data Link Protocol Error": "Data Link Protocol 錯誤（Data Link Protocol Error）",
-    "DLP": "Data Link Protocol 錯誤（DLP）",
-    "Surprise Down Error": "Surprise Down 錯誤（Surprise Down Error）",
-    "SurpriseDown": "Surprise Down 錯誤（SurpriseDown）",
+    "Data Link Protocol Error": "資料鏈結協定錯誤（Data Link Protocol Error）",
+    "DLP": "資料鏈結協定錯誤（DLP；Data Link Protocol）",
+    "Surprise Down Error": "意外斷線錯誤（Surprise Down Error）",
+    "SurpriseDown": "意外斷線錯誤（SurpriseDown）",
     "Poisoned TLP Received": "收到 Poisoned TLP（Poisoned TLP Received）",
     "PoisonedTLP": "收到 Poisoned TLP（PoisonedTLP）",
-    "Flow Control Protocol Error": "Flow Control Protocol 錯誤（Flow Control Protocol Error）",
-    "FCP": "Flow Control Protocol 錯誤（FCP）",
-    "Completion Timeout": "Completion Timeout（完成逾時；Completion Timeout）",
-    "CompTimeout": "Completion Timeout（完成逾時；CompTimeout）",
-    "Completer Abort": "Completer Abort（完成端中止；Completer Abort）",
-    "CompAbort": "Completer Abort（完成端中止；CompAbort）",
+    "Flow Control Protocol Error": "流量控制協定錯誤（Flow Control Protocol Error）",
+    "FCP": "流量控制協定錯誤（FCP；Flow Control Protocol）",
+    "Completion Timeout": "完成逾時（Completion Timeout）",
+    "CompTimeout": "完成逾時（CompTimeout；Completion Timeout）",
+    "Completer Abort": "完成端中止（Completer Abort）",
+    "CompAbort": "完成端中止（CompAbort；Completer Abort）",
     "Unexpected Completion": "非預期 Completion（Unexpected Completion）",
     "UnexpComp": "非預期 Completion（UnexpComp）",
-    "Receiver Overflow": "Receiver Overflow（接收器溢位；Receiver Overflow）",
-    "RxOverflow": "Receiver Overflow（接收器溢位；RxOverflow）",
-    "Malformed TLP": "Malformed TLP（封包格式錯誤；Malformed TLP）",
+    "Receiver Overflow": "接收器溢位（Receiver Overflow）",
+    "RxOverflow": "接收器溢位（RxOverflow；Receiver Overflow）",
+    "Malformed TLP": "封包格式錯誤（Malformed TLP）",
     "ECRC Error": "ECRC 錯誤（ECRC Error）",
     "ECRC": "ECRC 錯誤（ECRC）",
-    "Unsupported Request Error": "Unsupported Request 錯誤（Unsupported Request Error）",
-    "UR": "Unsupported Request 錯誤（UR）",
+    "Unsupported Request Error": "不支援請求錯誤（Unsupported Request Error）",
+    "UR": "不支援請求錯誤（UR；Unsupported Request）",
     "ACS Violation": "ACS 違規（ACS Violation）",
     "ACSViolation": "ACS 違規（ACSViolation）",
     "Uncorrectable Internal Error": "不可修正內部錯誤（Uncorrectable Internal Error）",
@@ -57,27 +67,27 @@ _ERROR_NAME_ZH = {
     "TLPPrefixBlocked": "TLP Prefix 被封鎖（TLPPrefixBlocked）",
     "Poisoned TLP Egress Blocked": "Poisoned TLP 輸出被封鎖（Poisoned TLP Egress Blocked）",
     "PoisonedEgressBlocked": "Poisoned TLP 輸出被封鎖（PoisonedEgressBlocked）",
-    "Receiver Error": "Receiver Error（接收器錯誤；Receiver Error）",
-    "RxErr": "Receiver Error（接收器錯誤；RxErr）",
-    "Bad DLLP": "Bad DLLP（DLLP 錯誤；Bad DLLP）",
-    "BadDLLP": "Bad DLLP（DLLP 錯誤；BadDLLP）",
-    "Bad TLP": "Bad TLP（LCRC 錯誤；Bad TLP）",
-    "BadTLP": "Bad TLP（LCRC 錯誤；BadTLP）",
-    "Replay Number Rollover": "Replay Number Rollover（重播序號回繞；Replay Number Rollover）",
-    "ReplayNumRollover": "Replay Number Rollover（重播序號回繞；ReplayNumRollover）",
-    "Replay Timer Timeout": "Replay Timer Timeout（重播計時器逾時；Replay Timer Timeout）",
-    "ReplayTimeout": "Replay Timer Timeout（重播計時器逾時；ReplayTimeout）",
-    "Advisory Non-Fatal Error": "Advisory Non-Fatal Error（建議性非致命錯誤）",
-    "AdvisoryNonFatal": "Advisory Non-Fatal Error（建議性非致命錯誤；AdvisoryNonFatal）",
-    "Corrected Internal Error": "Corrected Internal Error（已修正內部錯誤）",
-    "CorrIntErr": "Corrected Internal Error（已修正內部錯誤；CorrIntErr）",
-    "Header Log Overflow": "Header Log Overflow（標頭記錄溢位）",
-    "HdrLogOverflow": "Header Log Overflow（標頭記錄溢位；HdrLogOverflow）",
-    "MalformedTLP": "Malformed TLP（封包格式錯誤；MalformedTLP）",
-    "CompletionTimeout": "Completion Timeout（完成逾時；CompletionTimeout）",
-    "ReceiverError": "Receiver Error（接收器錯誤；ReceiverError）",
+    "Receiver Error": "接收器錯誤（Receiver Error）",
+    "RxErr": "接收器錯誤（RxErr；Receiver Error）",
+    "Bad DLLP": "DLLP 錯誤（Bad DLLP）",
+    "BadDLLP": "DLLP 錯誤（BadDLLP）",
+    "Bad TLP": "LCRC 錯誤（Bad TLP）",
+    "BadTLP": "LCRC 錯誤（BadTLP）",
+    "Replay Number Rollover": "重播序號回繞（Replay Number Rollover）",
+    "ReplayNumRollover": "重播序號回繞（ReplayNumRollover）",
+    "Replay Timer Timeout": "重播計時器逾時（Replay Timer Timeout）",
+    "ReplayTimeout": "重播計時器逾時（ReplayTimeout）",
+    "Advisory Non-Fatal Error": "建議性非致命錯誤（Advisory Non-Fatal Error）",
+    "AdvisoryNonFatal": "建議性非致命錯誤（AdvisoryNonFatal；Advisory Non-Fatal Error）",
+    "Corrected Internal Error": "已修正內部錯誤（Corrected Internal Error）",
+    "CorrIntErr": "已修正內部錯誤（CorrIntErr；Corrected Internal Error）",
+    "Header Log Overflow": "標頭記錄溢位（Header Log Overflow）",
+    "HdrLogOverflow": "標頭記錄溢位（HdrLogOverflow；Header Log Overflow）",
+    "MalformedTLP": "封包格式錯誤（MalformedTLP）",
+    "CompletionTimeout": "完成逾時（CompletionTimeout）",
+    "ReceiverError": "接收器錯誤（ReceiverError）",
     "Memory Space Disabled": "記憶體空間未啟用（Memory Space Disabled）",
-    "Bus Master Disabled": "Bus Master 未啟用（Bus Master Disabled）",
+    "Bus Master Disabled": "匯流排主控未啟用（Bus Master Disabled）",
 }
 
 _CLASS_NAME_ZH = {
@@ -102,6 +112,13 @@ _CLASS_NAME_ZH = {
     "Processing Accelerator": "處理加速器（Processing Accelerator）",
     "Non-Essential Instrumentation": "非必要儀器（Non-Essential Instrumentation）",
     "Unassigned / Vendor Specific": "未指定／廠商專屬（Unassigned / Vendor Specific）",
+}
+
+_HEADER_TYPE_ZH = {
+    HeaderType.TYPE_0_ENDPOINT.name: "端點裝置（TYPE_0_ENDPOINT）",
+    HeaderType.TYPE_1_BRIDGE.name: "橋接裝置（TYPE_1_BRIDGE）",
+    HeaderType.TYPE_2_CARDBUS.name: "CardBus 裝置（TYPE_2_CARDBUS）",
+    HeaderType.UNKNOWN.name: "未知（UNKNOWN）",
 }
 
 _CAPABILITY_NAME_ZH = {
@@ -130,6 +147,14 @@ _CAPABILITY_NAME_ZH = {
     "Virtual Channel (VC)": "虛擬通道（Virtual Channel；VC）",
     "Device Serial Number (DSN)": "裝置序號（Device Serial Number；DSN）",
     "Power Budgeting": "電源預算（Power Budgeting）",
+    "Root Complex Link Declaration": "Root Complex Link 宣告（Root Complex Link Declaration）",
+    "Root Complex Internal Link Control": "Root Complex 內部 Link 控制（Root Complex Internal Link Control）",
+    "Root Complex Event Collector Endpoint Association": "Root Complex 事件收集器 Endpoint 關聯（Root Complex Event Collector Endpoint Association）",
+    "Multi-Function Virtual Channel": "多功能虛擬通道（Multi-Function Virtual Channel）",
+    "Virtual Channel 9": "虛擬通道 9（Virtual Channel 9）",
+    "Root Complex Register Block": "Root Complex 暫存器區塊（Root Complex Register Block）",
+    "Vendor-Specific Extended Capability (VSEC)": "廠商專屬延伸 Capability（Vendor-Specific Extended Capability；VSEC）",
+    "Configuration Access Correlation": "設定存取關聯（Configuration Access Correlation）",
     "Access Control Services (ACS)": "存取控制服務（Access Control Services；ACS）",
     "Alternative Routing-ID Interpretation (ARI)": "替代路由識別碼解讀（Alternative Routing-ID Interpretation；ARI）",
     "Address Translation Services (ATS)": "位址轉譯服務（Address Translation Services；ATS）",
@@ -167,7 +192,7 @@ _CAPABILITY_FIELD_ZH = {
     "current_link_speed": "目前 Link 速率（current_link_speed）",
     "current_link_width": "目前 Link 寬度（current_link_width）",
     "is_link_degraded": "Link 是否降級（is_link_degraded）",
-    "link_retrain": "Link retrain（link_retrain）",
+    "link_retrain": "連線重新訓練（Link retrain；link_retrain）",
     "is_64bit": "是否 64-bit（is_64bit）",
     "enabled": "是否啟用（enabled）",
     "multiple_msg_enable": "多重訊息啟用數（multiple_msg_enable）",
@@ -183,15 +208,15 @@ _CAPABILITY_FIELD_ZH = {
 }
 
 _CAPABILITY_VALUE_ZH = {
-    "PCI Express Endpoint": "PCI Express Endpoint（PCIe 終端裝置）",
-    "Legacy PCI Express Endpoint": "Legacy PCI Express Endpoint（舊式 PCIe 終端裝置）",
-    "Root Port of PCI Express Root Complex": "Root Port of PCI Express Root Complex（PCIe Root Complex 根埠）",
-    "Upstream Port of PCI Express Switch": "Upstream Port of PCI Express Switch（PCIe Switch 上游埠）",
-    "Downstream Port of PCI Express Switch": "Downstream Port of PCI Express Switch（PCIe Switch 下游埠）",
-    "PCI Express to PCI/PCI-X Bridge": "PCI Express to PCI/PCI-X Bridge（PCIe 至 PCI/PCI-X 橋接器）",
-    "PCI/PCI-X to PCI Express Bridge": "PCI/PCI-X to PCI Express Bridge（PCI/PCI-X 至 PCIe 橋接器）",
-    "Root Complex Integrated Endpoint": "Root Complex Integrated Endpoint（Root Complex 整合終端）",
-    "Root Complex Event Collector": "Root Complex Event Collector（Root Complex 事件收集器）",
+    "PCI Express Endpoint": "PCIe 終端裝置（PCI Express Endpoint）",
+    "Legacy PCI Express Endpoint": "舊式 PCIe 終端裝置（Legacy PCI Express Endpoint）",
+    "Root Port of PCI Express Root Complex": "PCIe Root Complex 根埠（Root Port of PCI Express Root Complex）",
+    "Upstream Port of PCI Express Switch": "PCIe Switch 上游埠（Upstream Port of PCI Express Switch）",
+    "Downstream Port of PCI Express Switch": "PCIe Switch 下游埠（Downstream Port of PCI Express Switch）",
+    "PCI Express to PCI/PCI-X Bridge": "PCIe 至 PCI/PCI-X 橋接器（PCI Express to PCI/PCI-X Bridge）",
+    "PCI/PCI-X to PCI Express Bridge": "PCI/PCI-X 至 PCIe 橋接器（PCI/PCI-X to PCI Express Bridge）",
+    "Root Complex Integrated Endpoint": "Root Complex 整合終端（Root Complex Integrated Endpoint）",
+    "Root Complex Event Collector": "Root Complex 事件收集器（Root Complex Event Collector）",
 }
 
 _TLP_TYPE_ZH = {
@@ -216,51 +241,84 @@ _TLP_TYPE_ZH = {
 }
 
 
+def _contains_cjk(value: str) -> bool:
+    return bool(re.search(r"[\u3400-\u9fff]", value))
+
+
 def _localize_root_cause(value: str | None) -> str:
     if not value:
         return ""
     if "\n" in value:
         return "\n".join(_localize_root_cause(line) for line in value.splitlines())
-    link_reason = _localize_link_reason(value)
-    if link_reason != value:
-        return link_reason
+    if _LINK_DEGRADED_RE.fullmatch(value):
+        return _localize_link_reason(value)
     translated = _ROOT_CAUSE_GUIDE_ZH.get(value)
     if translated:
         return translated
+    if value.startswith("【Root Cause 排查建議】"):
+        return value.replace("【Root Cause 排查建議】", "【根因排查建議（Root Cause）】", 1)
     if value.startswith("Linux Kernel AER error event: "):
-        return f"Linux Kernel AER 事件：{value.removeprefix('Linux Kernel AER error event: ')}"
+        token = value.removeprefix("Linux Kernel AER error event: ")
+        return f"Linux Kernel AER 事件：{_localize_error_name(token)}"
     if value.startswith("Specific error flag: "):
-        return f"特定錯誤旗標：{value.removeprefix('Specific error flag: ')}"
-    if value == "Command Register Bit 1 (MSE) is 0.":
-        return "Command Register Bit 1（MSE）為 0。"
-    if value == "Command Register Bit 2 (BME) is 0.":
-        return "Command Register Bit 2（BME）為 0。"
-    return value
+        token = value.removeprefix("Specific error flag: ")
+        return f"特定錯誤旗標：{_localize_error_name(token)}"
+    match = _COMMAND_REGISTER_BIT_RE.fullmatch(value)
+    if match:
+        return f"Command Register Bit {match.group('bit')}（{match.group('field')}）為 0。"
+    if value.startswith("Root Cause: "):
+        return f"根因：{value.removeprefix('Root Cause: ')}（原始：{value}）"
+    if _contains_cjk(value):
+        return value
+    return f"根因排查指引（原始：{value}）"
 
 
 def _localize_data_quality_issue(value: str) -> str:
+    match = _DEVICE_DUMP_RE.fullmatch(value)
+    if match:
+        return (
+            f"裝置 dump 無法解碼：{match.group('detail')}；來源 bytes 未被解讀為有效 "
+            f"PCIe Configuration Space。（原始：{value}）"
+        )
     if value.startswith("Device dump could not be decoded: "):
         detail = value.removeprefix("Device dump could not be decoded: ")
-        return f"裝置 dump 無法解碼：{detail}（Device dump could not be decoded）"
+        return f"裝置 dump 無法解碼：{detail}（原始：{value}）"
     match = _AER_TRUNCATED_RE.fullmatch(value)
     if match:
         return (
-            f"AER capability 位於 {match.group('offset')}，來源 dump 只提供部分結構，"
-            f"未包含完整 {match.group('size')} bytes（{value}）"
+            f"AER Capability 位於 {match.group('offset')}；來源 dump 只有部分結構，"
+            f"未包含完整 {match.group('size')} bytes。（原始：{value}）"
         )
-    return value
+    if _contains_cjk(value):
+        return value
+    return f"資料品質問題（原始：{value}）"
 
 
 def _localize_class_name(value: str) -> str:
+    if not value:
+        return ""
     if value in _CLASS_NAME_ZH:
         return _CLASS_NAME_ZH[value]
     match = re.fullmatch(r"Unknown Class (0x[0-9A-Fa-f]+)", value)
     if match:
         return f"未知類別（{value}）"
-    return value
+    if _contains_cjk(value):
+        return value
+    return f"未知類別（{value}）"
+
+
+def _localize_header_type(value: HeaderType | str) -> str:
+    raw = value.name if isinstance(value, HeaderType) else str(value)
+    if raw in _HEADER_TYPE_ZH:
+        return _HEADER_TYPE_ZH[raw]
+    if _contains_cjk(raw):
+        return raw
+    return f"未知標頭類型（{raw}）"
 
 
 def _localize_capability_name(value: str) -> str:
+    if not value:
+        return ""
     if value in _CAPABILITY_NAME_ZH:
         return _CAPABILITY_NAME_ZH[value]
     match = re.fullmatch(r"Unknown Cap \((0x[0-9A-Fa-f]+)\)", value)
@@ -269,40 +327,66 @@ def _localize_capability_name(value: str) -> str:
     match = re.fullmatch(r"Extended Cap (0x[0-9A-Fa-f]+)", value)
     if match:
         return f"未知延伸 Capability（{value}）"
-    return value
+    if _contains_cjk(value):
+        return value
+    return f"未知 Capability（{value}）"
 
 
 def _localize_tlp_type(value: str) -> str:
-    return _TLP_TYPE_ZH.get(value, value)
+    if value in _TLP_TYPE_ZH:
+        return _TLP_TYPE_ZH[value]
+    match = _TLP_FALLBACK_RE.fullmatch(value)
+    if match:
+        return f"未知 TLP 類型（{value}）"
+    if _contains_cjk(value):
+        return value
+    return f"未知 TLP 類型（{value}）"
+
+
+def _localize_field_name(value: str) -> str:
+    if value in _CAPABILITY_FIELD_ZH:
+        return _CAPABILITY_FIELD_ZH[value]
+    if _contains_cjk(value):
+        return value
+    return f"欄位（{value}）"
 
 
 def _localize_decoded_value(key: str, value: object) -> str:
     if isinstance(value, dict):
         parts = [
-            f"{_CAPABILITY_FIELD_ZH.get(str(item_key), str(item_key))}: "
+            f"{_localize_field_name(str(item_key))}: "
             f"{_localize_decoded_value(str(item_key), item_value)}"
             for item_key, item_value in value.items()
         ]
         return "；".join(parts)
     if isinstance(value, bool):
         return f"{'是' if value else '否'}（{value}）"
+    if isinstance(value, (int, float)):
+        return str(value)
     if key == "message":
         return _localize_data_quality_issue(str(value))
-    if str(value) in _CAPABILITY_VALUE_ZH:
-        return _CAPABILITY_VALUE_ZH[str(value)]
-    if str(value).startswith("Unknown ("):
-        return f"未知（{value}）"
-    if key == "evidence" and str(value) == "truncated":
+    value_text = str(value)
+    if value_text in _CAPABILITY_VALUE_ZH:
+        return _CAPABILITY_VALUE_ZH[value_text]
+    if value_text.startswith("Unknown ("):
+        return f"未知值（{value_text}）"
+    if key == "evidence" and value_text == "truncated":
         return "截斷（truncated）"
-    return str(value)
+    if key in {"max_link_speed", "current_link_speed"} or re.fullmatch(
+        r"(?:0x[0-9A-Fa-f]+|x\d+|\d+(?:\.\d+)? GT/s \(Gen\d+\))", value_text
+    ):
+        return value_text
+    if _contains_cjk(value_text):
+        return value_text
+    return f"未知值（{value_text}）"
 
 
 def _localize_decoded_info(info: dict[str, object]) -> str:
     return "；".join(
-        f"{_CAPABILITY_FIELD_ZH.get(str(key), str(key))}: "
+        f"{_localize_field_name(str(key))}: "
         f"{_localize_decoded_value(str(key), value)}"
         for key, value in info.items()
-    ) or "N/A"
+    ) or "無資料（N/A）"
 
 
 def _localize_severity(value: str) -> str:
@@ -319,19 +403,25 @@ def _localize_severity(value: str) -> str:
         outer = direct.get(match.group("outer"), match.group("outer"))
         inner = direct.get(match.group("inner"), match.group("inner"))
         return f"{outer}／{inner}（{value}）"
-    return value
+    if _contains_cjk(value):
+        return value
+    return f"未知嚴重度（{value}）"
 
 
 def _localize_error_name(value: str) -> str:
     if value in _ERROR_NAME_ZH:
         return _ERROR_NAME_ZH[value]
-    return value
+    if _contains_cjk(value):
+        return value
+    return f"未知 AER 錯誤（{value}）"
 
 
 def _localize_link_reason(value: str) -> str:
     match = _LINK_DEGRADED_RE.fullmatch(value)
     if not match:
-        return value
+        if _contains_cjk(value):
+            return value
+        return f"PCIe Link 降級原因（原始：{value}）"
     return (
         f"PCIe Link 降級：目前 {match.group('current')} x{match.group('current_width')}，"
         f"最大能力 {match.group('maximum')} x{match.group('maximum_width')}"
@@ -339,6 +429,16 @@ def _localize_link_reason(value: str) -> str:
 
 
 class PCIeReporter:
+    @staticmethod
+    def localize_class_name(value: str) -> str:
+        """Return a Chinese-first PCI class label for GUI and CLI callers."""
+        return _localize_class_name(value)
+
+    @staticmethod
+    def localize_header_type(value: HeaderType | str) -> str:
+        """Return a Chinese-first configuration-space header type label."""
+        return _localize_header_type(value)
+
     @staticmethod
     def localize_link_reason(value: str) -> str:
         """Return a Chinese-first link health explanation for GUI callers."""
@@ -367,33 +467,33 @@ class PCIeReporter:
                 return "\n".join(lines)
         lines.append("## 1. 裝置識別與基礎設定（Device Identification & Base Configuration）")
         lines.append(
-            f"- **Vendor ID／Device ID（廠商／裝置識別碼）**: "
+            f"- **廠商 ID／裝置 ID（Vendor ID／Device ID）**: "
             f"`0x{cfg.vendor_id:04X}` / `0x{cfg.device_id:04X}`"
         )
         class_name = _localize_class_name(cfg.class_name) if cfg.class_name else "未知類別（Unavailable）"
         lines.append(
-            f"- **Class Code（類別碼）**: `0x{cfg.base_class:02X}{cfg.sub_class:02X}{cfg.prog_if:02X}` "
+            f"- **類別碼（Class Code）**: `0x{cfg.base_class:02X}{cfg.sub_class:02X}{cfg.prog_if:02X}` "
             f"({class_name})"
         )
-        lines.append(f"- **Revision ID（修訂識別碼）**: `0x{cfg.revision_id:02X}`")
+        lines.append(f"- **修訂識別碼（Revision ID）**: `0x{cfg.revision_id:02X}`")
         lines.append(
-            f"- **Header Type（標頭類型）**: `{cfg.header_type.name}` "
-            f"（Multi-Function: `{cfg.is_multi_function}`）"
+            f"- **標頭類型（Header Type）**: `{_localize_header_type(cfg.header_type)}` "
+            f"（多功能（Multi-Function）: `{cfg.is_multi_function}`）"
         )
         lines.append(
-            f"- **Command Register（命令暫存器）**: `0x{cfg.command:04X}` "
+            f"- **命令暫存器（Command Register）**: `0x{cfg.command:04X}` "
             f"（MSE: `{bool(cfg.command & 0x02)}`, BME: `{bool(cfg.command & 0x04)}`, "
             f"IOSE: `{bool(cfg.command & 0x01)}`）"
         )
         lines.append(
-            f"- **Status Register（狀態暫存器）**: `0x{cfg.status:04X}` "
+            f"- **狀態暫存器（Status Register）**: `0x{cfg.status:04X}` "
             f"（CapList: `{bool(cfg.status & 0x10)}`, MasterDataParity: `{bool(cfg.status & 0x8000)}`）"
         )
         lines.append("")
 
         if cfg.link_info:
             lines.append(
-                "## 2. PCIe Link 協商與速率／寬度健康度（Link Negotiation & Speed/Width Health）"
+                "## 2. PCIe 連線協商與速率／寬度健康度（PCIe Link Negotiation & Speed/Width Health）"
             )
             lines.append(
                 f"- **最大能力（Maximum Capable）**: "
@@ -405,7 +505,7 @@ class PCIeReporter:
             )
             if cfg.link_info.is_degraded:
                 lines.append(
-                    f"- **Link 健康度（Link Health）**: `🚨 DEGRADED` "
+                    f"- **連線健康度（Link Health）**: `🚨 已降級（DEGRADED）` "
                     f"({_localize_link_reason(cfg.link_info.degradation_reason)})"
                 )
                 lines.append(
@@ -413,7 +513,7 @@ class PCIeReporter:
                 )
             else:
                 lines.append(
-                    "- **Link 健康度（Link Health）**: `✔ OPTIMAL` （以設計的最大能力運作）"
+                    "- **連線健康度（Link Health）**: `✔ 最佳（OPTIMAL）` （以設計的最大能力運作）"
                 )
             lines.append("")
 
@@ -434,9 +534,9 @@ class PCIeReporter:
             lines.append("")
         elif cfg.header_type == HeaderType.TYPE_1_BRIDGE and cfg.bridge_bus:
             b = cfg.bridge_bus
-            lines.append("## 3. Type 1 PCI-to-PCI Bridge 設定（PCI-to-PCI Bridge Configuration）")
+            lines.append("## 3. 第 1 類 PCI 橋接器設定（Type 1 PCI-to-PCI Bridge Configuration）")
             lines.append(
-                f"- **Primary／Secondary／Subordinate Bus（匯流排）**: "
+                f"- **主要／次要／從屬匯流排（Primary／Secondary／Subordinate Bus）**: "
                 f"`{b.primary_bus}` / `{b.secondary_bus}` / `{b.subordinate_bus}`"
             )
             lines.append(
@@ -454,7 +554,7 @@ class PCIeReporter:
         lines.append("## 4. 標準 PCI Capabilities（Standard PCI Capabilities；0x34 Linked List）")
         if cfg.standard_capabilities:
             lines.append(
-                "| 位移（Offset） | Cap ID | 名稱（Name） | 下一個位移（Next Offset） | "
+                "| 位移（Offset） | 能力 ID（Cap ID） | 名稱（Name） | 下一個位移（Next Offset） | "
                 "關鍵參數（Key Parameters） |"
             )
             lines.append("|---|---|---|---|---|")
@@ -474,7 +574,7 @@ class PCIeReporter:
         )
         if cfg.extended_capabilities:
             lines.append(
-                "| 位移（Offset） | Ext Cap ID | 版本（Version） | 名稱（Name） | "
+                "| 位移（Offset） | 延伸能力 ID（Ext Cap ID） | 版本（Version） | 名稱（Name） | "
                 "下一個位移（Next Offset） |"
             )
             lines.append("|---|---|---|---|---|")
@@ -490,7 +590,7 @@ class PCIeReporter:
         lines.append("## 6. AER（Advanced Error Reporting）深入分析（In-Depth Analysis）")
         if cfg.aer_analysis:
             aer = cfg.aer_analysis
-            lines.append(f"- **AER Capability 位移（Offset）**: `0x{aer.offset:03X}`")
+            lines.append(f"- **AER 能力位移（AER Capability Offset）**: `0x{aer.offset:03X}`")
             lines.append(
                 f"- **不可修正錯誤狀態／遮罩／嚴重度（Uncorrectable Error Status / Mask / Severity）**: "
                 f"`0x{aer.uncorr_status_raw:08X}` / `0x{aer.uncorr_mask_raw:08X}` / "
@@ -502,7 +602,8 @@ class PCIeReporter:
             )
             lines.append(
                 f"- **作用中的不可修正錯誤（Active Uncorrectable Errors）**: "
-                f"Fatal: `{aer.active_uncorr_fatal_count}`、Non-Fatal: `{aer.active_uncorr_nonfatal_count}`"
+                f"致命（Fatal）: `{aer.active_uncorr_fatal_count}`、"
+                f"非致命（Non-Fatal）: `{aer.active_uncorr_nonfatal_count}`"
             )
             lines.append(
                 f"- **作用中的可修正錯誤（Active Correctable Errors）**: `{aer.active_corr_count}`"
@@ -515,7 +616,7 @@ class PCIeReporter:
                     "### 作用中的不可修正錯誤與根因指引（Active Uncorrectable Errors & Root Cause Guidance）"
                 )
                 for err in active_uncorr:
-                    masked_tag = "（MASKED）" if err.is_masked else ""
+                    masked_tag = "（已遮罩；MASKED）" if err.is_masked else ""
                     lines.append(
                         f"#### [{_localize_severity(err.severity)}] {_localize_error_name(err.name)}"
                         f"（Bit {err.bit_pos}）{masked_tag}"
@@ -530,7 +631,7 @@ class PCIeReporter:
             if active_corr:
                 lines.append("### 作用中的可修正錯誤（Active Correctable Errors）")
                 for corr_err in active_corr:
-                    masked_tag = "（MASKED）" if corr_err.is_masked else ""
+                    masked_tag = "（已遮罩；MASKED）" if corr_err.is_masked else ""
                     lines.append(
                         f"#### {_localize_error_name(corr_err.name)}（Bit {corr_err.bit_pos}）{masked_tag}"
                     )
@@ -542,7 +643,7 @@ class PCIeReporter:
 
             if aer.decoded_tlp:
                 tlp = aer.decoded_tlp
-                lines.append("### TLP Header Log 解碼（Faulting Transaction）")
+                lines.append("### 故障交易 TLP Header Log 解碼（Faulting Transaction）")
                 raw_dw = list(tlp.raw_dw[:4])
                 raw_dw_text = " ".join(
                     f"0x{word:08X}" if isinstance(word, int) else "n/a" for word in raw_dw
@@ -556,8 +657,9 @@ class PCIeReporter:
                 )
                 lines.append(f"- **長度（Length）**: `{tlp.length}` DW（{tlp.length * 4} Bytes）")
                 lines.append(
-                    f"- **Traffic Class（TC）**: `{tlp.tc}`、**Digest（TD）**: `{tlp.td}`、"
-                    f"**Poisoned（EP）**: `{tlp.ep}`"
+                    f"- **流量類別（Traffic Class；TC）**: `{tlp.tc}`、"
+                    f"**摘要（Digest；TD）**: `{tlp.td}`、"
+                    f"**毒化（Poisoned；EP）**: `{tlp.ep}`"
                 )
                 if tlp.requester_id is not None:
                     req_b = (tlp.requester_id >> 8) & 0xFF
@@ -565,8 +667,9 @@ class PCIeReporter:
                     tag_text = f"0x{tlp.tag:02X}" if isinstance(tlp.tag, int) else "n/a"
                     lines.append(
                         f"- **Requester ID（請求端識別碼）**: `0x{tlp.requester_id:04X}` "
-                        f"（Bus:{req_b:02X}, Dev:{req_df >> 3:02X}, Func:{req_df & 0x7:X}）、"
-                        f"**Tag**: `{tag_text}`"
+                        f"（匯流排（Bus）:{req_b:02X}, 裝置（Dev）:{req_df >> 3:02X}, "
+                        f"函式（Func）:{req_df & 0x7:X}）、**標籤（Tag）**: `{tag_text}`"
+                        f"（原始欄位 Tag**: `{tag_text}`）"
                     )
                 if tlp.address is not None:
                     lines.append(f"- **Target Address（目標位址）**: `0x{tlp.address:016X}`")
@@ -577,7 +680,9 @@ class PCIeReporter:
                     )
                 lines.append("")
         else:
-            lines.append("*Configuration Space 未偵測到 AER Extended Capability。*\n")
+            lines.append(
+                "*找不到 AER Extended Capability（Configuration Space 未偵測到 AER Extended Capability）。*\n"
+            )
         return "\n".join(lines)
 
     @staticmethod

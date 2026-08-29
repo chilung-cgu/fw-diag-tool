@@ -1,17 +1,29 @@
+from io import StringIO
+
 import pytest
+from rich.console import Console
 from typer.testing import CliRunner
 
 from fw_diag_tool.cli import app
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.spi.models import (
     FlashStatusRegister1,
+    SPIDataQualityIssue,
+    SPIDiagnosticIssue,
     SPIReport,
     SPIReportSummary,
     SPISeverity,
     SPITransaction,
 )
 from fw_diag_tool.spi.parser import SPIParser
-from fw_diag_tool.spi.reporter import SPIReporter
+from fw_diag_tool.spi.reporter import (
+    SPIReporter,
+    _localize_issue_description,
+    _localize_issue_title,
+    _localize_opcode_name,
+    _localize_quality_message,
+    _localize_root_cause,
+)
 
 
 def test_spi_jedec_id_and_wren_program():
@@ -45,6 +57,19 @@ def test_spi_jedec_id_and_wren_program():
     assert report.summary.anomaly_count == 0
     md = SPIReporter.to_markdown(report)
     assert "Winbond W25Q128" in md
+
+
+def test_spi_markdown_uses_zh_tw_first_transaction_headers():
+    report = SPIDiagnosticEngine().analyze_csv_content(
+        "Time [s],MOSI,MISO,Enable\n"
+        "0.001,0x06,0x00,0\n"
+        "0.002,0x00,0x00,1\n"
+    )
+
+    markdown = SPIReporter.to_markdown(report)
+
+    assert "操作碼（Opcode）" in markdown
+    assert "SPI 交易記錄（SPI Transaction Log；範例 Sample）" in markdown
 
 
 def test_spi_write_without_wren_anomaly():
@@ -106,6 +131,56 @@ def test_spi_reporter_localizes_truncated_detail_keys_and_unknown_opcode_value()
     assert "要求的 MOSI 位元組數（required_mosi_bytes）" in truncated_md
     assert "收到的 MISO 位元組數（received_miso_bytes）" in truncated_md
     assert "未知 Opcode（Unknown Opcode (0x77)）" in unknown_md
+
+
+def test_spi_reporter_dynamic_fallbacks_keep_unknown_tokens_in_markdown_and_terminal():
+    issue = SPIDiagnosticIssue(
+        code="SPI_FUTURE_ANOMALY",
+        title="Future SPI hazard token",
+        severity=SPISeverity.ERROR,
+        timestamp=0.25,
+        transaction_id=7,
+        description="Future SPI description token.",
+        root_cause_guide="Future SPI root-cause token.",
+    )
+    report = SPIReport(
+        summary=SPIReportSummary(total_transactions=0, anomaly_count=1),
+        anomalies=[issue],
+        data_quality_issues=[
+            SPIDataQualityIssue(code="SPI_FUTURE_QUALITY", message="Future quality token.")
+        ],
+    )
+
+    markdown = SPIReporter.to_markdown(report)
+    assert "未知 SPI 異常（Future SPI hazard token）" in markdown
+    assert "未知 SPI 異常描述（原始：Future SPI description token.）" in markdown
+    assert "根因排查指南（原始：Future SPI root-cause token.）" in markdown
+    assert "未知資料品質問題（SPI_FUTURE_QUALITY）：Future quality token." in markdown
+
+    stream = StringIO()
+    SPIReporter.render_terminal(report, console=Console(file=stream, color_system=None, width=200))
+    terminal = stream.getvalue()
+    assert "Future SPI hazard token" in terminal
+    assert "Future SPI description token." in terminal
+    assert "Future SPI root-cause token." in terminal
+
+
+def test_spi_reporter_localizes_unknown_tokens_in_direct_helpers():
+    assert _localize_opcode_name("Future Command (0xC4)") == (
+        "未知 Opcode（Future Command (0xC4)）"
+    )
+    assert _localize_issue_title("Future SPI hazard token") == (
+        "未知 SPI 異常（Future SPI hazard token）"
+    )
+    assert _localize_issue_description("Future SPI description token.") == (
+        "未知 SPI 異常描述（原始：Future SPI description token.）"
+    )
+    assert _localize_root_cause("Future SPI root-cause token.") == (
+        "根因排查指南（原始：Future SPI root-cause token.）"
+    )
+    assert _localize_quality_message("SPI_FUTURE_QUALITY", "Future quality token.") == (
+        "未知資料品質問題（SPI_FUTURE_QUALITY）：Future quality token."
+    )
 
 
 def test_spi_status_wel_evidence_controls_program_diagnosis():

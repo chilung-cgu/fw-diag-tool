@@ -36,9 +36,85 @@ _FAULT_FLAG_ZH = {
     "UFSR.INVPC (Invalid PC load / EXC_RETURN)": "UFSR.INVPC（PC 載入無效／EXC_RETURN）",
 }
 
+_PANIC_REASON_REPLACEMENTS = (
+    (
+        "BUG: unable to handle page fault for address:",
+        "BUG：無法處理 page fault（分頁錯誤），位址：",
+    ),
+    (
+        "Kernel panic - not syncing:",
+        "Kernel panic（核心 Panic）：未同步：",
+    ),
+    (
+        "Fatal exception in interrupt",
+        "中斷期間發生致命例外（Fatal exception in interrupt）",
+    ),
+    (
+        "Internal error: synchronous external abort:",
+        "內部錯誤（Internal error）：同步 external abort（synchronous external abort）：",
+    ),
+    ("Internal error:", "內部錯誤（Internal error）："),
+    (
+        "Unable to handle kernel paging request at virtual address",
+        "無法處理核心 paging request（kernel paging request），虛擬位址：",
+    ),
+)
+
+_ANALYSIS_TEXT_REPLACEMENTS = (
+    (
+        "NULL Pointer Dereference 候選",
+        "NULL 指標解引用候選（NULL Pointer Dereference）",
+    ),
+    ("Kernel Exception", "核心例外（Kernel Exception）"),
+    ("Stack Corruption", "堆疊損毀（Stack Corruption）"),
+    ("fault context", "故障上下文（fault context）"),
+    ("總線錯誤", "匯流排錯誤"),
+    ("總線", "匯流排"),
+    (" (位址:", "（位址："),
+)
+
+_CHECKLIST_TEXT_REPLACEMENTS = (
+    ("Call Trace", "Call Trace（呼叫追蹤）"),
+    ("Stack Corruption", "堆疊損毀（Stack Corruption）"),
+)
+
 
 def _localize_crash_type(value: str) -> str:
     return _CRASH_TYPE_ZH.get(value, value)
+
+
+def _localize_panic_reason(value: str) -> str:
+    """Translate known kernel panic prose while retaining the source line."""
+    if not value:
+        return value
+    localized = value.strip()
+    for source, target in _PANIC_REASON_REPLACEMENTS:
+        localized = localized.replace(source, target)
+    if localized == value.strip():
+        return value
+    return f"{localized}（原文：{value.strip()}）"
+
+
+def _localize_analysis_text(value: str) -> str:
+    """Translate analyzer prose without changing symbols, expressions, or values."""
+    if not value:
+        return value
+    lines = []
+    for line in value.splitlines():
+        localized = line
+        for source, target in _ANALYSIS_TEXT_REPLACEMENTS:
+            localized = localized.replace(source, target)
+        lines.append(localized)
+    return "\n".join(lines)
+
+
+def _localize_checklist_item(value: str) -> str:
+    if not value:
+        return value
+    localized = value
+    for source, target in _CHECKLIST_TEXT_REPLACEMENTS:
+        localized = localized.replace(source, target)
+    return localized
 
 
 def _localize_fault_flag(value: str) -> str:
@@ -60,7 +136,7 @@ def _localize_fault_flag(value: str) -> str:
 def _localize_hardfault_summary(value: str) -> str:
     if value == "ARM Cortex-M HardFault Exception Triggered.":
         return "ARM Cortex-M HardFault 例外已觸發（ARM Cortex-M HardFault Exception Triggered.）"
-    return value
+    return _localize_analysis_text(value)
 
 
 class UARTReporter:
@@ -91,7 +167,7 @@ class UARTReporter:
             sum_tbl.add_column("欄位（Field）", style="cyan")
             sum_tbl.add_column("值（Value）", style="bold white")
             sum_tbl.add_row("架構（Architecture）", kp.architecture)
-            sum_tbl.add_row("Panic 原因（Panic Reason）", kp.panic_reason)
+            sum_tbl.add_row("Panic 原因（Panic Reason）", _localize_panic_reason(kp.panic_reason))
             if kp.faulting_ip:
                 sum_tbl.add_row("故障 IP／RIP（Faulting IP / RIP）", kp.faulting_ip)
             if kp.faulting_func:
@@ -119,10 +195,13 @@ class UARTReporter:
                     )
                 c.print(trace_tbl)
 
-            chk_str = "\n".join(f"- ✔ {chk}" for chk in kp.actionable_checklist)
+            root_cause = _localize_analysis_text(kp.root_cause_analysis)
+            chk_str = "\n".join(
+                f"- ✔ {_localize_checklist_item(chk)}" for chk in kp.actionable_checklist
+            )
             c.print(
                 Panel(
-                    f"[bold yellow]根因分析（Root Cause Analysis）:[/]\n{kp.root_cause_analysis}\n\n"
+                    f"[bold yellow]根因分析（Root Cause Analysis）:[/]\n{root_cause}\n\n"
                     f"[bold green]可執行除錯清單（Actionable Debug Checklist）:[/]\n{chk_str}",
                     border_style="red",
                 )
@@ -159,7 +238,9 @@ class UARTReporter:
                         border_style="yellow",
                     )
                 )
-            chk_str = "\n".join(f"- ✔ {chk}" for chk in hf.actionable_checklist)
+            chk_str = "\n".join(
+                f"- ✔ {_localize_checklist_item(chk)}" for chk in hf.actionable_checklist
+            )
             c.print(
                 Panel(
                     f"[bold yellow]根因分析（Root Cause Analysis）:[/]\n"
@@ -181,7 +262,9 @@ class UARTReporter:
             kp = report.kernel_panic
             lines.append("## 1. 崩潰摘要（Crash Summary）")
             lines.append(f"- **架構（Architecture）**: `{kp.architecture}`")
-            lines.append(f"- **Panic 原因（Panic Reason）**: `{kp.panic_reason}`")
+            lines.append(
+                f"- **Panic 原因（Panic Reason）**: `{_localize_panic_reason(kp.panic_reason)}`"
+            )
             if kp.faulting_ip:
                 lines.append(
                     f"- **故障 IP（Faulting IP）**: `{kp.faulting_ip}` "
@@ -204,9 +287,9 @@ class UARTReporter:
                     )
                 lines.append("")
             lines.append("## 3. 根因分析與除錯清單（Root Cause Analysis & Debug Checklist）")
-            lines.append(f"```text\n{kp.root_cause_analysis}\n```\n")
+            lines.append(f"```text\n{_localize_analysis_text(kp.root_cause_analysis)}\n```\n")
             for chk in kp.actionable_checklist:
-                lines.append(f"- [ ] {chk}")
+                lines.append(f"- [ ] {_localize_checklist_item(chk)}")
         elif report.arm_hardfault:
             hf = report.arm_hardfault
             lines.append("## 1. HardFault 暫存器（HardFault Registers）")
@@ -226,7 +309,7 @@ class UARTReporter:
                 lines.append(f"- ⚠️ {_localize_fault_flag(fl)}")
             lines.append(f"\n```text\n{_localize_hardfault_summary(hf.root_cause_analysis)}\n```\n")
             for chk in hf.actionable_checklist:
-                lines.append(f"- [ ] {chk}")
+                lines.append(f"- [ ] {_localize_checklist_item(chk)}")
         else:
             lines.extend(
                 [

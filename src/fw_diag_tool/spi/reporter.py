@@ -60,6 +60,28 @@ _QUALITY_MESSAGE_ZH = {
         "額外 status payload 不視為可信的暫存器寫入。"
     ),
 }
+_QUALITY_SOURCE_MESSAGES = {
+    "SPI_SOURCE_EMPTY": (
+        "The capture has no data rows after removing the header/comments; "
+        "no SPI protocol conclusion can be established."
+    ),
+    "SPI_NO_TRANSACTIONS": (
+        "Input rows were present but no CS-framed SPI transaction was decoded; "
+        "check chip-select polarity and capture framing."
+    ),
+    "SPI_CS_UNTERMINATED": (
+        "The capture ended while CS was still asserted; the final transaction may be truncated."
+    ),
+    "SPI_RESPONSE_TRUNCATED": (
+        "One or more SPI commands ended before the minimum response or payload "
+        "bytes required for a trustworthy decode were captured."
+    ),
+    "SPI_RESPONSE_OVERLONG": (
+        "One or more fixed-width SPI commands carried more bytes than the "
+        "decoder contract permits; the extra status payload was not treated "
+        "as a trustworthy register write."
+    ),
+}
 
 _OPCODE_NAME_ZH = {
     "Read JEDEC ID": "讀取 JEDEC ID",
@@ -72,7 +94,7 @@ _OPCODE_NAME_ZH = {
     "Fast Read Quad Output": "快速讀取（Quad Output）",
     "Write Enable / WREN": "寫入使能／WREN",
     "Write Disable / WRDI": "寫入停用／WRDI",
-    "Volatile SR Write Enable": "Volatile SR 寫入使能",
+    "Volatile SR Write Enable": "易失性狀態暫存器寫入使能（Volatile SR Write Enable）",
     "Page Program": "頁面寫入",
     "Quad Page Program": "四線頁面寫入",
     "Sector Erase 4KB": "4KB 扇區抹除",
@@ -104,7 +126,7 @@ _DETAIL_KEY_ZH = {
     "page_start_offset": "頁內起點（page_start_offset）",
     "page_size": "頁面大小（page_size）",
     "erase_address": "抹除位址（erase_address）",
-    "sr1_raw": "Status Register-1 原始值（sr1_raw）",
+    "sr1_raw": "狀態暫存器 1 原始值（Status Register-1；sr1_raw）",
     "busy": "忙碌狀態（busy）",
     "wel": "寫入使能狀態（wel）",
     "block_protect": "區塊保護（block_protect）",
@@ -130,7 +152,13 @@ _DETAIL_VALUE_ZH = {
 }
 
 
+def _contains_cjk(value: str) -> bool:
+    return bool(re.search(r"[\u3400-\u9fff]", value))
+
+
 def _localize_chip_name(value: str) -> str:
+    if not value:
+        return ""
     if value == "Unknown / Generic SPI Flash":
         return "未知／通用 SPI Flash（Unknown / Generic SPI Flash）"
     if value == "Unknown Manufacturer / Model":
@@ -139,49 +167,90 @@ def _localize_chip_name(value: str) -> str:
 
 
 def _localize_opcode_name(value: str) -> str:
+    if not value:
+        return "無資料（No Data）"
     match = _OPCODE_NAME_RE.fullmatch(value)
     if match:
         name = match.group("name")
         localized = _OPCODE_NAME_ZH.get(name)
         if localized:
             return f"{localized}（{name}；{match.group('opcode')}）"
+        return f"未知 Opcode（{value}）"
     if value == "Unknown Opcode" or value.startswith("Unknown Opcode ("):
         return f"未知 Opcode（{value}）"
-    return value
+    if value == "No Data":
+        return "無資料（No Data）"
+    if _contains_cjk(value):
+        return value
+    return f"未知 Opcode（{value}）"
+
+
+def _localize_detail_key(value: str) -> str:
+    if value in _DETAIL_KEY_ZH:
+        return _DETAIL_KEY_ZH[value]
+    if _contains_cjk(value):
+        return value
+    return f"欄位（{value}）"
+
+
+def _localize_detail_value(value: object) -> str:
+    if isinstance(value, bool):
+        return f"{'是' if value else '否'}（{value}）"
+    if isinstance(value, (int, float)):
+        return str(value)
+    text = str(value)
+    translated = _DETAIL_VALUE_ZH.get(text)
+    if translated:
+        return translated
+    if _contains_cjk(text) or re.fullmatch(r"0x[0-9A-Fa-f]+", text):
+        return text
+    return f"未知值（{text}）"
 
 
 def _localize_detail(key: str, value: object) -> str:
-    label = _DETAIL_KEY_ZH.get(key, key)
+    label = _localize_detail_key(key)
     if key == "identified_chip":
         shown = _localize_chip_name(str(value))
-    elif isinstance(value, bool):
-        shown = f"{'是' if value else '否'}（{value}）"
     else:
-        shown = _DETAIL_VALUE_ZH.get(str(value), str(value))
+        shown = _localize_detail_value(value)
     return f"{label}: {shown}"
 
 
 def _localize_severity(value: SPISeverity | str) -> str:
     text = value.value if isinstance(value, SPISeverity) else str(value)
-    return {
+    localized = {
         "INFO": "資訊（INFO）",
         "WARNING": "警告（WARNING）",
         "ERROR": "錯誤（ERROR）",
         "CRITICAL": "嚴重（CRITICAL）",
-    }.get(text, text)
+    }.get(text)
+    if localized:
+        return localized
+    if _contains_cjk(text):
+        return text
+    return f"未知嚴重度（{text}）"
 
 
 def _localize_quality_message(code: str, value: str) -> str:
-    return _QUALITY_MESSAGE_ZH.get(code, value)
+    localized = _QUALITY_MESSAGE_ZH.get(code)
+    if localized and value == _QUALITY_SOURCE_MESSAGES.get(code):
+        return localized
+    if localized:
+        return f"{localized}（原始訊息：{value}）"
+    if _contains_cjk(value):
+        return value
+    return f"未知資料品質問題（{code}）：{value}"
 
 
 def _localize_issue_title(value: str) -> str:
+    if not value:
+        return "未知 SPI 異常（無標題）"
     match = _JEDEC_TITLE_RE.fullmatch(value)
     if match:
         reason = {
             "Floating MISO / No Power": "MISO 浮接／未供電（Floating MISO / No Power）",
             "MISO Short to GND / Bus Clamped": "MISO 對地短路／匯流排被箝位（MISO Short to GND / Bus Clamped）",
-        }.get(match.group("reason"), match.group("reason"))
+        }.get(match.group("reason"), f"未知原因（{match.group('reason')}）")
         return f"JEDEC ID 讀取回傳全為 {match.group('value')}（{reason}） @ Tx #{match.group('tx')}"
     match = _BUSY_TITLE_RE.fullmatch(value)
     if match:
@@ -198,7 +267,9 @@ def _localize_issue_title(value: str) -> str:
         if value.startswith(prefix):
             suffix = value[len(prefix) :]
             return f"{localized}{suffix}"
-    return value
+    if _contains_cjk(value):
+        return value
+    return f"未知 SPI 異常（{value}）"
 
 
 def _localize_issue_description(value: str) -> str:
@@ -214,21 +285,21 @@ def _localize_issue_description(value: str) -> str:
     match = _BUSY_DESCRIPTION_RE.fullmatch(value)
     if match:
         return (
-            f"指令 {_localize_opcode_name(match.group('command'))} 發送時，最近一次觀察到的 "
-            "狀態暫存器（status register）顯示 "
+            f"指令 {_localize_opcode_name(match.group('command'))} 發送時，最近一次觀察到的"
+            "狀態暫存器（status register）顯示"
             "BUSY=1；內部寫入／抹除週期尚未完成。"
         )
     match = _WEL_ZERO_DESCRIPTION_RE.fullmatch(value)
     if match:
         return (
-            f"指令 {_localize_opcode_name(match.group('command'))} 發送時，最近一次觀察到的 "
-            "狀態暫存器（status register）顯示 "
+            f"指令 {_localize_opcode_name(match.group('command'))} 發送時，最近一次觀察到的"
+            "狀態暫存器（status register）顯示"
             "WEL=0；Flash 可能拒絕此操作。"
         )
     match = _WEL_UNKNOWN_DESCRIPTION_RE.fullmatch(value)
     if match:
         return (
-            f"本次擷取在 {_localize_opcode_name(match.group('command'))} 之前沒有 WREN 或 "
+            f"本次擷取在 {_localize_opcode_name(match.group('command'))} 之前沒有 WREN 或"
             "狀態讀取（status-read）證據；"
             "無法證明操作當下的 latch（鎖存）狀態。"
         )
@@ -242,7 +313,7 @@ def _localize_issue_description(value: str) -> str:
     match = _STATUS_WEL_UNKNOWN_DESCRIPTION_RE.fullmatch(value)
     if match:
         return (
-            f"在 {_localize_opcode_name(match.group('command'))} 之前未擷取到 WREN 或 status（狀態） "
+            f"在 {_localize_opcode_name(match.group('command'))} 之前未擷取到 WREN 或 status（狀態）"
             "證據；無法證明寫入使能前提。"
         )
     match = _PAGE_WRAP_DESCRIPTION_RE.fullmatch(value)
@@ -256,14 +327,25 @@ def _localize_issue_description(value: str) -> str:
     match = _TRUNCATED_DESCRIPTION_RE.fullmatch(value)
     if match:
         return (
-            f"指令 {_localize_opcode_name(match.group('command'))} 至少需要 {match.group('minimum')} bytes "
+            f"指令 {_localize_opcode_name(match.group('command'))} 至少需要 {match.group('minimum')} bytes"
             f"（Opcode + 24-bit Address），但 CS 在收到 {match.group('received')} byte(s) 後已拉高。"
         )
-    return value
+    if _contains_cjk(value):
+        return value
+    return f"未知 SPI 異常描述（原始：{value}）"
 
 
 def _localize_root_cause(value: str) -> str:
-    return value.replace("【Root Cause 排查建議】", "【根因排查建議（Root Cause）】")
+    if not value:
+        return ""
+    if "\n" in value:
+        return "\n".join(_localize_root_cause(line) for line in value.splitlines())
+    translated = value.replace("【Root Cause 排查建議】", "【根因排查建議（Root Cause）】", 1)
+    if translated != value or _contains_cjk(value):
+        return translated
+    if value.startswith("Root Cause: "):
+        return f"根因：{value.removeprefix('Root Cause: ')}（原始：{value}）"
+    return f"根因排查指南（原始：{value}）"
 
 
 class SPIReporter:
@@ -389,9 +471,9 @@ class SPIReporter:
                 )
                 lines.append(f"\n```text\n{_localize_root_cause(a.root_cause_guide)}\n```\n")
 
-        lines.append("## 📜 SPI 交易記錄（SPI Transaction Log；Sample）")
+        lines.append("## 📜 SPI 交易記錄（SPI Transaction Log；範例 Sample）")
         lines.append(
-            "| 索引（Index） | 時間（s） | Opcode | 名稱（Name） | "
+            "| 索引（Index） | 時間（s） | 操作碼（Opcode） | 名稱（Name） | "
             "位址（Address） | 資料長度（Data Len） | 細節（Details） |"
         )
         lines.append("|---|---|---|---|---|---|---|")

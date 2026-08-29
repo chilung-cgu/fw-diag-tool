@@ -22,6 +22,8 @@ Call Trace:
     assert "NULL Pointer Dereference" in report.kernel_panic.root_cause_analysis
     md = UARTReporter.to_markdown(report)
     assert "nvme_pci_complete_rq" in md
+    assert "NULL 指標解引用候選（NULL Pointer Dereference）" in md
+    assert "kzalloc/kmalloc/devm_*" in md
 
 
 def test_arm_hardfault_parsing():
@@ -72,6 +74,33 @@ status: 0000000200000100 badvaddr: 0000000000000020 cause: 000000000000000d
     assert report.kernel_panic is not None
     assert report.kernel_panic.architecture == "RISC-V"
     assert report.kernel_panic.faulting_address == "0x0000000000000020"
+    markdown = UARTReporter.to_markdown(report)
+    assert "NULL 指標解引用候選（NULL Pointer Dereference）" in markdown
+    assert "無法處理核心 paging request" in markdown
+    assert "Unable to handle kernel paging request" in markdown
+
+
+def test_non_null_kernel_root_cause_keeps_debug_tokens_in_zh_tw_report():
+    report = UARTCrashParser.parse_log_text(
+        "Unable to handle kernel paging request at virtual address 0000000080200020\n"
+        "epc : 0000000080201234\n"
+    )
+
+    markdown = UARTReporter.to_markdown(report)
+
+    assert "核心例外（Kernel Exception）" in markdown
+    assert "gdb / addr2line" in markdown
+    assert "堆疊損毀（Stack Corruption）" in markdown
+    assert "0x0000000080200020" in markdown
+
+
+def test_hardfault_fallback_is_localized_without_dropping_canonical_name():
+    report = UARTCrashParser.parse_log_text("HardFault Exception!\nHFSR: 0x00000000\nCFSR: 0x00000000\n")
+
+    markdown = UARTReporter.to_markdown(report)
+
+    assert "ARM Cortex-M HardFault 例外已觸發" in markdown
+    assert "ARM Cortex-M HardFault Exception Triggered." in markdown
 
 
 def test_generic_serial_log_report_explains_unsupported_signature():

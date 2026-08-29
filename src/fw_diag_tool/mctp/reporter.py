@@ -12,9 +12,18 @@ _SUMMARY_RE = re.compile(
     r"^Decoded (\d+) MCTP packet\(s\) and (\d+) IPMB frame\(s\)\."
     r"(?: (\d+) input line\(s\) were not decoded\.)?$"
 )
+_SHORT_SUMMARY_RE = re.compile(
+    r"^Decoded (?P<mctp>\d+) MCTP(?: packet\(s\))?(?:,| and) "
+    r"(?P<ipmb>\d+) IPMB(?: frame\(s\))?\.?$"
+)
 _INCOMPLETE_TOKEN_RE = re.compile(r"^line (\d+): incomplete byte token (.+)$")
 _UNRECOGNIZED_LINE_RE = re.compile(r"^line (\d+): no recognizable MCTP packet or IPMB frame$")
 _SEQUENCE_MISMATCH_RE = re.compile(r"^sequence mismatch: expected (\d+), got (\d+)$")
+_MCTP_TYPE_CODE_RE = re.compile(r"^Type (?P<code>0x[0-9A-Fa-f]+)$")
+_NETFN_CODE_RE = re.compile(
+    r"^NetFn (?P<code>0x[0-9A-Fa-f]+)(?: \((?P<direction>Request|Response)\))?$"
+)
+_COMMAND_CODE_RE = re.compile(r"^Cmd (?P<code>0x[0-9A-Fa-f]+)$")
 _PLDM_INFO_RE = re.compile(
     r"^PLDM (?P<type>.+) (?P<direction>Request|Response): Cmd (?P<cmd>0x[0-9A-Fa-f]+) "
     r"\(Instance (?P<instance>\d+)\)(?: \[CC: (?P<cc>0x[0-9A-Fa-f]+)\])?$"
@@ -33,6 +42,10 @@ _MCTP_ORPHAN_SUMMARY_RE = re.compile(
 )
 _MCTP_INCOMPLETE_SUMMARY_RE = re.compile(
     r"^MCTP: Incomplete message from EID (?P<src>0x[0-9A-Fa-f]+) \(missing EOM\)$"
+)
+_IPMB_SUMMARY_RE = re.compile(
+    r"^IPMB: (?P<rq>0x[0-9A-Fa-f]+) -> (?P<rs>0x[0-9A-Fa-f]+) "
+    r"\[(?P<netfn>.+?): (?P<command>.+?)\](?: \[CC: (?P<cc>0x[0-9A-Fa-f]+)\])?$"
 )
 
 _MCTP_TYPE_ZH = {
@@ -96,30 +109,67 @@ def _localize_named_token(value: str, translations: dict[str, str]) -> str:
 
 
 def _localize_msg_type(value: str) -> str:
-    return _localize_named_token(value, _MCTP_TYPE_ZH)
+    localized = _localize_named_token(value, _MCTP_TYPE_ZH)
+    if localized != value:
+        return localized
+    match = _MCTP_TYPE_CODE_RE.fullmatch(value)
+    if match:
+        return f"未知訊息類型（Type {match.group('code')}）"
+    return value
 
 
 def _localize_pldm_type(value: str) -> str:
-    return _localize_named_token(value, _PLDM_TYPE_ZH)
+    localized = _localize_named_token(value, _PLDM_TYPE_ZH)
+    if localized != value:
+        return localized
+    match = _MCTP_TYPE_CODE_RE.fullmatch(value)
+    if match:
+        return f"未知 PLDM 類型（Type {match.group('code')}）"
+    return value
 
 
 def _localize_netfn(value: str) -> str:
-    return _localize_named_token(value, _IPMB_NETFN_ZH)
+    localized = _localize_named_token(value, _IPMB_NETFN_ZH)
+    if localized != value:
+        return localized
+    match = _NETFN_CODE_RE.fullmatch(value)
+    if not match:
+        return value
+    localized = f"未知網路功能（NetFn {match.group('code')}）"
+    if match.group("direction"):
+        direction = "請求（Request）" if match.group("direction") == "Request" else "回應（Response）"
+        localized += f" {direction}"
+    return localized
 
 
 def _localize_command(value: str) -> str:
-    return _IPMB_COMMAND_ZH.get(value, value)
+    localized = _IPMB_COMMAND_ZH.get(value)
+    if localized:
+        return localized
+    match = _COMMAND_CODE_RE.fullmatch(value)
+    if match:
+        return f"未知命令（Cmd {match.group('code')}）"
+    return value
 
 
 def _localize_summary(value: str) -> str:
     match = _SUMMARY_RE.fullmatch(value.strip())
-    if not match:
-        return value
-    mctp_count, ipmb_count, unparsed_count = match.groups()
-    localized = f"已解碼 {mctp_count} 個 MCTP 封包與 {ipmb_count} 個 IPMB frame"
-    if unparsed_count:
-        localized += f"；另有 {unparsed_count} 行輸入未解碼"
-    return f"{localized}（{value}）"
+    if match:
+        mctp_count, ipmb_count, unparsed_count = match.groups()
+        localized = f"已解碼 {mctp_count} 個 MCTP 封包與 {ipmb_count} 個 IPMB 框架"
+        if unparsed_count:
+            localized += f"；另有 {unparsed_count} 行輸入未解碼"
+        return f"{localized}（{value}）"
+    match = _SHORT_SUMMARY_RE.fullmatch(value.strip())
+    if match:
+        localized = (
+            f"已解碼 {match.group('mctp')} 個 MCTP 封包與 "
+            f"{match.group('ipmb')} 個 IPMB 框架"
+        )
+        return f"{localized}（{value}）"
+    if not value.strip():
+        return "尚未提供解碼摘要（Summary unavailable）"
+    return f"解碼摘要：{value}"
 
 
 def _localize_source_error(value: str) -> str:
@@ -129,7 +179,9 @@ def _localize_source_error(value: str) -> str:
     match = _UNRECOGNIZED_LINE_RE.fullmatch(value)
     if match:
         return f"第 {match.group(1)} 行：找不到可辨識的 MCTP 封包或 IPMB frame（{value}）"
-    return value
+    if value:
+        return f"來源解析錯誤：{value}"
+    return "來源解析錯誤：未提供詳細原因"
 
 
 def _localize_pldm_command(value: str) -> str:
@@ -154,7 +206,9 @@ def _localize_message_error(value: str) -> str:
         return f"收到沒有前置 SOM 的孤立封包（{value}）"
     if value == "Incomplete message stream: missing EOM":
         return f"訊息串流不完整：缺少 EOM（{value}）"
-    return value
+    if value:
+        return f"訊息錯誤：{value}"
+    return "訊息錯誤：未提供詳細原因"
 
 
 def _localize_message_summary(value: str) -> str:
@@ -187,12 +241,25 @@ def _localize_message_summary(value: str) -> str:
     match = _MCTP_INCOMPLETE_SUMMARY_RE.fullmatch(value.strip())
     if match:
         return f"MCTP：來自 EID {match.group('src')} 的訊息不完整（缺少 EOM）"
-    return value
+    match = _IPMB_SUMMARY_RE.fullmatch(value.strip())
+    if match:
+        localized = (
+            f"IPMB：{match.group('rq')} -> {match.group('rs')} "
+            f"[{_localize_netfn(match.group('netfn'))}：{_localize_command(match.group('command'))}]"
+        )
+        if match.group("cc"):
+            localized += f"；完成碼（CC）{match.group('cc')}"
+        return localized
+    if value.strip():
+        return f"訊息摘要：{value}"
+    return "未提供訊息摘要（Summary unavailable）"
 
 
 def _localize_status(value: str) -> str:
     if value == "Complete":
         return "完成（Complete）"
+    if value == "Incomplete":
+        return "不完整（Incomplete）"
     if value.startswith("Error: "):
         return f"錯誤（{_localize_message_error(value[7:])}）"
     return value
