@@ -346,14 +346,14 @@ def case_18_imprecise_bus_fault() -> str:
 
 
 def case_19_mctp_sequence() -> str:
-    # Two single-packet MCTP/PLDM messages: seq 0 (hdr_flags 0xC0) then seq 2
-    # (hdr_flags 0xE0 = SOM|EOM|seq=2), so the second packet is out of
-    # sequence (expected 1).
+    # One two-packet MCTP/PLDM message: start with seq 0, then end with seq 2
+    # (expected 1).  Keeping SOM clear on the second packet makes the parser
+    # reassemble the stream and expose the sequence error.
     return (
-        "# MCTP PLDM sensor read request (SOM/EOM, seq 0)\n"
-        "01 08 00 C0 01 80 02 01 00\n"
-        "# MCTP PLDM sensor read response with wrong sequence (seq 2)\n"
-        "01 08 00 E0 01 80 02 01 00\n"
+        "# MCTP PLDM sensor read request (SOM, seq 0)\n"
+        "01 08 00 80 01 80 02\n"
+        "# Continuation segment with wrong sequence (EOM, seq 2; expected 1)\n"
+        "01 08 00 60 01 00\n"
     )
 
 

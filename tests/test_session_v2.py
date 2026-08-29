@@ -378,6 +378,9 @@ class TestFaultArenaCasesParse:
         sequences = [pkt.pkt_seq for pkt in report.mctp_packets]
 
         assert sequences == [0, 2], "second packet must carry the out-of-order sequence 2"
+        assert len(report.mctp_messages) == 1
+        assert report.mctp_messages[0].is_complete is False
+        assert report.mctp_messages[0].error == "sequence mismatch: expected 1, got 2"
 
     def test_ipmb_checksum_corruption_detected(self):
         report = ServerMgmtParser.parse_text_dump(FaultArenaFixtures.generate("20"))
