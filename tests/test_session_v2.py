@@ -21,9 +21,7 @@ from fw_diag_tool.uart.parser import UARTCrashParser
 
 class TestSessionV2Schema:
     def test_version_alias_is_normalized_without_keyerror(self):
-        document = SessionManager.deserialize_session(
-            '{"version":"2.0","config":{},"report":{}}'
-        )
+        document = SessionManager.deserialize_session('{"version":"2.0","config":{},"report":{}}')
 
         assert document.schema_version == "2.0"
 
@@ -311,6 +309,43 @@ class TestFaultArenaCasesParse:
             assert any("VOUT_TRIM" in s and "-0.25" in s for s in summaries)
             assert any("READ_VOUT" in s and "= 12.0 V" in s for s in summaries)
 
+    def test_case_04_uses_24c02_page_profile_for_rollover(self):
+        report = I2CDiagnosticEngine(eeprom_profile="24C02").analyze_csv_content(
+            FaultArenaFixtures.generate("04")
+        )
+
+        rollover_transactions = [
+            tx for tx in report.transactions if tx.decoded_values.get("rollover_hazard") is True
+        ]
+
+        assert len(rollover_transactions) == 1
+        decoded = rollover_transactions[0].decoded_values
+        assert decoded["offset"] == 0x06
+        assert decoded["page_size"] == 8
+        assert decoded["payload_len"] == 4
+        assert decoded["evidence"] == "explicit-profile"
+        assert any(issue.code == "I2C_EEPROM_PAGE_ROLLOVER" for issue in report.issues)
+
+    def test_case_06_metadata_matches_signed_decode(self):
+        case = FaultArenaFixtures.get_case("06")
+        report = I2CDiagnosticEngine(eeprom_profile="24C02").analyze_csv_content(
+            FaultArenaFixtures.generate("06")
+        )
+
+        summaries = [tx.semantic_summary or "" for tx in report.transactions]
+        trim_transaction = next(tx for tx in report.transactions if tx.command_name == "VOUT_TRIM")
+        vout_transaction = next(
+            tx
+            for tx in report.transactions
+            if tx.command_name == "READ_VOUT" and "value" in tx.decoded_values
+        )
+        assert case.title == ("PMBus VOUT_TRIM Signed Two's-Complement (-0.25 V; READ_VOUT 12.0 V)")
+        assert "127" not in case.title
+        assert trim_transaction.decoded_values["value"] == -0.25
+        assert vout_transaction.decoded_values["value"] == 12.0
+        assert any("VOUT_TRIM = -0.25 V" in summary for summary in summaries)
+        assert any("READ_VOUT = 12.0 V" in summary for summary in summaries)
+
     @pytest.mark.parametrize(
         ("case_id", "expected_aer", "expect_degraded"),
         [
@@ -333,6 +368,19 @@ class TestFaultArenaCasesParse:
             e.short_code for e in cfg.aer_analysis.uncorr_errors if e.is_active and not e.is_masked
         }
         assert active == expected_aer
+
+    def test_case_07_represents_gen4_x16_to_gen1_x1_degradation(self):
+        bdf, raw = PCIeAnalyzer.parse_lspci_text(FaultArenaFixtures.generate("07"))
+        cfg = PCIeAnalyzer.decode_config_space(raw, bdf)
+
+        assert cfg.link_info is not None
+        assert cfg.link_info.max_speed_code == 4
+        assert cfg.link_info.max_speed_str == "16.0 GT/s (Gen4)"
+        assert cfg.link_info.max_width == 16
+        assert cfg.link_info.current_speed_code == 1
+        assert cfg.link_info.current_speed_str == "2.5 GT/s (Gen1)"
+        assert cfg.link_info.current_width == 1
+        assert cfg.link_info.is_degraded is True
 
     def test_spi_missing_wren_flags_unknown_wel_state(self):
         report = SPIDiagnosticEngine().analyze_csv_content(FaultArenaFixtures.generate("11"))

@@ -84,7 +84,7 @@ def case_04_eeprom_page_rollover() -> str:
     return _i2c_csv(
         [
             "0.000000,0,0x50,,Write,ACK",
-            "0.000025,0,,0x1E,Write,ACK",
+            "0.000025,0,,0x06,Write,ACK",
             "0.000050,0,,0xAA,Write,ACK",
             "0.000075,0,,0xBB,Write,ACK",
             "0.000100,0,,0xCC,Write,ACK",
@@ -109,11 +109,9 @@ def case_05_mux_conflict() -> str:
 
 
 def case_06_pmbus_vout_trim() -> str:
-    # VOUT_TRIM (0x22) = 0xFF80.  With Linear16 two's-complement handling the
-    # trim word is negative (-128); decoding it as unsigned yields the classic
-    # ~127x over-report.  A READ_VOUT (0x8B) response follows so the report
-    # shows both the misconfigured trim and its measured consequence
-    # (READ_VOUT = 12.0 V with the default Linear16 exponent -9).
+    # VOUT_TRIM (0x22) = 0xFF80.  Linear16 two's-complement decoding yields
+    # -0.25 V with the default exponent -9.  A READ_VOUT (0x8B) response
+    # follows so the report also shows the measured 12.0 V output.
     return _i2c_csv(
         [
             "0.000000,0,0x58,,Write,ACK",
@@ -144,8 +142,8 @@ def _pcie_config_space(*, degraded_link: bool, aer_status: int) -> bytes:
     cfg[0x34] = 0x40  # capability pointer -> PCIe cap at 0x40
 
     # Standard capability list: PCIe capability (ID 0x10) at 0x40.
-    link_cap = (1 << 0) | (16 << 4)  # max Gen1, x16
-    link_sta = (1 << 0) | (1 << 4) if degraded_link else (1 << 0) | (16 << 4)
+    link_cap = (4 << 0) | (16 << 4)  # max Gen4, x16
+    link_sta = (1 << 0) | (1 << 4) if degraded_link else (4 << 0) | (16 << 4)
     cfg[0x40] = 0x10
     cfg[0x41] = 0x00
     cfg[0x42:0x44] = struct.pack("<H", (1 << 4) | 1)  # endpoint, cap version 1
@@ -396,7 +394,7 @@ _CASES: list[FixtureCase] = [
     ),
     FixtureCase(
         "06",
-        "PMBus VOUT_TRIM Two's-Complement",
+        "PMBus VOUT_TRIM Signed Two's-Complement (-0.25 V; READ_VOUT 12.0 V)",
         "i2c",
         "case06_pmbus_vout_trim.csv",
         case_06_pmbus_vout_trim,
