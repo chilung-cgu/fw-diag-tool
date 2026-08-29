@@ -62,3 +62,10 @@ def test_readme_does_not_overstate_unverified_capabilities() -> None:
     assert "真實故障波形" not in readme
     assert "56 項測試" not in readme
     assert "MISRA-C CodeGen" not in readme
+
+
+def test_register_codegen_chapter_meaning_table_uses_localized_labels() -> None:
+    chapter = (ROOT / "docs" / "chapters" / "ch09_register_codegen.md").read_text(encoding="utf-8")
+    assert "輸出過電壓故障（Vout Overvoltage Fault）" in chapter
+    assert "正常（Normal）" in chapter
+    assert "過溫警報（Overtemperature Alarm）" in chapter

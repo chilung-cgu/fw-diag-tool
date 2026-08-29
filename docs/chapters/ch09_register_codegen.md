@@ -21,9 +21,9 @@ Raw value 必須是非負、且不超過該 register 宣告的寬度；例如 8-
 
 | Bit Range | Field | Value | Meaning |
 |---|---|---|---|
-| 15 | VOUT_FAULT | 0x1 | ⚠ Vout Overvoltage Fault |
-| 14 | IOUT_FAULT | 0x0 | Normal |
-| 10 | TEMPERATURE | 0x1 | ⚠ Overtemperature Alarm |
+| 15 | VOUT_FAULT | 0x1 | ⚠ 輸出過電壓故障（Vout Overvoltage Fault） |
+| 14 | IOUT_FAULT | 0x0 | 正常（Normal） |
+| 10 | TEMPERATURE | 0x1 | ⚠ 過溫警報（Overtemperature Alarm） |
 
 ### 頁面 10：C 語言 Register 巨集產生器
 
