@@ -124,7 +124,7 @@ class CHeaderGenerator:
         lines: list[str] = [
             "/**",
             f" * @file {header_filename}",
-            " * @brief 自動產生的硬體暫存器 Bitfield 定義與 RMW 巨集",
+            " * @brief 自動產生的硬體暫存器位元欄位（Bitfield）定義與讀取-修改-寫入（RMW）巨集",
             " * @generated 由 fw-diag-tool（Firmware Diagnostic Toolkit）產生",
             " * @note 除非必要，請勿直接手動修改此檔案。",
             " */",
@@ -135,7 +135,7 @@ class CHeaderGenerator:
             "#include <stdint.h>",
             "",
             "/* ========================================================================= */",
-            "/*                 暫存器位移（REGISTER OFFSETS）與遮罩（MASKS）             */",
+            "/*                 暫存器位移（Register Offset）與遮罩（Mask）             */",
             "/* ========================================================================= */",
             "",
         ]
@@ -143,7 +143,9 @@ class CHeaderGenerator:
         for offset, reg in sorted(self.catalog.registers.items()):
             r_name = self._sanitize_name(reg.name)
             desc_comment = (
-                f" /* {self._escape_c_comment(reg.description)} */" if reg.description else ""
+                f"；說明（Description）：{self._escape_c_comment(reg.description)}"
+                if reg.description
+                else ""
             )
             lines.append(f"/* 暫存器（Register）：{r_name}（0x{reg.offset:04X}）{desc_comment} */")
             lines.append(f"#define REG_{r_name}_OFFSET              (0x{reg.offset:04X}U)")
@@ -167,14 +169,14 @@ class CHeaderGenerator:
                     )
                 elif access == "W1C":
                     lines.append(
-                        "/* W1C：寫入 1 清除；不可使用 read-modify-write（do not use read-modify-write）。 */"
+                        "/* W1C：寫入 1 清除；不可使用讀取-修改-寫入（read-modify-write；do not use read-modify-write）。 */"
                     )
                     lines.append(
                         f"#define REG_{r_name}_{f_name}_W1C_MASK (REG_{r_name}_{f_name}_MSK)"
                     )
 
                 if f.values:
-                    lines.append(f"/* {r_name}.{f_name} 的值（Values） */")
+                    lines.append(f"/* {r_name}.{f_name} 的列舉值（Enum values） */")
                     for val_int, val_meaning in sorted(f.values.items()):
                         v_label = self._sanitize_name(val_meaning)
                         lines.append(f"#define VAL_{r_name}_{f_name}_{v_label} ({val_int}U)")

@@ -41,6 +41,8 @@ def test_cli_pcie_analyze_dmesg_and_lspci(tmp_path: Path):
     res2 = runner.invoke(app, ["pcie", "analyze", str(lspci_file)])
     assert res2.exit_code == 0
     assert "Device Overview" in res2.output
+    assert "處理加速器（Processing Accelerator）" in res2.output
+    assert "端點裝置（TYPE_0_ENDPOINT）" in res2.output
 
     # 3. Invalid input
     bad_lspci = "0000:01:00.0 Memory controller: Test Device\n00: 12 34\n"
