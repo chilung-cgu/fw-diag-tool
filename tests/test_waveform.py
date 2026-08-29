@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from fw_diag_tool.codegen.driver_gen import I2CDriverCodeGenerator
@@ -70,6 +72,66 @@ def test_aggregate_ack_waveform_keeps_known_payload_as_unknown_ack():
     labels = [annotation.label for annotation in waveform.annotations]
     assert "0x04" in labels
     assert "UNKNOWN" in labels
+
+
+def test_decoded_clock_stretch_is_rendered_on_source_data_byte():
+    csv_path = Path(__file__).parent / "data" / "saleae_anomaly_clock_stretching.csv"
+    report = I2CDiagnosticEngine().analyze_csv_file(str(csv_path))
+    tx = report.transactions[1]
+
+    assert tx.clock_stretching_events == [
+        {
+            "timestamp": 0.000175,
+            "duration_ms": 28.5,
+            "byte_val": "0x00",
+            "evidence": "source_clock_stretch",
+        }
+    ]
+    assert tx.byte_packets[1].clock_stretch_us == pytest.approx(28_500.0)
+
+    annotations = I2CWaveformReconstructor().reconstruct_transaction_waveform(tx).annotations
+    address = next(annotation for annotation in annotations if annotation.annotation_type == "ADDRESS")
+    address_ack = next(
+        annotation for annotation in annotations if annotation.annotation_type == "ACK"
+    )
+    data = next(
+        annotation
+        for annotation in annotations
+        if annotation.annotation_type == "DATA" and annotation.label == "0x00"
+    )
+    stretch = next(annotation for annotation in annotations if annotation.annotation_type == "STRETCH")
+    data_index = annotations.index(data)
+    data_ack = next(
+        annotation
+        for index, annotation in enumerate(annotations)
+        if annotation.annotation_type == "ACK" and index > data_index
+    )
+
+    assert stretch.start_time == pytest.approx(data.end_time)
+    assert stretch.end_time == pytest.approx(data_ack.start_time)
+    assert stretch.end_time > address_ack.end_time
+    assert stretch.start_time >= address.end_time
+    assert stretch.end_time - stretch.start_time == pytest.approx(28_500.0)
+
+
+def test_decoded_clock_stretch_on_address_byte_remains_on_address_ack():
+    csv_data = """Time,Packet ID,Address,Data,Read/Write,ACK/NAK,Duration,Clock Stretch [s]
+0.001000,0,0x50,,Write,ACK,0.000025,0.000250
+0.001025,0,,0x10,Write,ACK,0.000025,
+"""
+    report = I2CDiagnosticEngine().analyze_csv_content(csv_data)
+    tx = report.transactions[0]
+
+    annotations = I2CWaveformReconstructor().reconstruct_transaction_waveform(tx).annotations
+    address = next(annotation for annotation in annotations if annotation.annotation_type == "ADDRESS")
+    stretch = next(annotation for annotation in annotations if annotation.annotation_type == "STRETCH")
+    address_ack = next(annotation for annotation in annotations if annotation.annotation_type == "ACK")
+    data = next(annotation for annotation in annotations if annotation.annotation_type == "DATA")
+
+    assert stretch.start_time == pytest.approx(address.end_time)
+    assert stretch.end_time == pytest.approx(address_ack.start_time)
+    assert stretch.end_time <= data.start_time
+    assert stretch.end_time - stretch.start_time == pytest.approx(250.0)
 
 
 def test_driver_code_generator():

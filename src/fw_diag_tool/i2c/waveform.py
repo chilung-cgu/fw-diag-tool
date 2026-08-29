@@ -10,7 +10,7 @@ from plotly.subplots import make_subplots
 from fw_diag_tool.errors import ResourceLimitError
 
 from .localization import localize_waveform_detail, localize_waveform_label
-from .models import AckType, I2CDirection, I2CTransaction
+from .models import AckType, I2CBytePacket, I2CDirection, I2CTransaction
 
 
 @dataclass
@@ -241,13 +241,35 @@ class I2CWaveformReconstructor:
                 )
             )
 
+        def stretch_ms_for_packet(byte_val: int, packet: I2CBytePacket | None) -> float:
+            if packet is not None and packet.clock_stretch_us > 0:
+                return packet.clock_stretch_us / 1000.0
+            byte_key = f"0x{byte_val:02X}"
+            packet_timestamp = packet.timestamp if packet is not None else None
+            for event in tx.clock_stretching_events:
+                if event.get("byte_val") != byte_key:
+                    continue
+                event_timestamp = event.get("timestamp")
+                if (
+                    packet_timestamp is not None
+                    and event_timestamp is not None
+                    and not math.isclose(
+                        float(event_timestamp), packet_timestamp, rel_tol=0.0, abs_tol=1e-12
+                    )
+                ):
+                    continue
+                return event.get("duration_ms", 0.0)
+            return 0.0
+
         # 3. Emit Address Byte (7-bit address + R/W bit)
         addr_8b = (tx.address_7bit << 1) | (1 if tx.direction == I2CDirection.READ else 0)
-        # Find any clock stretching associated with address
-        addr_stretch_ms = 0.0
-        if tx.clock_stretching_events:
-            addr_stretch_ms = tx.clock_stretching_events[0].get("duration_ms", 0.0)
-        emit_byte(addr_8b, is_addr=True, ack=tx.address_ack, stretch_ms=addr_stretch_ms)
+        addr_pkt = next((packet for packet in tx.byte_packets if packet.is_address), None)
+        emit_byte(
+            addr_8b,
+            is_addr=True,
+            ack=tx.address_ack,
+            stretch_ms=stretch_ms_for_packet(addr_8b, addr_pkt),
+        )
 
         # 4. Emit Data Bytes
         # Aggregate analyzer rows can preserve known payload bytes while the
@@ -257,7 +279,8 @@ class I2CWaveformReconstructor:
         if tx.address_ack == AckType.ACK or tx.aggregate_ack != AckType.NONE:
             data_pkts = [p for p in tx.byte_packets if not p.is_address and p.byte_available]
             for idx, data_b in enumerate(tx.data_bytes):
-                pkt_ack = data_pkts[idx].ack if idx < len(data_pkts) else AckType.NONE
+                data_pkt = data_pkts[idx] if idx < len(data_pkts) else None
+                pkt_ack = data_pkt.ack if data_pkt is not None else AckType.NONE
                 if tx.aggregate_ack != AckType.NONE:
                     pkt_ack = AckType.NONE
                 # Label detail
@@ -266,7 +289,13 @@ class I2CWaveformReconstructor:
                     data_b == tx.command_code or tx.command_code > 0xFF
                 ):
                     lbl = f"Reg:0x{data_b:02X}"
-                emit_byte(data_b, is_addr=False, ack=pkt_ack, label_override=lbl)
+                emit_byte(
+                    data_b,
+                    is_addr=False,
+                    ack=pkt_ack,
+                    stretch_ms=stretch_ms_for_packet(data_b, data_pkt),
+                    label_override=lbl,
+                )
 
         # 5. STOP Condition (SDA goes 0->1 while SCL is 1)
         if tx.has_stop:
