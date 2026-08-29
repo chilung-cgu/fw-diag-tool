@@ -49,7 +49,7 @@ def test_pcie_dmesg_packaged_sample_is_parser_compatible() -> None:
 
 def test_pcie_gui_loads_packaged_dmesg_sample_and_renders_tlp_header() -> None:
     at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
-    at.sidebar.radio[0].set_value("🚀 PCIe Config Space 與 AER 診斷").run()
+    at.sidebar.radio[0].set_value("🚀 PCIe 設定空間（Config Space）與 AER 診斷").run()
 
     next(button for button in at.button if button.label == "載入內建 dmesg AER 範例").click().run()
     assert not at.exception

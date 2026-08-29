@@ -1,34 +1,53 @@
-# 韌體除錯分層 SOP
+# 韌體除錯分層標準作業流程（SOP；Firmware Debugging SOP）
 
-若你第一次使用 GUI，先看[12 個 GUI 頁面的閱讀地圖](appendix_gui_reading_guide.md)，再用本章的 L1～L7 SOP 組織跨模組排查。
+若你第一次使用 GUI，先看[12 個 GUI 頁面的閱讀地圖](appendix_gui_reading_guide.md)，再用本章的
+L1～L7 分層流程（layered SOP）組織跨模組排查。
 
-本章是 GUI 第 12 頁「📚 韌體除錯指南與 SOP」的完整教學。它不新增一種協定解碼器，而是教你把不同來源的證據放在正確層次，避免看到一張漂亮的圖就直接宣布 root cause。
+本章是 GUI 第 12 頁「📚 韌體除錯指南與 SOP」的完整教學。它不新增協定解碼器，而是教你
+把不同來源的證據放在正確層次，避免看到一張漂亮的圖就直接宣布根因（root cause）。
 
 ## 先記住三句話
 
 1. **先保存原始證據，再開始解讀。** 截圖只適合溝通，不足以重跑分析。
-2. **工具可以縮小範圍，不會自動證明根因。** 根因仍要用 datasheet、schematic、driver source、matching ELF、kernel log 或目標板重現確認。
+2. **工具可以縮小範圍，不會自動證明根因。** 根因仍要用資料表（datasheet）、電路圖（schematic）、
+   驅動程式原始碼（driver source）、相同映像符號（matching ELF）、核心 log 或目標板重現確認。
 3. **缺資料就寫 `Unavailable`，不要用 0、預設值或猜測填滿畫面。**
 
 ## 這一頁的 L1～L7 是什麼？
 
-這是實務上的排查順序，不是宣稱所有問題都嚴格符合 OSI 七層模型。每一層都回答不同問題：
+這是實務上的排查順序，不是宣稱所有問題都嚴格符合 OSI 七層模型。每一層都回答不同問題；
+層名保留英文 token，方便和工具報告、規格及 log 對照：
 
 | 層次 | 白話問題 | `fw-diag-tool` 可以提供的證據 | 仍然要到哪裡確認 |
 |---|---|---|---|
-| **L1 物理 / 電氣** | 線上真的有正確的電平、clock、pull-up、termination 嗎？ | Raw I2C 的 digital 0/1 edge、`tHIGH`、`tLOW`、period、頻率 | 示波器、公司的 logic analyzer、電源量測、schematic；本工具不能量類比電壓、rise/fall 或 PCIe eye |
-| **L2 Link / Framing** | START/STOP、CS、byte boundary、ACK/NACK 是否合理？ | I2C/SPI analyzer decode、raw I2C bit decode、PCIe config/AER 欄位 | 原始 capture、analyzer 設定、協定規格 |
-| **L3 Protocol** | address、opcode、register、command、checksum、message type 是否正確？ | I2C/SMBus/PMBus、EEPROM、SPI、MCTP/IPMB、PCIe 欄位解碼 | 目標晶片 datasheet、DMTF/SMBus/PMBus 或產品協定文件 |
-| **L4 Driver / Transport** | driver 或 transport 是否送出預期序列？ | 將 capture/log 的交易順序整理出來；產生 driver/DTS 起始模板 | kernel source、driver debug log、DTS、實際執行環境；工具不會直接讀 live kernel state |
-| **L5 Retry / State** | 是一次性錯誤，還是 retry、timeout、WREN/Busy、MUX/reset 狀態機？ | 列出已觀察到的 retry、NACK、clock stretch、SPI WREN/Busy 等事件 | driver 狀態機、timeout 設定、reset/power 時序與重現測試 |
-| **L6 Platform / Board** | board wiring、binding、power/reset ownership 是否吻合？ | DTS/driver 起始模板與欄位檢查 | schematic、BOM、board revision、binding、`dtc`、`dt-schema` |
-| **L7 Application / Meaning** | 這個 register 或 telemetry 值對產品行為代表什麼？ | register/bitfield、PMBus/sensor 的候選語意 | 正確 device profile、firmware source、產品需求與系統 log |
+| **L1 物理／電氣（Physical / Electrical）** | 線上真的有正確的電平、clock、pull-up、termination 嗎？ | 原始 I2C（Raw I2C）的 digital 0/1 edge、`tHIGH`、`tLOW`、period、頻率 | 示波器、公司的 logic analyzer、電源量測、schematic；本工具不能量類比電壓、rise/fall 或 PCIe eye |
+| **L2 連結／框架（Link / Framing）** | START/STOP、CS、byte boundary、ACK/NACK 是否合理？ | I2C/SPI 分析器解碼（analyzer decode）、原始 I2C 位元解碼（raw I2C bit decode）、PCIe config/AER 欄位 | 原始 capture、analyzer 設定、協定規格 |
+| **L3 協定（Protocol）** | address、opcode、register、command、checksum、message type 是否正確？ | I2C/SMBus/PMBus、EEPROM、SPI、MCTP/IPMB、PCIe 欄位解碼 | 目標晶片 datasheet、DMTF/SMBus/PMBus 或產品協定文件 |
+| **L4 驅動／傳輸（Driver / Transport）** | driver 或 transport 是否送出預期序列？ | 將擷取檔／log（capture/log）的交易順序整理出來；產生 driver/DTS 起始模板 | kernel source、driver debug log、DTS、實際執行環境；工具不會直接讀 live kernel state |
+| **L5 重試／狀態（Retry / State）** | 是一次性錯誤，還是 retry、timeout、WREN/Busy、MUX/reset 狀態機？ | 列出已觀察到的重試（retry）、NACK、clock stretch、SPI WREN/Busy 等事件 | driver 狀態機、timeout 設定、reset/power 時序與重現測試 |
+| **L6 平台／板卡（Platform / Board）** | board wiring、binding、power/reset ownership 是否吻合？ | DTS/driver 起始模板與欄位檢查 | schematic、BOM、board revision、binding、`dtc`、`dt-schema` |
+| **L7 應用／意義（Application / Meaning）** | 這個 register 或 telemetry 值對產品行為代表什麼？ | register/bitfield、PMBus/sensor 的候選語意 | 正確 device profile、firmware source、產品需求與系統 log |
+
+## GUI 第 12 頁畫面輸出怎麼讀
+
+第 12 頁「📚 韌體除錯指南與 SOP」是閱讀與取證框架，不上傳檔案，也不會替目前板卡產生
+診斷結果。頁面會固定顯示下列三個區段；要分析實際資料，請依輸入類型切到第 1、4、5、7 或
+8 頁，再把該頁的報告帶回這套 L1～L7 框架：
+
+| 畫面區段 | 這一段回答什麼 | 不要怎麼解讀 |
+|---|---|---|
+| 分層診斷模型（L1～L7） | 目前證據屬於哪一層，以及下一個應補的外部來源 | 不是健康分數，也不是自動根因排名 |
+| 固定七步流程（7-step workflow） | 從保存原始資料到寫出可重現結論的順序 | 不是要求每個問題都只會有一個線性原因 |
+| 報告證據詞（Evidence Terms） | `Measured`、`Inferred`、`Reconstructed`、`Hypothesis`、`Unavailable` 的證據等級 | 不要把 `Inferred` 或 `Hypothesis` 改寫成已確認事實 |
+
+頁面上方的提示「先確認證據，再提出假設」是使用順序；它本身沒有讀取 live driver、示波器、
+matching ELF 或目標板狀態的能力。
 
 ## 每次都照著做的 7 步
 
-### Step 1：保存可重現的原始資料
+### 步驟 1：保存可重現的原始資料（Step 1）
 
-建立一個資料夾，至少保留：
+建立一個你自己的案例資料夾，至少保留；下列 `case-2026-08-23/` 是文件範例，不是專案內建路徑：
 
 ```text
 case-2026-08-23/
@@ -42,18 +61,18 @@ case-2026-08-23/
 
 I2C 頁面的 Markdown 分頁會提供「下載可重現 Session（不含原始檔）」：它包含工具版本、分析設定、輸入檔名、輸入 SHA-256 與結構化報告。Session 不是 capture 備份；請把原始 CSV/log 與它放在同一個 case 資料夾，並檢查是否含公司機密。
 
-### Step 2：先辨認輸入證據等級
+### 步驟 2：先辨認輸入證據等級（Step 2）
 
 在 GUI 第 1 頁先看檔案屬於哪一種：
 
-- **Decoded table**：已有 analyzer 解出的 transaction；可做協定與異常分析，但不代表工具看到了每一個 raw edge。
-- **Raw digital**：每列至少有單調遞增的時間、SCL、SDA 0/1；可直接由 edge 計算 digital timing 與 bit decode。
-- **Analog waveform**：目前本工具不接收類比電壓波形，rise/fall time 應標為 `Unavailable`。
-- **Log / register dump / config dump**：分別送到 UART、MCTP/IPMB、PCIe 或 register 頁面，不要當成 I2C 波形輸入。
+- **解碼表（Decoded table）**：已有 analyzer 解出的 transaction；可做協定與異常分析，但不代表工具看到了每一個 raw edge。
+- **原始數位（Raw digital）**：每列至少有單調遞增的時間、SCL、SDA 0/1；可直接由 edge 計算 digital timing 與 bit decode。
+- **類比波形（Analog waveform）**：目前本工具不接收類比電壓波形，rise/fall time 應標為 `Unavailable`。
+- **日誌／暫存器／組態傾印（Log / register dump / config dump）**：分別送到 UART、MCTP/IPMB、PCIe 或 register 頁面，不要當成 I2C 波形輸入。
 
 看到 `Unavailable` 不是程式壞掉，而是輸入沒有足夠證據。先記錄它，再決定是否回到公司 LA 重新 capture。
 
-### Step 3：先查 L1，再看漂亮的圖
+### 步驟 3：先查 L1，再看漂亮的圖（Step 3）
 
 Raw I2C 模式中，先確認：
 
@@ -64,7 +83,7 @@ Raw I2C 模式中，先確認：
 
 這個頁面仍然不能回答「電壓是否達到 VIH/VIL」或「pull-up RC 是否合格」。那是示波器/LA 與硬體規格的工作。
 
-### Step 4：用 L2/L3 對照協定文件
+### 步驟 4：用 L2/L3 對照協定文件（Step 4）
 
 在 I2C 圖表或 transaction table 中，逐筆確認：
 
@@ -75,7 +94,7 @@ Raw I2C 模式中，先確認：
 
 其餘頁面用同一個問題：SPI 看 opcode/WREN/Busy/page boundary；MCTP/IPMB 看 header、tag、sequence、checksum；PCIe 看 config capability/AER；UART 看 log 中可解析的 fault 欄位。每一項都要回到相應規格或 source 交叉確認。
 
-### Step 5：把 L4/L5 對回 driver 與狀態機
+### 步驟 5：把 L4/L5 對回 driver 與狀態機（Step 5）
 
 不要只問「哪個裝置是紅色」。請把交易時間或順序對回：
 
@@ -86,9 +105,9 @@ Raw I2C 模式中，先確認：
 | UART fault address 很小 | NULL pointer 候選，亦可能是其他 fault context | 用 matching ELF、symbolication、CFSR/HFSR 與 fault frame 確認 |
 | PCIe AER 出現錯誤 | link/config/endpoint 或電氣問題皆可能 | 對照 link status、AER severity、kernel log 與實際拓撲 |
 
-`Possible`、`candidate`、`hypothesis` 都代表還有替代解釋；只有 source、規格與重現結果一致，才可以升級成已確認原因。
+`可能（Possible）`、`候選（candidate）`、`假設（hypothesis）` 都代表還有替代解釋；只有 source、規格與重現結果一致，才可以升級成已確認原因。
 
-### Step 6：最後才檢查 L6/L7
+### 步驟 6：最後才檢查 L6/L7（Step 6）
 
 當協定序列看起來合理，才檢查 board 與語意：
 
@@ -97,43 +116,44 @@ Raw I2C 模式中，先確認：
 - Device name 若有多個候選，報告會保留候選與 confidence；不要把候選名稱寫成已確認的晶片型號。
 - 對照 schematic、BOM、board revision、driver source、產品需求；這些不是 CSV 可以推導出來的。
 
-### Step 7：寫一份可重現的結論
+### 步驟 7：寫一份可重現的結論（Step 7）
 
 每個 finding 都用下面四欄，不要只寫「根因是 XXX」：
 
 ```text
-Observed facts:
+已觀察事實（Observed facts）:
 - Raw capture 在 0.0012 s 的 address 0x50 出現 NACK。
 - timestamp 可用；頻率樣本 42 個，約 400 kHz。
 
-Hypothesis:
+練習假設（Hypothesis）:
 - 可能是 EEPROM 尚未完成 write cycle，或 driver address/流程錯誤。
 
-Discriminating test:
+區分測試（Discriminating test）:
 - 對照 datasheet tWR 與 status polling；同時保留 power/reset/MUX log。
 
-Unverified:
+尚未驗證（Unverified）:
 - 尚未用示波器確認類比 VIH/VIL、rise time，也尚未確認 board revision。
 ```
 
 ## GUI 圖表怎麼讀
 
-第 1 頁的詳細圖表解讀在 [附錄 A：圖表與證據判讀](appendix_chart_guide.md)。先看圖表標題、evidence label、sample count，再看顏色與大小：
+第 1 頁的詳細圖表解讀在 [附錄 A：圖表與證據判讀](appendix_chart_guide.md)。先看圖表標題、
+證據標籤（evidence label）與樣本數（sample count），再看顏色與大小：
 
-- **SCL Clock Frequency Distribution**：X 軸是頻率，Y 軸是有效樣本數；單一窄柱只代表輸入中的樣本分布，不代表整條 bus 永遠穩定。
-- **Bus Transaction Timeline & Active Device Map**：X 軸是 transaction start time，Y 軸是 device；圓點大小是 duration，顏色反映 ACK/NACK 狀態。沒有 timestamp 的資料不能當作可靠時間軸。
-- **Waveform**：Raw digital 圖是 `Measured` 的 0/1 edge；decoded table 畫出的圖是 `Reconstructed` 示意。兩者都不是類比電壓波形。
-- **Health Grade**：是目前輸入與規則的排查優先級摘要，不是晶片健康保證。
+- **SCL 時鐘頻率分布（SCL Clock Frequency Distribution）**：X 軸是頻率，Y 軸是有效樣本數；單一窄柱只代表輸入中的樣本分布，不代表整條 bus 永遠穩定。
+- **匯流排交易時間軸與作用中裝置圖（Bus Transaction Timeline & Active Device Map）**：X 軸是 transaction start time，Y 軸是 device；圓點大小是 duration，顏色反映 ACK/NACK 狀態。沒有 timestamp 的資料不能當作可靠時間軸。
+- **波形（Waveform）**：Raw digital 圖是 `Measured` 的 0/1 edge；decoded table 畫出的圖是 `Reconstructed` 示意。兩者都不是類比電壓波形。
+- **健康等級（Health Grade）**：是目前輸入與規則的排查優先級摘要，不是晶片健康保證。
 
 ## 證據詞彙表
 
 | 詞 | 代表什麼 | 不代表什麼 |
 |---|---|---|
-| `Measured` | 直接由輸入 timestamp、edge、duration 或 value 計算 | 不代表類比電壓或所有硬體條件都已驗證 |
-| `Inferred` | 由多個觀察值推論 | 不代表只有一個可能原因 |
-| `Reconstructed` | 依 decoded bytes 畫出的理想示意 | 不代表 LA 實際捕捉到同樣的每個 edge |
-| `Hypothesis` | 值得排查的方向 | 不代表 root cause 已證明 |
-| `Unavailable` | 輸入缺少必要證據，工具拒絕猜測 | 不代表數值為 0，也不代表硬體一定正常 |
+| 已量測（`Measured`） | 直接由輸入 timestamp、edge、duration 或 value 計算 | 不代表類比電壓或所有硬體條件都已驗證 |
+| 推論（`Inferred`） | 由多個觀察值推論 | 不代表只有一個可能原因 |
+| 重建（`Reconstructed`） | 依 decoded bytes 畫出的理想示意 | 不代表 LA 實際捕捉到同樣的每個 edge |
+| 假設（`Hypothesis`） | 值得排查的方向 | 不代表 root cause 已證明 |
+| 不可用（`Unavailable`） | 輸入缺少必要證據，工具拒絕猜測 | 不代表數值為 0，也不代表硬體一定正常 |
 
 ## 什麼時候應該停止相信這份報告？
 

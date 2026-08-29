@@ -59,6 +59,28 @@ def test_mctp_tutorial_matches_gui_sample_and_uses_valid_ipmb_checksum() -> None
     assert "20 18 67 20 00 01 5F" not in chapter
 
 
+def test_mctp_tutorial_matches_gui_labels_and_localizes_protocol_fields() -> None:
+    chapter = (ROOT / "docs" / "chapters" / "ch05_mctp_ipmb.md").read_text(encoding="utf-8")
+
+    assert "執行 MCTP／IPMB 伺服器管理協定解碼" in chapter
+    assert "執行伺服器協定解碼" not in chapter
+    for token in ("MCTP", "IPMB", "PLDM", "SPDM", "Header Version"):
+        assert token in chapter
+    for label in (
+        "標頭版本（Header Version）",
+        "目的端點識別碼（Dest EID）",
+        "來源端點識別碼（Src EID）",
+        "訊息類型（Msg Type）",
+        "PLDM 命令（PLDM Command）",
+        "請求位址（Rq Addr）",
+        "回應位址（Rs Addr）",
+        "網路功能（NetFn）",
+        "命令（Command）",
+        "狀態（Status）",
+    ):
+        assert label in chapter
+
+
 def test_readme_does_not_overstate_unverified_capabilities() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "真實故障波形" not in readme

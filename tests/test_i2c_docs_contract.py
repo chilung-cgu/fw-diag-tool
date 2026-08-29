@@ -129,6 +129,21 @@ def test_packet_builder_docs_cover_canonical_operations_and_safety() -> None:
         assert term in chapter
 
 
+def test_spi_case11_docs_distinguish_unknown_wel_from_missing_wren() -> None:
+    chapter = read_doc("ch08_spi_flash.md")
+
+    for term in (
+        "SPI_WEL_STATE_UNKNOWN",
+        "SPI_WRITE_NO_WREN",
+        "Status Register 寫入",
+        "WEL=0",
+        "0x06",
+        "0x50",
+        "不能直接判定 WREN 未送出",
+    ):
+        assert term in chapter
+
+
 @pytest.mark.parametrize(
     ("filename", "expected_code"),
     [
@@ -137,9 +152,7 @@ def test_packet_builder_docs_cover_canonical_operations_and_safety() -> None:
         ("i2c_missing_stop.csv", "I2C_MISSING_STOP"),
     ],
 )
-def test_documented_decoded_anomaly_fixtures_execute(
-    filename: str, expected_code: str
-) -> None:
+def test_documented_decoded_anomaly_fixtures_execute(filename: str, expected_code: str) -> None:
     content = (EXAMPLES / filename).read_text(encoding="utf-8")
     report = I2CDiagnosticEngine().analyze_csv_content(content)
     assert expected_code in {issue.code for issue in report.issues}
@@ -175,12 +188,9 @@ def test_aggregate_golden_and_failing_nack_withhold_semantics_without_issue() ->
     assert not golden.issues
     assert not failing.issues
     assert all(tx.status == "ACK UNKNOWN" for tx in golden.transactions)
-    assert not any(
-        issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in golden.data_quality_issues
-    )
+    assert not any(issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in golden.data_quality_issues)
     assert any(
-        issue.code == "I2C_ACK_AGGREGATE_UNATTRIBUTABLE"
-        for issue in failing.data_quality_issues
+        issue.code == "I2C_ACK_AGGREGATE_UNATTRIBUTABLE" for issue in failing.data_quality_issues
     )
     assert any("withheld" in (tx.semantic_summary or "") for tx in failing.transactions)
     health = I2CTimingCharts.get_device_health_summary(golden)
@@ -191,9 +201,7 @@ def test_aggregate_golden_and_failing_nack_withhold_semantics_without_issue() ->
 def test_waveform_diff_doc_matches_current_cli_example_output() -> None:
     chapter = read_doc("ch03_waveform_diff.md")
     engine = I2CDiagnosticEngine()
-    golden = engine.analyze_csv_content(
-        (EXAMPLES / "i2c_golden.csv").read_text(encoding="utf-8")
-    )
+    golden = engine.analyze_csv_content((EXAMPLES / "i2c_golden.csv").read_text(encoding="utf-8"))
     failing = engine.analyze_csv_content(
         (EXAMPLES / "i2c_failing_nack.csv").read_text(encoding="utf-8")
     )

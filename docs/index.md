@@ -36,7 +36,7 @@ uv run fw-diag gui
 | 4 | 📟 UART 崩潰轉儲與 HardFault 分析（Crash Dump） | [ch04_uart_crash.md](chapters/ch04_uart_crash.md) | `kernel_panic_nvme.log` / `arm_hardfault_stm32.log` |
 | 5 | 🌐 MCTP／IPMB 伺服器管理協定解析 | [ch05_mctp_ipmb.md](chapters/ch05_mctp_ipmb.md) | `mctp_pldm_sample.hex` / `ipmb_sample.hex` |
 | 6 | 🌲 Device Tree（.dts）產生器 | [ch06_dts_generator.md](chapters/ch06_dts_generator.md) | 無需檔案 |
-| 7 | 🚀 PCIe Config Space 與 AER 診斷 | [ch07_pcie_aer.md](chapters/ch07_pcie_aer.md) | `pcie_aer_lspci.txt` / `pcie_aer_dmesg.log` |
+| 7 | 🚀 PCIe 設定空間（Config Space）與 AER 診斷 | [ch07_pcie_aer.md](chapters/ch07_pcie_aer.md) | `pcie_aer_lspci.txt` / `pcie_aer_dmesg.log` |
 | 8 | ⚡ SPI Flash 協定診斷 | [ch08_spi_flash.md](chapters/ch08_spi_flash.md) | `spi_w25q128_sample.csv` |
 | 9 | 🎛 晶片暫存器 Bitfield 解碼器 | [ch09_register_codegen.md](chapters/ch09_register_codegen.md) | 內建 YAML |
 | 10 | 🛠 C 語言 Register 巨集產生器 | [ch09_register_codegen.md](chapters/ch09_register_codegen.md)（同第9章） | 內建 YAML |
