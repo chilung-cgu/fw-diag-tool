@@ -338,7 +338,23 @@ class I2CDiagnosticEngine:
                 # Record address byte packet
                 dur_s = ev.duration_s
                 clock_stretch_us = 0.0
-                if ev.extra and "clock_stretch_us" in ev.extra:
+                aggregate_clock_stretch_us = 0.0
+                if ev.extra and ev.extra.get("aggregate_clock_stretch_unattributable"):
+                    aggregate_clock_stretch_us = float(
+                        ev.extra.get("aggregate_clock_stretch_us", 0.0)
+                    )
+                    if aggregate_clock_stretch_us > 0:
+                        current_tx.clock_stretching_events.append(
+                            {
+                                "timestamp": ev.timestamp,
+                                "duration_ms": aggregate_clock_stretch_us / 1000.0,
+                                "evidence": ev.extra.get(
+                                    "aggregate_clock_stretch_evidence", "source_clock_stretch"
+                                ),
+                                "attribution": "aggregate_unattributable",
+                            }
+                        )
+                elif ev.extra and "clock_stretch_us" in ev.extra:
                     clock_stretch_us = float(ev.extra["clock_stretch_us"])
                 if clock_stretch_us > 0:
                     current_tx.clock_stretching_events.append(
@@ -1290,19 +1306,26 @@ class I2CDiagnosticEngine:
                     count=aggregate_ack_count,
                 )
             )
-        aggregate_duration_count = sum(
-            bool(event.extra and event.extra.get("aggregate_duration_unattributable"))
+        aggregate_timing_count = sum(
+            bool(
+                event.extra
+                and (
+                    event.extra.get("aggregate_duration_unattributable")
+                    or event.extra.get("aggregate_clock_stretch_unattributable")
+                )
+            )
             for event in events
         )
-        if aggregate_duration_count:
+        if aggregate_timing_count:
             data_quality_issues.append(
                 DataQualityIssue(
                     code="I2C_TIMING_AGGREGATE_UNATTRIBUTABLE",
                     message=(
-                        "An aggregate analyzer row supplied one Duration for address plus data bytes; "
-                        "the value was retained as source metadata but not attributed to per-byte frequency samples."
+                        "An aggregate analyzer row supplied one Duration or Clock Stretch value for address "
+                        "plus data bytes; the value was retained as source metadata but not attributed to "
+                        "per-byte timing or waveform overlays."
                     ),
-                    count=aggregate_duration_count,
+                    count=aggregate_timing_count,
                 )
             )
 

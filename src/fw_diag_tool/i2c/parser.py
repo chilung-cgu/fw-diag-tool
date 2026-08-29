@@ -488,7 +488,16 @@ class I2CParser:
                 )
                 if source_error:
                     aggregate_extra["source_error"] = source_error
-                aggregate_extra.update(timing_extra)
+                if timing_extra:
+                    aggregate_extra.update(
+                        {
+                            "aggregate_clock_stretch_unattributable": True,
+                            "aggregate_clock_stretch_us": timing_extra["clock_stretch_us"],
+                            "aggregate_clock_stretch_evidence": timing_extra.get(
+                                "timing_evidence", "source_clock_stretch"
+                            ),
+                        }
+                    )
                 if dur is not None:
                     # A summary row has one timing value for address plus all
                     # payload bytes; retain the fact that it could not be
@@ -519,6 +528,9 @@ class I2CParser:
                     data_extra = aggregate_extra.copy()
                     data_extra.pop("aggregate_duration_unattributable", None)
                     data_extra.pop("aggregate_duration_s", None)
+                    data_extra.pop("aggregate_clock_stretch_unattributable", None)
+                    data_extra.pop("aggregate_clock_stretch_us", None)
+                    data_extra.pop("aggregate_clock_stretch_evidence", None)
                     events.append(
                         RawI2CEvent(
                             timestamp=timestamp,

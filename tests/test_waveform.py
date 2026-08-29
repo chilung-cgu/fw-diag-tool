@@ -134,6 +134,31 @@ def test_decoded_clock_stretch_on_address_byte_remains_on_address_ack():
     assert stretch.end_time - stretch.start_time == pytest.approx(250.0)
 
 
+def test_aggregate_clock_stretch_remains_transaction_level_without_byte_marker():
+    csv_data = """Time,Packet ID,Address,Data,Read/Write,ACK/NACK,Duration,Clock Stretch [s]
+0.001000,0,0x50,"0x10 0x20",Write,ACK,0.000090,0.000250
+"""
+    report = I2CDiagnosticEngine().analyze_csv_content(csv_data)
+    tx = report.transactions[0]
+
+    assert tx.clock_stretching_events == [
+        {
+            "timestamp": 0.001,
+            "duration_ms": 0.25,
+            "evidence": "source_clock_stretch",
+            "attribution": "aggregate_unattributable",
+        }
+    ]
+    assert all(packet.clock_stretch_us == 0.0 for packet in tx.byte_packets)
+    assert any(
+        issue.code == "I2C_TIMING_AGGREGATE_UNATTRIBUTABLE"
+        for issue in report.data_quality_issues
+    )
+
+    annotations = I2CWaveformReconstructor().reconstruct_transaction_waveform(tx).annotations
+    assert not any(annotation.annotation_type == "STRETCH" for annotation in annotations)
+
+
 def test_driver_code_generator():
     snippets = I2CDriverCodeGenerator.generate_all_snippets(
         addr_7bit=0x50, reg_offset=0x10, data_bytes=[0xAB, 0xCD], is_read=False, bus_num=2
