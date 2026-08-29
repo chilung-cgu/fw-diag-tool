@@ -31,35 +31,35 @@
 |---|---|---|---|
 | canonical operation（register/direct）、7-bit address、optional register offset/width/order、data 或 read length、bus number | canonical transaction preview 與 ideal waveform | 產生的 bytes/`Unknown` read placeholder 不是裝置回應 | 以 datasheet transaction review，再在安全板卡上執行。 |
 
-### 3. [Golden vs Failing Waveform Diff](ch03_waveform_diff.md)
+### 3. [Golden 與 Failing 雙波形差分對比（Waveform Diff）](ch03_waveform_diff.md)
 
 | 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
 |---|---|---|---|
-| Golden 與 Failing decoded trace | insufficient evidence、第一個 divergence、mismatch type | protocol diff 不等於 analog 或 firmware state diff | 同一時間窗補 raw edge、driver log、status register。 |
+| Golden 與 Failing decoded trace，或先按 GUI 內建 pair loader | insufficient evidence、第一個 divergence、mismatch type | protocol diff 不等於 analog 或 firmware state diff | 同一時間窗補 raw edge、driver log、status register。 |
 
-### 4. [UART Crash & HardFault 分析](ch04_uart_crash.md)
+### 4. [UART 崩潰轉儲與 HardFault 分析（Crash Dump）](ch04_uart_crash.md)
 
 | 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
 |---|---|---|---|
 | kernel panic/dmesg 或 Cortex-M HardFault log | RIP/CR2/call trace，或 HFSR/CFSR/stacked PC | 沒有 matching symbols/ELF 不能宣稱唯一 source line/root cause | 保存原始 log，以相同 build 的 symbols 對照。 |
 
-### 5. [MCTP / IPMB 伺服器協定解析](ch05_mctp_ipmb.md)
+### 5. [MCTP／IPMB 伺服器管理協定解析](ch05_mctp_ipmb.md)
 
 | 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
 |---|---|---|---|
 | 每行一個完整 hex frame | protocol/header/payload/checksum/frame count | parser output 不代表完整 DSP0236/PLDM/SPDM conformance | 用規格重算 checksum，核對 binding、EID 與平台設定。 |
 
-### 6. [Device Tree (`.dts`) 產生器](ch06_dts_generator.md)
+### 6. [Device Tree（.dts）產生器](ch06_dts_generator.md)
 
 | 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
 |---|---|---|---|
 | bus、MUX、clock-frequency、device addr/channel/name/compatible | node hierarchy、`reg`、`compatible`、clock 與 channel | template 不代表 kernel 已 probe 或 wiring 正確 | 以 schematic、DT binding、build 與 target dmesg 驗證。 |
 
-### 7. [PCIe Config、AER 與 Link 降級診斷](ch07_pcie_aer.md)
+### 7. [PCIe Config Space、AER 與 Link 降級診斷](ch07_pcie_aer.md)
 
 | 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
 |---|---|---|---|
-| `lspci -xxxx`/config dump 或 dmesg AER log | vendor/device、capability chain、link width/speed、AER status | partial dump 不能證明整個 link 或唯一 root cause | 保存完整 dump，對照 PCIe spec、kernel log、LTSSM/硬體量測。 |
+| `lspci -xxxx`/config dump 或 `examples/data/pcie_aer_dmesg.log` | vendor/device、capability chain、link width/speed、AER status、captured TLP header | partial dump 不能證明整個 link 或唯一 root cause | 保存完整 dump，對照 PCIe spec、kernel log、LTSSM/硬體量測。 |
 
 ### 8. [SPI NOR Flash 協定診斷](ch08_spi_flash.md)
 
@@ -79,7 +79,7 @@
 |---|---|---|---|
 | register YAML 與 access/reset/field 定義 | `_GET`、RW setter、W1C mask、reset constants | generated header 不是整個 driver 的 concurrency/atomicity proof | compile、review volatile/MMIO、reserved bits、RMW 與 ISR/thread 邊界。 |
 
-### 11. [Junior FW Fault Arena](ch10_fault_arena.md)
+### 11. [初階 Firmware 實戰除錯實驗室（Fault Arena）](ch10_fault_arena.md)
 
 | 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
 |---|---|---|---|

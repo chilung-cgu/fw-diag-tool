@@ -9,10 +9,10 @@ PCIe 設備（GPU、NVMe SSD、網卡）在開機時，BIOS/UEFI 會讀取每個
 
 ## 怎麼操作？
 
-1. 進入 GUI 第 7 頁 **「🚀 PCIe Config & AER 診斷」**。
+1. 進入 GUI 第 7 頁 **「🚀 PCIe Config Space 與 AER 診斷」**。
 2. 選擇輸入方式：
    - **貼上 lspci -xxxx**：分析設備身份、BAR、Capability 鏈表與 Link 速度。
-   - **貼上 dmesg AER Log**：解析目前支援的 PCIe Bus Error 與 TLP header 欄位，列出可能排查方向。
+   - **貼上 dmesg AER Log**：解析目前支援的 PCIe Bus Error 與 TLP header 欄位，列出可能排查方向；可直接貼上 `examples/data/pcie_aer_dmesg.log`。
 3. 點擊 **「執行 PCIe 分析」** 按鈕。
 
 ## 怎麼看懂輸出結果？
@@ -72,3 +72,9 @@ Link capability 與 negotiated status 的差異可指出「目前沒有跑到最
 > **說明：**
 >
 > 本頁分析 Config Space、`lspci` 與 AER log，不是 PCIe protocol analyzer、LTSSM trace 或高速差分電氣量測工具。
+
+## 測試資料
+
+- **Config Space**：`examples/data/pcie_aer_lspci.txt`，用於設備身份、Capability 與 Link 欄位教學。
+- **Linux dmesg AER**：`examples/data/pcie_aer_dmesg.log`，包含 `MalformedTLP` 事件與 `TLP Header: 00000001 0100000f fe000000 00000000`。
+- dmesg 範例預期在報告中看到 `Captured TLP Header`；這只代表 kernel log 捕獲到 header，不等於已定位唯一硬體 root cause。

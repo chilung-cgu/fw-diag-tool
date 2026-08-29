@@ -32,18 +32,18 @@ uv run fw-diag gui
 |---|---|---|---|
 | 1 | 📊 I2C / PMBus 診斷與波形檢視 | [ch01_i2c_pmbus.md](chapters/ch01_i2c_pmbus.md) + [附錄A 圖表判讀](chapters/appendix_chart_guide.md) | `i2c_split_decoded.csv`、`i2c_raw_100khz.csv`、`i2c_text_trace.log`、aggregate `i2c_golden.csv` |
 | 2 | 🎨 I2C 封包模擬器與驅動產生 | [ch02_packet_builder.md](chapters/ch02_packet_builder.md) | 無需檔案 |
-| 3 | ⚖️ 雙波形對比檢視 (Waveform Diff) | [ch03_waveform_diff.md](chapters/ch03_waveform_diff.md) | `i2c_golden.csv` + `i2c_failing_nack.csv` |
-| 4 | 📟 UART Crash & HardFault 分析 | [ch04_uart_crash.md](chapters/ch04_uart_crash.md) | `kernel_panic_nvme.log` / `arm_hardfault_stm32.log` |
-| 5 | 🌐 MCTP / IPMB 伺服器協定解析 | [ch05_mctp_ipmb.md](chapters/ch05_mctp_ipmb.md) | `mctp_pldm_sample.hex` / `ipmb_sample.hex` |
-| 6 | 🌲 Device Tree (.dts) 產生器 | [ch06_dts_generator.md](chapters/ch06_dts_generator.md) | 無需檔案 |
-| 7 | 🚀 PCIe Config & AER 診斷 | [ch07_pcie_aer.md](chapters/ch07_pcie_aer.md) | `pcie_aer_lspci.txt` |
+| 3 | ⚖️ 雙波形對比檢視（Waveform Diff） | [ch03_waveform_diff.md](chapters/ch03_waveform_diff.md) | GUI 內建 pair：`i2c_golden.csv` + `i2c_failing_nack.csv` |
+| 4 | 📟 UART 崩潰轉儲與 HardFault 分析（Crash Dump） | [ch04_uart_crash.md](chapters/ch04_uart_crash.md) | `kernel_panic_nvme.log` / `arm_hardfault_stm32.log` |
+| 5 | 🌐 MCTP／IPMB 伺服器管理協定解析 | [ch05_mctp_ipmb.md](chapters/ch05_mctp_ipmb.md) | `mctp_pldm_sample.hex` / `ipmb_sample.hex` |
+| 6 | 🌲 Device Tree（.dts）產生器 | [ch06_dts_generator.md](chapters/ch06_dts_generator.md) | 無需檔案 |
+| 7 | 🚀 PCIe Config Space 與 AER 診斷 | [ch07_pcie_aer.md](chapters/ch07_pcie_aer.md) | `pcie_aer_lspci.txt` / `pcie_aer_dmesg.log` |
 | 8 | ⚡ SPI Flash 協定診斷 | [ch08_spi_flash.md](chapters/ch08_spi_flash.md) | `spi_w25q128_sample.csv` |
 | 9 | 🎛 晶片暫存器 Bitfield 解碼器 | [ch09_register_codegen.md](chapters/ch09_register_codegen.md) | 內建 YAML |
 | 10 | 🛠 C 語言 Register 巨集產生器 | [ch09_register_codegen.md](chapters/ch09_register_codegen.md)（同第9章） | 內建 YAML |
-| 11 | 🏆 Junior FW 實戰除錯實驗室 (Fault Arena) | [ch10_fault_arena.md](chapters/ch10_fault_arena.md) | 內建案例 |
-| 12 | 📚 韌體除錯指南 & SOP | [ch12_sop.md](chapters/ch12_sop.md) + [GUI 閱讀地圖](chapters/appendix_gui_reading_guide.md) + GUI L1~L7 分層模型 | 無需檔案 |
+| 11 | 🏆 初階 Firmware 實戰除錯實驗室（Fault Arena） | [ch10_fault_arena.md](chapters/ch10_fault_arena.md) | 內建案例 |
+| 12 | 📚 韌體除錯指南與 SOP | [ch12_sop.md](chapters/ch12_sop.md) + [GUI 閱讀地圖](chapters/appendix_gui_reading_guide.md) + GUI L1~L7 分層模型 | 無需檔案 |
 
-> 📂 **測試資料路徑**：`examples/data/` 目錄下有所有演練用的 CSV / Log / Hex 檔案。
+> 📂 **測試資料路徑**：`examples/data/` 目錄下有所有演練用的 CSV / Log / Hex 檔案。第 3 頁也提供套件內建的 Golden/Failing pair 載入與下載按鈕；PCIe dmesg 範例則可直接貼上 `examples/data/pcie_aer_dmesg.log` 的內容。
 
 ---
 
@@ -55,9 +55,9 @@ docs/
 ├── chapters/                    ← 各章節詳細教學（每個 GUI 頁面一個檔案）
 │   ├── ch01_i2c_pmbus.md        ← I2C 波形診斷與數位波形判讀
 │   ├── ch02_packet_builder.md   ← 封包模擬器與 C 驅動產生
-│   ├── ch03_waveform_diff.md    ← Golden vs Failing 雙波形比對
+│   ├── ch03_waveform_diff.md    ← Golden 與 Failing 雙波形比對
 │   ├── ch04_uart_crash.md       ← Linux Kernel Panic + ARM HardFault
-│   ├── ch05_mctp_ipmb.md        ← MCTP / IPMB 伺服器管理協定
+│   ├── ch05_mctp_ipmb.md        ← MCTP／IPMB 伺服器管理協定
 │   ├── ch06_dts_generator.md    ← Device Tree 自動生成
 │   ├── ch07_pcie_aer.md         ← PCIe Config Space + Link 降級 + AER
 │   ├── ch08_spi_flash.md        ← SPI NOR Flash 協定診斷

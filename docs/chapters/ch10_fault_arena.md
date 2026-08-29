@@ -1,4 +1,4 @@
-# Junior FW 20 大實戰故障演練場 (Fault Arena)
+# 初階 Firmware 20 大實戰故障演練場（Fault Arena）
 
 ## 這個頁面在做什麼？
 
@@ -7,7 +7,7 @@
 
 ## 怎麼操作？
 
-1. 進入 GUI 第 11 頁 **「🏆 Junior FW 實戰除錯實驗室 (Fault Arena)」**。
+1. 進入 GUI 第 11 頁 **「🏆 初階 Firmware 實戰除錯實驗室（Fault Arena）」**。
 2. 從下拉選單選擇任一個案例。
 3. 頁面顯示故障情境說明與排查 SOP。
 

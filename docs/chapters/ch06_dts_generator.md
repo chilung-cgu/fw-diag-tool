@@ -1,4 +1,4 @@
-# Linux & OpenBMC Device Tree (.dts) 自動產生器
+# Linux／OpenBMC Device Tree（.dts）自動產生器
 
 ## 這個頁面在做什麼？
 
@@ -13,10 +13,10 @@
 
 ## 怎麼操作？
 
-1. 進入 GUI 第 6 頁 **「🌲 Device Tree (.dts) 產生器」**。
+1. 進入 GUI 第 6 頁 **「🌲 Device Tree（.dts）產生器」**。
 2. 輸入 I2C Bus Number（如 `1` 代表 `&i2c1`）、MUX address、MUX `compatible` 與 `clock-frequency`。
 3. 在 YAML 裝置清單中，為每一顆實際存在的裝置填入 `addr`、`channel`、`name`、`compatible`。
-4. 按 **「產生 Device Tree」**；輸入不完整、位址保留、同一 channel 位址重複或 compatible 不是
+4. 按 **「產生 Device Tree（.dts）」**；輸入不完整、位址保留、同一 channel 位址重複或 compatible 不是
    `vendor,device` 格式時，頁面會拒絕生成並顯示錯誤。
 5. 下載產生的 `i2c_busN.dtsi`。工具輸出的是拓撲模板，不是已經通過目標 kernel binding 的完整 board DTS。
 

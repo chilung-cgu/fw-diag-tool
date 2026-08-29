@@ -1,4 +1,4 @@
-# UART Serial Crash Dump 與 ARM HardFault 智慧診斷
+# UART 序列埠崩潰轉儲與 ARM Cortex-M HardFault 智慧診斷（Crash Dump）
 
 ## 這個頁面在做什麼？
 
@@ -10,9 +10,9 @@
 
 ## 怎麼操作？
 
-1. 進入 GUI 第 4 頁 **「📟 UART Crash & HardFault 分析」**。
+1. 進入 GUI 第 4 頁 **「📟 UART 崩潰轉儲與 HardFault 分析（Crash Dump）」**。
 2. 選擇輸入方式：貼上自己的 Log，或載入範例。
-3. 點擊 **「執行 UART Crash 分析」** 按鈕。
+3. 點擊 **「執行 UART 崩潰轉儲分析（Crash Dump）」** 按鈕。
 
 ## 怎麼看懂輸出結果？
 

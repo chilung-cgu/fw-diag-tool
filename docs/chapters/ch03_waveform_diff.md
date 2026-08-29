@@ -1,4 +1,4 @@
-# Golden vs Failing 雙波形差分對比 (Waveform Diff)
+# Golden 與 Failing 雙波形差分對比（Waveform Diff）
 
 ## 這個頁面在做什麼？
 
@@ -16,10 +16,10 @@
 
 ## 怎麼操作？
 
-1. 進入 GUI 第 3 頁 **「⚖️ 雙波形對比檢視 (Waveform Diff)」**。
-2. 左邊上傳 Golden Trace CSV（如 `examples/data/i2c_golden.csv`）。
-3. 右邊上傳 Failing Trace CSV（如 `examples/data/i2c_failing_nack.csv`）。
-4. 系統自動比對並顯示結果。
+1. 進入 GUI 第 3 頁 **「⚖️ 雙波形對比檢視（Waveform Diff）」**。
+2. 第一次操作可先按 **「載入內建 Golden/Failing 範例」**；GUI 會載入套件內建的最小 decoded CSV pair，並提供兩份 CSV 的下載按鈕。
+3. 若要使用自己的 capture，左邊上傳 Golden Trace CSV（如 `examples/data/i2c_golden.csv`），右邊上傳 Failing Trace CSV（如 `examples/data/i2c_failing_nack.csv`）。
+4. 兩份輸入都就緒後，系統自動比對並顯示結果；只有一邊上傳時會先提示補齊另一邊。
 
 ## 怎麼看懂輸出結果？
 
@@ -53,3 +53,4 @@ Hint: 先確認 NACK 是 address、write-data、read 終止，還是來源欄位
 
 - **Golden**: `examples/data/i2c_golden.csv`（小型 synthetic 參考資料）
 - **Failing**: `examples/data/i2c_failing_nack.csv`（加入 NACK 差異的 synthetic 資料）
+- GUI 內建 pair 與上述檔案內容一致；載入後預期看到 `Found 1 divergence point(s). First mismatch at Transaction #3.` 與 `Type: NACK_MISMATCH`。
