@@ -68,6 +68,7 @@ class PCIeAnalyzer:
         text = hex_input.strip()
         lines = text.splitlines()
         byte_values: list[int] = []
+        offset_rows: list[tuple[int, list[int]]] = []
 
         # Check if lines have offset patterns like "00: ..." or "0000:01:00.0 ..."
         for line in lines:
@@ -82,18 +83,30 @@ class PCIeAnalyzer:
             if m:
                 rest = m.group(1)
                 tokens = re.findall(r"\b[0-9a-fA-F]{2}\b", rest)
-                for t in tokens:
-                    byte_values.append(int(t, 16))
+                offset = int(line[: line.index(":")], 16)
+                offset_rows.append((offset, [int(t, 16) for t in tokens]))
             else:
                 tokens = re.findall(r"\b[0-9a-fA-F]{2}\b", line)
                 for t in tokens:
                     byte_values.append(int(t, 16))
 
+        if offset_rows:
+            positioned_data = bytearray()
+            for offset, row_bytes in offset_rows:
+                end = offset + len(row_bytes)
+                if end > len(positioned_data):
+                    positioned_data.extend(bytes(end - len(positioned_data)))
+                positioned_data[offset:end] = bytes(row_bytes)
+            has_config_start = any(offset == 0 and row_bytes for offset, row_bytes in offset_rows)
+            if has_config_start and len(positioned_data) >= 64:
+                return bytes(positioned_data)
+
         if len(byte_values) >= 64:
             return bytes(byte_values)
-        all_tokens = re.findall(r"\b[0-9a-fA-F]{2}\b", text)
-        if len(all_tokens) >= 64:
-            return bytes([int(t, 16) for t in all_tokens])
+        if not offset_rows:
+            all_tokens = re.findall(r"\b[0-9a-fA-F]{2}\b", text)
+            if len(all_tokens) >= 64:
+                return bytes([int(t, 16) for t in all_tokens])
         raise ValueError(
             "Invalid hex input: cannot extract at least 64 bytes of PCI configuration space."
         )

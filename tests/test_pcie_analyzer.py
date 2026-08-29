@@ -2,6 +2,7 @@ import struct
 import unittest
 
 from fw_diag_tool.pcie import HeaderType, PCIeAnalyzer, PCIeReporter
+from fw_diag_tool.resources import load_pcie_lspci_sample
 
 
 class TestPCIeAnalyzer(unittest.TestCase):
@@ -114,6 +115,21 @@ class TestPCIeAnalyzer(unittest.TestCase):
         self.assertEqual(bdf, "0000:01:00.0")
         cfg = PCIeAnalyzer.decode_config_space(parsed_data, bdf)
         self.assertEqual(cfg.vendor_id, 0x10EE)
+
+    def test_packaged_lspci_sample_preserves_offsets_and_decodes_aer(self):
+        bdf, parsed_data = PCIeAnalyzer.parse_lspci_text(load_pcie_lspci_sample())
+
+        self.assertEqual(bdf, "0000:01:00.0")
+        self.assertEqual(len(parsed_data), 0x130)
+        self.assertEqual(parsed_data[0x100:0x104], bytes.fromhex("01 00 01 00"))
+        self.assertEqual(parsed_data[0x60:0x100], bytes(0xA0))
+
+        cfg = PCIeAnalyzer.decode_config_space(parsed_data, bdf)
+        self.assertEqual([cap.ext_cap_id for cap in cfg.extended_capabilities], [0x0001])
+        self.assertIsNotNone(cfg.aer_analysis)
+        assert cfg.aer_analysis is not None
+        self.assertEqual(cfg.aer_analysis.active_uncorr_fatal_count, 1)
+        self.assertIsNotNone(cfg.aer_analysis.decoded_tlp)
 
     def test_dmesg_parsing(self):
         dmesg_sample = """
