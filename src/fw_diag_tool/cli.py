@@ -434,13 +434,15 @@ def decode_register(
     table.add_column("Bits", style="cyan", width=10)
     table.add_column("Field Name", style="bold green", width=20)
     table.add_column("Value", style="yellow", width=12)
+    table.add_column("Access", style="cyan", width=8)
     table.add_column("Meaning / Status", style="magenta")
     for f in result.fields:
         meaning_str = f.meaning
         if f.is_warning:
             meaning_str = f"[bold red]⚠ {meaning_str}[/]"
-        table.add_row(f.bit_range, f.name, f.hex_val, meaning_str)
+        table.add_row(f.bit_range, f.name, f.hex_val, f.access, meaning_str)
     console.print(table)
+    console.print(f"Unmapped bits: 0x{result.unmapped_bits:08X}")
 
 
 @gen_app.command("c-header")

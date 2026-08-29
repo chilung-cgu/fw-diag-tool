@@ -384,6 +384,16 @@ registers:
         generator.generate_header(module_name)
 
 
+def test_c_header_filename_uses_the_generated_identifier() -> None:
+    assert CHeaderGenerator.header_filename("My Chip/v1") == "my_chip_v1.h"
+
+
+@pytest.mark.parametrize("module_name", ["123-chip", "_private", "!!!"])
+def test_c_header_filename_rejects_nonportable_generated_identifiers(module_name):
+    with pytest.raises(ValueError, match="C identifier"):
+        CHeaderGenerator.header_filename(module_name)
+
+
 def test_register_catalog_rejects_duplicate_offsets_instead_of_overwriting():
     with pytest.raises(ValueError, match="duplicate register offset"):
         CHeaderGenerator.from_yaml_str(
@@ -533,9 +543,10 @@ registers:
     fields: []
 """
     )
-    header = generator.generate_header("MOD*/\n#define EVIL 2\n/*")
+    module_name = "MOD*/\n#define EVIL 2\n/*"
+    header = generator.generate_header(module_name)
 
-    assert "@file mod____define_evil_2___.h" in header
+    assert f"@file {CHeaderGenerator.header_filename(module_name)}" in header
     assert "\n#define EVIL" not in header
     assert "* /" in header
 

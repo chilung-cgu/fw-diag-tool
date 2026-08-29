@@ -84,7 +84,7 @@ def test_cli_spi_analyze_and_reporter(tmp_path: Path):
     report = SPIDiagnosticEngine().analyze_csv_file(spi_csv)
     buf = StringIO()
     SPIReporter.render_terminal(report, console=Console(file=buf))
-    assert "SPI / QSPI Flash Protocol Diagnostic Report" in buf.getvalue()
+    assert "SPI / QSPI Flash 協定診斷報告" in buf.getvalue()
 
 
 def test_cli_uart_analyze_and_reporter(tmp_path: Path):
@@ -106,13 +106,13 @@ def test_cli_uart_analyze_and_reporter(tmp_path: Path):
     hf_report = UARTCrashParser.parse_log_text(hf_text)
     buf = StringIO()
     UARTReporter.render_terminal(hf_report, console=Console(file=buf))
-    assert "UART Crash & HardFault Diagnostic Report" in buf.getvalue()
+    assert "UART 崩潰轉儲與 HardFault 診斷報告" in buf.getvalue()
 
     # Panic reporter
     panic_report = UARTCrashParser.parse_log_text(panic_text)
     buf_p = StringIO()
     UARTReporter.render_terminal(panic_report, console=Console(file=buf_p))
-    assert "UART Crash & HardFault Diagnostic Report" in buf_p.getvalue()
+    assert "UART 崩潰轉儲與 HardFault 診斷報告" in buf_p.getvalue()
 
 
 def test_cli_mctp_analyze_and_reporter(tmp_path: Path):
@@ -175,7 +175,7 @@ def test_cli_mctp_analyze_and_reporter(tmp_path: Path):
     ServerMgmtReporter.render_terminal(report, console=Console(file=buf))
     assert "MCTP Packets" in buf.getvalue()
     assert "IPMB Frames" in buf.getvalue()
-    assert "Input Lines Not Decoded" in buf.getvalue()
+    assert "未解碼輸入行" in buf.getvalue()
 
 
 def test_cli_reg_decode_and_generators(tmp_path: Path):
@@ -197,9 +197,12 @@ registers:
     yaml_file.write_text(yaml_content, encoding="utf-8")
 
     # 1. reg decode success
-    res_dec = runner.invoke(app, ["reg", "decode", str(yaml_file), "STATUS", "0x01"])
+    res_dec = runner.invoke(app, ["reg", "decode", str(yaml_file), "STATUS", "0x03"])
     assert res_dec.exit_code == 0
     assert "READY" in res_dec.output
+    assert "Access" in res_dec.output
+    assert "RO" in res_dec.output
+    assert "Unmapped bits: 0x00000002" in res_dec.output
 
     # 2. reg decode invalid hex
     res_bad_hex = runner.invoke(app, ["reg", "decode", str(yaml_file), "STATUS", "not-hex"])
