@@ -72,3 +72,14 @@ status: 0000000200000100 badvaddr: 0000000000000020 cause: 000000000000000d
     assert report.kernel_panic is not None
     assert report.kernel_panic.architecture == "RISC-V"
     assert report.kernel_panic.faulting_address == "0x0000000000000020"
+
+
+def test_generic_serial_log_report_explains_unsupported_signature():
+    report = UARTCrashParser.parse_log_text("booting firmware\nready\n")
+
+    markdown = UARTReporter.to_markdown(report)
+
+    assert "未辨識 Crash Signature" in markdown
+    assert "未偵測到已支援的 Kernel Panic / HardFault 標記" in markdown
+    assert "**原始日誌行數（Raw Log Lines）**: `2`" in markdown
+    assert "建議下一步" in markdown

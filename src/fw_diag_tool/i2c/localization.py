@@ -588,6 +588,16 @@ def localize_issue_description(description: str | None) -> str:
         matched = re.fullmatch(pattern, raw)
         if matched:
             return re.sub(pattern, replacement, raw)
+    mux_match = re.fullmatch(
+        r"I2C Mux at (0x[0-9A-Fa-f]+) was configured with control byte "
+        r"(0x[0-9A-Fa-f]+), enabling channels (\[[^]]+\]) simultaneously\.",
+        raw,
+    )
+    if mux_match:
+        return (
+            f"位於 {mux_match.group(1)} 的 I2C 多工器控制位元組為 {mux_match.group(2)}，"
+            f"同時啟用通道 {mux_match.group(3)}。"
+        )
     return localize_explanatory_text(raw)
 
 
@@ -620,6 +630,11 @@ def localize_issue_root_cause(root_cause: str | None) -> str:
         ("1. Software bit-banging I2C driver interrupted by high-priority RTOS interrupts / ISRs.", "1. 軟體模擬 I2C 驅動程式（Software bit-banging driver）被高優先權 RTOS 中斷／ISR 打斷。"),
         ("2. Excessive bus capacitance (>400pF) causing slow rise times (t_r) and trigger threshold delay.", "2. 匯流排電容過大（>400 pF），造成上升時間（t_r）變慢與觸發門檻延遲。"),
         ("3. Pull-up resistors too large (e.g. 10kΩ on Fast-mode 400kHz).", "3. 上拉電阻過大（例如 Fast-mode 400 kHz 使用 10 kΩ）。"),
+        (
+            "Enabling multiple downstream MUX channels simultaneously can cause address collisions "
+            + "and excessive bus capacitance (> 400pF).",
+            "同時啟用多個下游 MUX 通道可能造成位址碰撞與匯流排電容過大（> 400 pF）。",
+        ),
     )
     for source, target in replacements:
         value = value.replace(source, target)
@@ -653,6 +668,14 @@ def localize_issue_advice(advice: str | None) -> str:
         ("Slave 晶片", "從裝置晶片"),
         ("Slave 端", "從裝置端"),
         ("Master 端", "主機端"),
+        (
+            "Ensure only 1 downstream channel is enabled unless broadcast write is intended.",
+            "除非刻意進行 broadcast write，否則請只啟用 1 個下游通道。",
+        ),
+        (
+            "Verify identical slave addresses on different channels do not respond concurrently.",
+            "確認不同通道上的相同從裝置位址不會同時回應。",
+        ),
     )
     for source, target in replacements:
         value = value.replace(source, target)

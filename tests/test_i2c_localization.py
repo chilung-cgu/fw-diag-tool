@@ -10,6 +10,9 @@ from fw_diag_tool.i2c.localization import (
     localize_direction,
     localize_explanatory_text,
     localize_health_grade,
+    localize_issue_advice,
+    localize_issue_description,
+    localize_issue_root_cause,
     localize_quality_message,
     localize_semantic_summary,
     localize_speed_mode,
@@ -81,6 +84,23 @@ def test_quality_message_localization() -> None:
     zh_msg = localize_quality_message("I2C_ACK_AGGREGATE_UNATTRIBUTABLE")
     assert "彙總格式" in zh_msg
     assert "保留語意解碼" in zh_msg
+
+
+def test_mux_hazard_report_text_is_chinese_first() -> None:
+    description = localize_issue_description(
+        "I2C Mux at 0x70 was configured with control byte 0x05, enabling channels [0, 2] simultaneously."
+    )
+    root_cause = localize_issue_root_cause(
+        "Enabling multiple downstream MUX channels simultaneously can cause address collisions "
+        + "and excessive bus capacitance (> 400pF)."
+    )
+    advice = localize_issue_advice(
+        "Ensure only 1 downstream channel is enabled unless broadcast write is intended."
+    )
+
+    assert "I2C 多工器控制位元組為 0x05" in description
+    assert "同時啟用多個下游 MUX 通道" in root_cause
+    assert "除非刻意進行 broadcast write" in advice
 
 
 def test_explanatory_localization_does_not_corrupt_unexpected_tokens() -> None:

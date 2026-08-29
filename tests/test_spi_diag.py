@@ -64,6 +64,50 @@ def test_spi_write_without_wren_anomaly():
     assert report.anomalies[0].severity == SPISeverity.WARNING
 
 
+def test_spi_reporter_localizes_anomaly_and_transaction_details():
+    csv_data = """Time [s],MOSI,MISO,Enable
+0.0010,0x02,0x00,0
+0.0011,0x00,0x00,0
+0.0012,0x00,0x00,0
+0.0013,0x00,0x00,0
+0.0014,0x55,0x00,0
+0.0015,0x00,0x00,1
+"""
+    report = SPIDiagnosticEngine().analyze_csv_content(csv_data)
+
+    markdown = SPIReporter.to_markdown(report)
+    assert "# SPI / QSPI Flash 診斷報告" in markdown
+    assert "寫入／抹除的 WEL 狀態未觀察到" in markdown
+    assert "頁面寫入（Page Program；0x02）" in markdown
+
+
+def test_spi_reporter_localizes_data_quality_messages():
+    report = SPIDiagnosticEngine().analyze_csv_content("Time [s],MOSI,MISO,Enable\n")
+
+    markdown = SPIReporter.to_markdown(report)
+    assert "資料品質限制（Data Quality Limitations）" in markdown
+    assert "移除標題列／註解（header/comments）後沒有資料列" in markdown
+
+
+def test_spi_reporter_localizes_truncated_detail_keys_and_unknown_opcode_value():
+    truncated = """Time [s],MOSI,MISO,Enable
+0.001,0x9F,0x9F,0
+0.002,0x01,0xEF,0
+0.003,0x00,0x00,1
+"""
+    unknown_opcode = """Time [s],MOSI,MISO,Enable
+0.001,0x77,0x00,0
+0.002,0x00,0x00,1
+"""
+
+    truncated_md = SPIReporter.to_markdown(SPIDiagnosticEngine().analyze_csv_content(truncated))
+    unknown_md = SPIReporter.to_markdown(SPIDiagnosticEngine().analyze_csv_content(unknown_opcode))
+
+    assert "要求的 MOSI 位元組數（required_mosi_bytes）" in truncated_md
+    assert "收到的 MISO 位元組數（received_miso_bytes）" in truncated_md
+    assert "未知 Opcode（Unknown Opcode (0x77)）" in unknown_md
+
+
 def test_spi_status_wel_evidence_controls_program_diagnosis():
     status_then_program = """Time [s],MOSI,MISO,Enable
 0.001,0x05,0x00,0

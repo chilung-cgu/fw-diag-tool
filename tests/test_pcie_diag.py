@@ -92,8 +92,12 @@ class TestPCIeAnalyzer(unittest.TestCase):
         cfg = PCIeAnalyzer.decode_config_space(self.raw_bytes, bdf="0000:01:00.0")
         md = PCIeReporter.to_markdown(cfg)
         self.assertIn("PCIe Diagnostic Report", md)
+        self.assertIn("處理加速器（Processing Accelerator）", md)
+        self.assertIn("進階錯誤回報（Advanced Error Reporting", md)
+        self.assertIn("裝置類型（device_type）", md)
         self.assertIn("Malformed TLP", md)
         self.assertIn("Completion Timeout", md)
+        self.assertIn("記憶體讀取 3DW（MRd", md)
         self.assertIn("BAR0", md)
 
 

@@ -17,6 +17,8 @@ def test_mctp_dsp0236_header_version_and_pldm():
     assert "Platform Monitoring" in (pkt.pldm_command or "")
     md = ServerMgmtReporter.to_markdown(report)
     assert "MCTP Packets" in md
+    assert "回應（Response）" in md
+    assert "完成碼（CC）" in md
 
 
 def test_mctp_som_zero_continuation_packet():
@@ -95,6 +97,7 @@ def test_mctp_multi_packet_reassembly_success():
     assert msg.payload == [0x00, 0x02, 0x01, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
     md = ServerMgmtReporter.to_markdown(report)
     assert "Reassembled MCTP Messages" in md
+    assert "MCTP 訊息：" in md
 
 
 def test_mctp_multi_packet_sequence_mismatch_detected():

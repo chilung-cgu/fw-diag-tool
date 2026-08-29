@@ -72,4 +72,7 @@ def test_multi_lspci_invalid_device_is_retained_as_data_quality():
     assert "Device dump could not be decoded" in devices[0].data_quality_issues[0]
     assert devices[1].vendor_id == 0x10EE
     assert devices[1].data_quality_issues == []
-    assert "Device dump could not be decoded" in PCIeReporter.to_markdown(devices[0])
+    markdown = PCIeReporter.to_markdown(devices[0])
+    assert "Device dump could not be decoded" in markdown
+    assert "解碼狀態（Decode Status）" in markdown
+    assert "Vendor ID／Device ID" not in markdown
