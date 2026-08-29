@@ -1098,15 +1098,21 @@ elif menu == "🌐 MCTP / IPMB 伺服器協定解析":
         max_chars=MAX_TEXT_BYTES,
         value="01 08 00 C0 01 00 02 01 00\n20 18 C8 81 00 01 7E",
     )
+    m_protocol_mode = st.selectbox(
+        "協定模式（Protocol mode）",
+        ["auto", "mctp", "ipmb"],
+        format_func=lambda value: {
+            "auto": "自動判斷（auto）",
+            "mctp": "MCTP",
+            "ipmb": "IPMB",
+        }[value],
+        key="mctp_protocol_mode",
+    )
     if st.button("執行伺服器協定解碼") and m_raw.strip():
         try:
             m_report = ServerMgmtParser.parse_text_dump(
                 validate_pasted_text(m_raw, label="MCTP/IPMB dump"),
-                protocol_mode=st.selectbox(
-                    "Protocol mode",
-                    ["auto", "mctp", "ipmb"],
-                    key="mctp_protocol_mode",
-                ),
+                protocol_mode=m_protocol_mode,
             )
         except (TypeError, ValueError) as exc:
             st.error(f"MCTP/IPMB 輸入錯誤：{exc}")
@@ -1189,6 +1195,8 @@ elif menu == "🚀 PCIe Config & AER 診斷":
                     f"事件 #{idx}: {ev.bdf} - {ev.error_name} ({ev.severity})", expanded=True
                 ):
                     st.markdown(f"**原始日誌**: `{ev.raw_line}`")
+                    if ev.tlp_header:
+                        st.markdown(f"**擷取到的 TLP Header**: `{ev.tlp_header}`")
                     st.markdown("**Root Cause 排查 SOP**:\n" + ev.root_cause_guide)
         else:
             try:
@@ -1386,7 +1394,7 @@ elif menu == "🏆 Junior FW 實戰除錯實驗室 (Fault Arena)":
         elif fixture.kind == "uart":
             rep_uart = UARTCrashParser.parse_log_text(data_content)
             st.markdown(UARTReporter.to_markdown(rep_uart))
-        elif fixture.kind == "server_mgmt":
+        elif fixture.kind in {"server_mgmt", "mctp"}:
             rep_mctp = ServerMgmtParser.parse_text_dump(data_content)
             st.markdown(ServerMgmtReporter.to_markdown(rep_mctp))
     st.markdown("**【標準排查 SOP & Root Cause 診斷】**:")

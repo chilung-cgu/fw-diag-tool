@@ -526,6 +526,51 @@ def test_gui_mctp_page_sample_runs_without_exception():
     assert any("MCTP Packets" in item.value for item in at.markdown)
 
 
+def test_gui_mctp_protocol_mode_is_visible_before_execute_and_persists():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🌐 MCTP / IPMB 伺服器協定解析").run()
+
+    assert not at.exception
+    assert len(at.selectbox) == 1
+    assert at.selectbox[0].value == "auto"
+
+    at.selectbox[0].set_value("ipmb").run()
+    assert not at.exception
+    assert len(at.selectbox) == 1
+    assert at.selectbox[0].value == "ipmb"
+
+
+def test_gui_fault_arena_mctp_cases_render_protocol_reports():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🏆 Junior FW 實戰除錯實驗室 (Fault Arena)").run()
+
+    at.selectbox[0].set_value("Case 19: MCTP PLDM 感測器數值傳輸異常與封包順序錯亂").run()
+    at.button[0].click().run()
+    assert not at.exception
+    assert any("MCTP Packets" in item.value for item in at.markdown)
+
+    at.selectbox[0].set_value("Case 20: IPMB Checksum 1/2 校驗碼錯誤引發封包丟棄").run()
+    at.button[0].click().run()
+    assert not at.exception
+    assert any("IPMB Frames" in item.value for item in at.markdown)
+
+
+def test_gui_pcie_dmesg_event_shows_captured_tlp_header():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at.sidebar.radio[0].set_value("🚀 PCIe Config & AER 診斷").run()
+    at.radio[0].set_value("貼上 Linux dmesg AER Error Log")
+    at.text_area[0].input(
+        "[  124.582910] pcieport 0000:00:01.0: AER: Uncorrected (Fatal) error received: 0000:01:00.0\n"
+        "[  124.582922] pcieport 0000:00:01.0:    [18] MalformedTLP           (First)\n"
+        "[  124.582925] pcieport 0000:00:01.0:   TLP Header: 00000001 0100000f fe000000 00000000"
+    )
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert any("擷取到的 TLP Header" in item.value for item in at.markdown)
+    assert any("00000001 0100000f fe000000 00000000" in item.value for item in at.markdown)
+
+
 def test_gui_fault_arena_runs_without_exception():
     at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
     at.sidebar.radio[0].set_value("🏆 Junior FW 實戰除錯實驗室 (Fault Arena)").run()
