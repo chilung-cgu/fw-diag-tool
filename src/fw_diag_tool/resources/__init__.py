@@ -15,6 +15,7 @@ _WAVEFORM_DIFF_SAMPLE_FILES = {
 }
 
 _PCIE_DMESG_SAMPLE_FILE = "pcie_aer_dmesg.log"
+_PCIE_LSPCI_SAMPLE_FILE = "pcie_aer_lspci.txt"
 
 
 def load_i2c_sample(sample: str = "builtin-decoded") -> str:
@@ -46,9 +47,15 @@ def load_pcie_dmesg_sample() -> str:
     return files(__package__).joinpath(_PCIE_DMESG_SAMPLE_FILE).read_text(encoding="utf-8")
 
 
+def load_pcie_lspci_sample() -> str:
+    """Return the packaged lspci Config Space teaching sample."""
+    return files(__package__).joinpath(_PCIE_LSPCI_SAMPLE_FILE).read_text(encoding="utf-8")
+
+
 __all__ = [
     "load_i2c_sample",
     "load_pcie_dmesg_sample",
+    "load_pcie_lspci_sample",
     "load_spi_sample",
     "load_waveform_diff_samples",
 ]

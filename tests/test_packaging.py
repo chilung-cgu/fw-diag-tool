@@ -49,6 +49,7 @@ def test_wheel_metadata_and_package_resources_are_versioned_and_included(built_a
     assert "fw_diag_tool/resources/i2c_golden.csv" in names
     assert "fw_diag_tool/resources/i2c_failing_nack.csv" in names
     assert "fw_diag_tool/resources/pcie_aer_dmesg.log" in names
+    assert "fw_diag_tool/resources/pcie_aer_lspci.txt" in names
     assert "fw_diag_tool/docs/chapters/ch01_i2c_pmbus.md" in names
 
 
