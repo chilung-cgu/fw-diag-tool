@@ -47,6 +47,20 @@ def test_ipmb_response_frame_decoding():
     assert frame.data == [0x00]  # Completion Code 0x00
 
 
+def test_ipmb_markdown_table_columns_match_rows():
+    report = ServerMgmtParser.parse_text_dump("20 18 C8 81 00 01 7E")
+
+    table_lines = [
+        line for line in ServerMgmtReporter.to_markdown(report).splitlines() if line.startswith("|")
+    ]
+    header_index = next(i for i, line in enumerate(table_lines) if "請求位址（Rq Addr）" in line)
+
+    assert "網路功能（NetFn）" in table_lines[header_index]
+    assert all(
+        len(line.split("|")[1:-1]) == 7 for line in table_lines[header_index : header_index + 3]
+    )
+
+
 def test_unrecognized_input_line_is_reported_not_silently_dropped():
     report = ServerMgmtParser.parse_text_dump(
         "# IPMB Request\n01 08 00 C0 01 80 02 01 00\nnot-a-frame\n"

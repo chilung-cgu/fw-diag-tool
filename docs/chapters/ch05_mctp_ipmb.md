@@ -18,7 +18,7 @@
 
 ### MCTP 封包解碼範例
 
-輸入 `01 08 00 C0 01 80 02 01 00`，輸出會顯示：
+輸入 `01 08 00 C0 01 00 02 01 00`，輸出會顯示：
 
 | 欄位 | 值 | 白話解釋 |
 |---|---|---|
@@ -27,7 +27,7 @@
 | Src EID | 0x00 | 發送端 EID (通常是 BMC 自己) |
 | SOM / EOM | True / True | 這是單一完整封包（不是分段傳輸） |
 | Msg Type | PLDM | 訊息類型為 PLDM 感測器監控協定 |
-| PLDM Command | Platform Monitoring, Cmd 0x01 | 讀取感測器數值的指令 |
+| PLDM Command | Platform Monitoring, Response, Cmd 0x01, CC 0x00 | 讀取感測器數值的回應；CC=0x00 表示成功 |
 
 ### IPMB 訊框解碼範例
 
@@ -39,8 +39,7 @@
 | Rs Addr | 0x20 | 接收方 (Satellite Controller) 的位址 |
 | NetFn | App (Request) | 功能類別為 Application，這是一筆請求 |
 | Command | Get Device ID (0x01) | 查詢設備型號與版本 |
-| Checksum 1 | OK | 標頭校驗碼正確 |
-| Checksum 2 | OK | 資料校驗碼正確 |
+| Status | OK | Checksum 1/2 皆通過 |
 
 ### 常見問題排查
 

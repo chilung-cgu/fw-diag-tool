@@ -462,6 +462,40 @@ def test_raw_adapter_keeps_nominal_scl_frequency_separate_from_stretch_duration(
     assert report.timing_stats.max_clock_stretch_ms == pytest.approx(0.03, abs=1e-6)
 
 
+def test_raw_waveform_marks_measured_stretch_on_data_byte_before_ack() -> None:
+    builder = _CaptureBuilder()
+    builder.start()
+    builder.byte(0xA0, 0)
+    builder.byte(0x55, 0, stretch_at=3)
+    builder.stop()
+    decoded = analyze_raw_i2c_csv(builder.csv())
+
+    waveform = raw_decode_to_waveform(decoded, transaction_index=0)
+    data_index = next(
+        index
+        for index, annotation in enumerate(waveform.annotations)
+        if annotation.annotation_type == "DATA" and annotation.label == "0x55"
+    )
+    stretch_index = next(
+        index
+        for index, annotation in enumerate(waveform.annotations)
+        if annotation.annotation_type == "STRETCH"
+    )
+    data_ack_index = next(
+        index
+        for index, annotation in enumerate(waveform.annotations)
+        if index > data_index and annotation.annotation_type == "ACK"
+    )
+    stretch = waveform.annotations[stretch_index]
+
+    assert data_index < stretch_index < data_ack_index
+    assert stretch.start_time == pytest.approx(132.0)
+    assert stretch.end_time == pytest.approx(162.0)
+    assert stretch.end_time - stretch.start_time == pytest.approx(30.0)
+    assert "實測" in stretch.details
+    assert "raw_scl_period_delta" in stretch.details
+
+
 def test_raw_adapter_preserves_address_clock_stretch_evidence() -> None:
     builder = _CaptureBuilder()
     builder.start()

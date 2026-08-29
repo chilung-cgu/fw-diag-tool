@@ -51,8 +51,10 @@ def test_sop_teaches_evidence_boundaries() -> None:
     assert "不能量類比電壓" in sop
 
 
-def test_mctp_tutorial_uses_valid_ipmb_checksum_example() -> None:
+def test_mctp_tutorial_matches_gui_sample_and_uses_valid_ipmb_checksum() -> None:
     chapter = (ROOT / "docs" / "chapters" / "ch05_mctp_ipmb.md").read_text(encoding="utf-8")
+    assert "01 08 00 C0 01 00 02 01 00" in chapter
+    assert "01 08 00 C0 01 80 02 01 00" not in chapter
     assert "20 18 C8 81 00 01 7E" in chapter
     assert "20 18 67 20 00 01 5F" not in chapter
 

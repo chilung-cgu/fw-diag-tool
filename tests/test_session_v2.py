@@ -345,6 +345,7 @@ class TestFaultArenaCasesParse:
 
         assert opcodes[0].startswith("Write Enable")
         assert any(op.startswith("Page Program") for op in opcodes[1:])
+        assert any(a.code == "SPI_PAGE_PROGRAM_WRAP" for a in report.anomalies)
 
     @pytest.mark.parametrize("case_id", ["13", "14"])
     def test_spi_jedec_line_fault_detected(self, case_id: str):

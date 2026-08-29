@@ -358,8 +358,9 @@ class ServerMgmtReporter:
         if report.ipmb_frames:
             lines.append("## 2. IPMB 框架（IPMB Frames）")
             lines.append(
-                "| # | 請求位址（Rq Addr） | 回應位址（Rs Addr） | NetFn | "
-                "網路功能（NetFn） | 命令（Command） | 資料（Data） | 狀態（Status） |"
+                "| # | 請求位址（Rq Addr） | 回應位址（Rs Addr） | "
+                "網路功能（NetFn） | "
+                "命令（Command） | 資料（Data） | 狀態（Status） |"
             )
             lines.append("|---|---|---|---|---|---|---|")
             for idx, f in enumerate(report.ipmb_frames, 1):
