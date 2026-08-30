@@ -46,6 +46,7 @@ uv run fw-diag gui
 | 14 🆕 | 🧪 虛擬設備模擬器實驗室（Emulator Playground） | [ch14_emulator.md](chapters/ch14_emulator.md) | 無需檔案（互動式模擬） |
 | 15 🆕 | 🎲 協定解析器 Fuzz 測試（Fuzz Lab） | [ch15_fuzz_lab.md](chapters/ch15_fuzz_lab.md) | 內建 Fuzz 產生器 |
 | 16 🆕 | 🏠 功能總覽與快速入門（Dashboard） | [ch16_dashboard.md](chapters/ch16_dashboard.md) | 無需檔案 |
+| 17 🆕 | 🔗 跨協定時間線關聯分析 | [ch17_correlation.md](chapters/ch17_correlation.md) | `i2c_golden.csv`、`spi_w25q128_sample.csv`、`kernel_panic_nvme.log` |
 
 > 📂 **測試資料路徑**：`examples/data/` 目錄下有所有演練用的 CSV / Log / Hex 檔案。第 3 頁也提供套件內建的 Golden/Failing pair 載入與下載按鈕；PCIe dmesg 範例則可直接貼上 `examples/data/pcie_aer_dmesg.log` 的內容。
 
@@ -72,8 +73,8 @@ docs/
 │   ├── ch14_emulator.md         ← LM75 / W25Q128 / 24C64 虛擬模擬
 │   ├── ch15_fuzz_lab.md         ← 協定解析器 Fuzzing 穩健性測試
 │   ├── ch16_dashboard.md        ← 功能總覽與 3 步快速上手
+│   ├── ch17_correlation.md      ← 跨協定時間線對齊與異常叢集分析
 │   ├── appendix_chart_guide.md  ← I2C 圖表與 evidence level 判讀
-│   └── appendix_gui_reading_guide.md ← 16 個 GUI 頁面的第一輪閱讀地圖
+│   └── appendix_gui_reading_guide.md ← 17 個 GUI 頁面的第一輪閱讀地圖
 └── ...
 ```
-

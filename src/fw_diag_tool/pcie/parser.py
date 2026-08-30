@@ -121,6 +121,11 @@ class PCIeAnalyzer:
         return bdf, data
 
     @classmethod
+    def parse_config_dump(cls, text: str) -> PCIeConfigSpace:
+        bdf, raw_bytes = cls.parse_lspci_text(text)
+        return cls.decode_config_space(raw_bytes, bdf=bdf)
+
+    @classmethod
     def decode_config_space(cls, raw_data: bytes, bdf: str | None = None) -> PCIeConfigSpace:
         if not isinstance(raw_data, (bytes, bytearray)):
             raise TypeError("PCIe config space must be bytes-like")

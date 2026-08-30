@@ -1,8 +1,34 @@
 from __future__ import annotations
 
+import platform
+from pathlib import Path
+
 import streamlit as st
 
 from fw_diag_tool import __version__
+from fw_diag_tool.gui.shared import _FAULT_ARENA_CASES_ZH, render_page_footer
+
+
+def _get_example_data_count() -> int:
+    """掃描 examples/data/ 目錄內的範例檔案數量。"""
+    try:
+        repo_root = Path(__file__).resolve().parents[4]
+        data_dir = repo_root / "examples" / "data"
+        if not data_dir.exists():
+            data_dir = Path("examples/data")
+        if data_dir.is_dir():
+            return len([f for f in data_dir.iterdir() if f.is_file()])
+    except (OSError, ValueError):
+        return 17
+    return 17
+
+
+def _render_quick_link(url_path: str, label: str) -> None:
+    """嘗試使用 st.page_link 呈現快速啟動按鈕，若不支援則降級至 markdown 連結。"""
+    try:
+        st.page_link(url_path, label=label, use_container_width=True)
+    except Exception:
+        st.markdown(f"[{label}]({url_path})")
 
 
 def render() -> None:
@@ -10,6 +36,51 @@ def render() -> None:
     st.caption(
         f"⚡ fw-diag-tool v{__version__} — 專為韌體與嵌入式系統工程師打造的離線訊號、協定與崩潰轉儲診斷分析套件。"
     )
+
+    # 系統狀態面板
+    st.subheader("📊 系統狀態儀表板")
+    stat_col1, stat_col2, stat_col3 = st.columns(3)
+    with stat_col1:
+        st.metric(
+            label="工具版本 / 執行環境",
+            value=f"v{__version__}",
+            delta=f"Python {platform.python_version()}",
+            delta_color="off",
+        )
+    with stat_col2:
+        st.metric(
+            label="已安裝功能模組 / 支援協定",
+            value="20 Pages",
+            delta="6 大協定 (I2C, SPI, UART, PCIe, MCTP, DTS)",
+            delta_color="off",
+        )
+    with stat_col3:
+        fault_arena_count = len(_FAULT_ARENA_CASES_ZH)
+        example_count = _get_example_data_count()
+        st.metric(
+            label="實戰情境 / 範例檔案",
+            value=f"{fault_arena_count} Scenarios",
+            delta=f"{example_count} 個內建範例檔",
+            delta_color="off",
+        )
+
+    # 快速啟動按鈕
+    st.markdown("#### ⚡ 常用診斷快速啟動")
+    qcols = st.columns(6)
+    with qcols[0]:
+        _render_quick_link("i2c-diagnosis", "📊 I2C 診斷")
+    with qcols[1]:
+        _render_quick_link("waveform-diff", "⚖️ 雙波形差分")
+    with qcols[2]:
+        _render_quick_link("pcie", "🚀 PCIe AER")
+    with qcols[3]:
+        _render_quick_link("uart", "📟 UART Crash")
+    with qcols[4]:
+        _render_quick_link("spi", "⚡ SPI Flash")
+    with qcols[5]:
+        _render_quick_link("fault-arena", "🏆 Fault Arena")
+
+    st.divider()
 
     st.info(
         "💡 **工具能力邊界聲明**：\n"
@@ -141,6 +212,21 @@ def render() -> None:
         st.write(
             "**適用場景**：建立系統化除錯心智模型、依據 L1 (物理) 到 L7 (應用) 分層定位問題邊界、判斷各層所需量測工具與證據"
         )
+
+    st.markdown("---")
+    st.subheader("📢 最近更新紀錄 (What's New in v1.2.0)")
+    with st.expander("🎉 檢視 v1.2.0 重點更新項目", expanded=True):
+        st.markdown(
+            "- **🔗 跨協定時間線關聯分析 (Cross-Protocol Correlation)**：同步整合 I2C、SPI、UART、PCIe 異常事件時間軸，自動識別叢集並分析跨介面連鎖故障根因。\n"
+            "- **📋 Board Profile 視覺化編輯器**：支援板級拓撲、匯流排裝置、中斷與暫存器對映視覺化編輯、語意驗證與 YAML 匯入匯出。\n"
+            "- **🧪 虛擬設備模擬器升級 (Emulator Playground)**：新增 TMP102、PCA9548A、24C02、W25Q128 等週邊晶片模擬與暫存器/記憶體注入測試。\n"
+            "- **🛡️ SARIF 2.1.0 靜態分析匯出**：診斷報告全面支援標準 SARIF 格式，無縫整合 CI/CD 流程與 GitHub Code Scanning。\n"
+            "- **📄 獨立 HTML 診斷報告匯出**：支援一鍵將 Markdown 診斷報告封裝為美觀的離線獨立 HTML 網頁。\n"
+            "- **🎓 互動式教學導覽 (Tutorial UI)**：提供步驟式操作教學引導與 20 個實戰 Fault Arena 案例深度解析。\n"
+            "- **🌐 全介面繁體中文與體驗優化**：全模組落實繁體中文語意本地化、統一頁尾與主題樣式。"
+        )
+
+    render_page_footer()
 
 
 __all__ = ["render"]

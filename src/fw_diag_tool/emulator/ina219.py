@@ -172,7 +172,14 @@ class VirtualINA219:
         if ptr_reg not in (0x00, 0x01, 0x02, 0x03, 0x04, 0x05):
             raise ValueError(f"unsupported INA219 register pointer: 0x{ptr_reg:02X}")
         self.last_cmd = ptr_reg
-        ptr_names = {0x00: "CONFIG", 0x01: "SHUNT_V", 0x02: "BUS_V", 0x03: "POWER", 0x04: "CURRENT", 0x05: "CALIBRATION"}
+        ptr_names = {
+            0x00: "CONFIG",
+            0x01: "SHUNT_V",
+            0x02: "BUS_V",
+            0x03: "POWER",
+            0x04: "CURRENT",
+            0x05: "CALIBRATION",
+        }
         name = ptr_names.get(ptr_reg, f"REG_0x{ptr_reg:02X}")
 
         if len(data_bytes) >= 3:
@@ -182,13 +189,32 @@ class VirtualINA219:
                 if val_16bit & 0x8000:
                     self.reset()
                     return {"type": "Reset", "register": name, "summary": "INA219 Reset executed"}
-                return {"type": "Write Register", "register": name, "value": val_16bit, "summary": f"Write CONFIG = 0x{val_16bit:04X}"}
+                return {
+                    "type": "Write Register",
+                    "register": name,
+                    "value": val_16bit,
+                    "summary": f"Write CONFIG = 0x{val_16bit:04X}",
+                }
             if ptr_reg == 0x05:
                 self.write_calibration(val_16bit)
-                return {"type": "Write Register", "register": name, "value": val_16bit, "summary": f"Write CALIBRATION = 0x{val_16bit:04X}"}
-            return {"type": "Write Register", "register": name, "value": val_16bit, "summary": f"Ignored write to read-only register {name}"}
+                return {
+                    "type": "Write Register",
+                    "register": name,
+                    "value": val_16bit,
+                    "summary": f"Write CALIBRATION = 0x{val_16bit:04X}",
+                }
+            return {
+                "type": "Write Register",
+                "register": name,
+                "value": val_16bit,
+                "summary": f"Ignored write to read-only register {name}",
+            }
 
-        return {"type": "Set Register Pointer", "register": name, "summary": f"Set pointer to {name} (0x{ptr_reg:02X})"}
+        return {
+            "type": "Set Register Pointer",
+            "register": name,
+            "summary": f"Set pointer to {name} (0x{ptr_reg:02X})",
+        }
 
     def read(self, num_bytes: int = 2) -> bytes:
         if isinstance(num_bytes, bool) or not isinstance(num_bytes, int) or num_bytes < 0:

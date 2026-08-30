@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2026-08-30
+
+### Added
+- GUI 現代化重構：st.navigation 導覽、12→20 個模組化頁面、暗色主題 CSS
+- 跨協定時間線關聯分析頁面 (correlation_ui) — I2C/SPI/UART 多協定時間對齊與異常叢集偵測
+- Board Profile 視覺化拓撲編輯器 — 表單式拓撲定義、YAML 產出/匯入、位址衝突偵測
+- 互動式教學導覽頁面 — 3 條學習路徑、6 步驟互動教學
+- i18n 翻譯註冊表 (TranslationRegistry) — 多語言 domain-based 翻譯與向下相容橋接
+- INA219 功率監控器 + PCA9548A I2C MUX 模擬器（含 GUI 分頁）
+- HTML 報告產生器 — Markdown→HTML 轉換、暗色主題 CSS、自包含檔案
+- batch_analyze_directory() — 多協定目錄級批次分析 (CLI + API)
+- CLI `batch` 子命令 — 支援 Markdown/HTML/SARIF/manifest 多格式匯出
+- SARIF 匯出整合至 GUI（I2C 診斷頁面下載按鈕）
+- 4 新 MkDocs 教學章節 (ch13 晶片資料庫、ch14 模擬器、ch15 Fuzz 測試、ch16 總覽)
+- shared.py 新增 render_html_download() helper
+
+### Changed
+- 導覽結構從 sidebar 分頁遷移至 st.navigation() 6 大分類 (20 pages)
+- gui/shared.py 重構為集中式 helper 模組
+- pyproject.toml 版本升至 1.2.0
+- 測試套件從 ~590 增長至 729 tests
+
 ## [1.1.1] - 2026-08-24
 
 ### Security & Privacy

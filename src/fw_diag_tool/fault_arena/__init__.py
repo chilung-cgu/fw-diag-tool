@@ -1,5 +1,5 @@
 """Fault Arena synthetic case fixtures."""
 
-from .fixtures import FaultArenaFixtures
+from .fixtures import FIXTURE_CASES, FaultArenaFixtures, FixtureCase
 
-__all__ = ["FaultArenaFixtures"]
+__all__ = ["FIXTURE_CASES", "FaultArenaFixtures", "FixtureCase"]

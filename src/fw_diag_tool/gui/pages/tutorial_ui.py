@@ -259,7 +259,9 @@ def _render_step_5_interactive() -> None:
                 st.write("**呼叫堆疊（Call Trace）**：")
                 for sym in kp.call_trace:
                     st.write(f"- `{sym}`")
-            st.success("✅ 成功提取當機暫存器與呼叫鏈！精確定位至 `nvme_pci_complete_rq` 空指標存取。")
+            st.success(
+                "✅ 成功提取當機暫存器與呼叫鏈！精確定位至 `nvme_pci_complete_rq` 空指標存取。"
+            )
 
 
 def _render_step_6_interactive() -> None:

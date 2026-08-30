@@ -39,11 +39,17 @@ COMMON_TRANSLATIONS: dict[str, dict[str, str]] = {
     "unavailable": {"zh-TW": "不可用（Unavailable）", "en-US": "Unavailable"},
     "unknown": {"zh-TW": "未知（Unknown）", "en-US": "Unknown"},
     # Health Grade
-    "A (Excellent)": {"zh-TW": "A（優良：通訊完全正常）", "en-US": "A (Excellent: Fully Operational)"},
+    "A (Excellent)": {
+        "zh-TW": "A（優良：通訊完全正常）",
+        "en-US": "A (Excellent: Fully Operational)",
+    },
     "B (Good)": {"zh-TW": "B（良好：偶發輕微異常）", "en-US": "B (Good: Minor Anomalies)"},
     "C (Fair)": {"zh-TW": "C（普通：存在多項警示）", "en-US": "C (Fair: Multiple Warnings)"},
     "D (Poor)": {"zh-TW": "D（不良：嚴重錯誤頻發）", "en-US": "D (Poor: Frequent Errors)"},
-    "F (Critical)": {"zh-TW": "F（失效：通訊中斷或協定失敗）", "en-US": "F (Critical: Protocol Failure)"},
+    "F (Critical)": {
+        "zh-TW": "F（失效：通訊中斷或協定失敗）",
+        "en-US": "F (Critical: Protocol Failure)",
+    },
     # Register States
     "Unit On": {"zh-TW": "裝置開啟（Unit On）", "en-US": "Unit On"},
     "Unit Off": {"zh-TW": "裝置關閉（Unit Off）", "en-US": "Unit Off"},

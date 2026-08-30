@@ -128,7 +128,7 @@ def case_06_pmbus_vout_trim() -> str:
     )
 
 
-def _pcie_config_space(*, degraded_link: bool, aer_status: int) -> bytes:
+def _pcie_config_space(*, degraded_link: bool, aer_status: int, aer_corr_status: int = 0) -> bytes:
     import struct
 
     cfg = bytearray(0x100)
@@ -161,6 +161,7 @@ def _pcie_config_space(*, degraded_link: bool, aer_status: int) -> bytes:
     aer[0x00:0x04] = struct.pack("<I", 0x0001 | (1 << 20))  # cap id 1, next = 0
     aer[0x04:0x08] = struct.pack("<I", aer_status)
     aer[0x0C:0x10] = struct.pack("<I", aer_status)  # severity mirrors status
+    aer[0x10:0x14] = struct.pack("<I", aer_corr_status)
     cfg.extend(aer)
     return bytes(cfg)
 
@@ -366,6 +367,156 @@ def case_20_ipmb_checksum() -> str:
     )
 
 
+def case_21_i2c_multi_master_arbitration_loss() -> str:
+    # Master A attempts to address 0x50 (Write), but loses arbitration to Master B addressing 0x48 (Write).
+    # Master A detects arbitration loss (aborted/NAK on 0x50), then retries after Master B completes.
+    return _i2c_csv(
+        [
+            "0.000100,0,0x50,,Write,NAK",
+            "0.000200,1,0x48,,Write,ACK",
+            "0.000225,1,,0x00,Write,ACK",
+            "0.000250,1,,0x12,Write,ACK",
+            "0.001000,2,0x50,,Write,ACK",
+            "0.001025,2,,0x00,Write,ACK",
+            "0.001050,2,,0x55,Write,ACK",
+        ]
+    )
+
+
+def case_22_spi_jedec_id_read_failure() -> str:
+    # Read JEDEC ID (0x9F) returns all 0xFF when flash is unpowered, floating, or offline.
+    return _spi_csv(
+        [
+            "0.0001,0x9F,0x00,0",
+            "0.0002,0x00,0xFF,0",
+            "0.0003,0x00,0xFF,0",
+            "0.0004,0x00,0xFF,0",
+            "0.0005,0x00,0x00,1",
+        ]
+    )
+
+
+def case_23_uart_watchdog_reset_loop() -> str:
+    # Watchdog timer expirations causing repeated reboot loops.
+    return (
+        "[    0.000000] Booting Linux on physical CPU 0x0000000000 [0x410fd034]\n"
+        "[    0.000000] Linux version 5.15.0-kmt (gcc 11.2.0) #1 SMP PREEMPT\n"
+        "[    1.240500] systemd[1]: Starting Hardware Watchdog...\n"
+        "[    1.250100] watchdog: watchdog0: watchdog did not stop!\n"
+        "[   30.120400] watchdog: watchdog0: Watchdog timer expired! Resetting system...\n"
+        "[    0.000000] U-Boot 2022.04 (Aug 30 2026 - 12:00:00 +0000)\n"
+        "[    0.000010] Reset cause: Watchdog Timer (WDT) Reset\n"
+        "[    0.000020] DRAM:  1 GiB\n"
+        "[    0.500000] Starting kernel ...\n"
+        "[    1.250000] watchdog: watchdog0: watchdog did not stop!\n"
+        "[   30.125000] watchdog: watchdog0: Watchdog timer expired! Resetting system...\n"
+        "[    0.000000] U-Boot 2022.04 (Aug 30 2026 - 12:00:00 +0000)\n"
+        "[    0.000010] Reset cause: Watchdog Timer (WDT) Reset\n"
+    )
+
+
+def case_24_pmbus_status_word_multiple_faults() -> str:
+    # STATUS_WORD (0x79) read returning VIN_UV (bit 3), IOUT_OC (bit 4), and TEMPERATURE (bit 2)
+    # Low byte = 0x1C (VIN_UV | IOUT_OC | TEMP), High byte = 0x60 (INPUT_FAULT_WARN | IOUT_POUT_FAULT_WARN)
+    return _i2c_csv(
+        [
+            "0.000000,0,0x58,,Write,ACK",
+            "0.000025,0,,0x79,Write,ACK",
+            "0.000100,1,0x58,,Read,ACK",
+            "0.000125,1,,0x1C,Read,ACK",
+            "0.000150,1,,0x60,Read,NACK",
+        ]
+    )
+
+
+def case_25_spi_write_protect_violation() -> str:
+    # WREN issued, then Page Program to protected region, followed by RDSR showing WEL=0 and BP set (0x1C).
+    return _spi_csv(
+        [
+            "0.0001,0x06,0x00,0",
+            "0.0002,0x00,0x00,1",
+            "0.0010,0x02,0x00,0",
+            "0.0011,0x00,0x00,0",
+            "0.0012,0x10,0x00,0",
+            "0.0013,0x00,0x00,0",
+            "0.0014,0xAA,0x00,0",
+            "0.0015,0xBB,0x00,0",
+            "0.0016,0x00,0x00,1",
+            "0.0020,0x05,0x00,0",
+            "0.0021,0x00,0x1C,0",
+            "0.0022,0x00,0x00,1",
+        ]
+    )
+
+
+def case_26_pcie_aer_correctable_error_storm() -> str:
+    # PCIe AER with Bad TLP (bit 6) and Replay Timer Timeout (bit 12) correctable error flags set.
+    cfg = _pcie_config_space(
+        degraded_link=False,
+        aer_status=0,
+        aer_corr_status=(1 << 6) | (1 << 12),
+    )
+    lines = [
+        f"{offset:02x}: " + " ".join(f"{b:02x}" for b in chunk) for offset, chunk in _chunks(cfg)
+    ]
+    return "0000:05:00.0 Network controller: Synthetic Device 7024\n" + "\n".join(lines) + "\n"
+
+
+def case_27_i2c_eeprom_write_without_twr() -> str:
+    # First Page Write to 0x50 is ACKed.
+    # Second write issued immediately (< 5ms tWR) without ACK polling, receiving Address NAK.
+    return _i2c_csv(
+        [
+            "0.000000,0,0x50,,Write,ACK",
+            "0.000025,0,,0x00,Write,ACK",
+            "0.000050,0,,0xAA,Write,ACK",
+            "0.000075,0,,0xBB,Write,ACK",
+            "0.000200,1,0x50,,Write,NAK",
+        ]
+    )
+
+
+def case_28_uart_framing_error_break() -> str:
+    # UART framing errors, overruns, and break conditions caused by line noise/baud mismatch.
+    return (
+        "[   15.421090] ttyS0: 2 input overrun(s)\n"
+        "[   15.422100] serial8250: too much work for irq4\n"
+        "[   15.425000] ttyS0: framing error detected (break condition or baud rate mismatch)\n"
+        "[   15.425100] ttyS0: corrupted byte 0x00 received with framing error flag\n"
+        "[   15.430000] ??? UART LINE NOISE / BUS CONTENTION DETECTED ???\n"
+        "[   15.435000] ttyS0: UART RX break indicator detected on line\n"
+    )
+
+
+def case_29_i2c_10bit_addressing() -> str:
+    # 10-bit address transaction: 1st address byte 0x78 (10-bit prefix + A9:A8),
+    # 2nd byte 0x2A (A7:A0 lower address bits), followed by data bytes.
+    return _i2c_csv(
+        [
+            "0.000100,0,0x78,,Write,ACK",
+            "0.000125,0,,0x2A,Write,ACK",
+            "0.000150,0,,0x00,Write,ACK",
+            "0.000175,0,,0x5A,Write,ACK",
+            "0.001000,1,0x78,,Write,ACK",
+            "0.001025,1,,0x2A,Write,ACK",
+            "0.001050,1,,0xA5,Write,ACK",
+        ]
+    )
+
+
+def case_30_spi_dual_quad_mode_mismatch() -> str:
+    # Fast Read Quad Output (0x6B) or Quad I/O (0xEB) issued over standard SPI bus without required dummy configuration.
+    return _spi_csv(
+        [
+            "0.0001,0xEB,0x00,0",
+            "0.0002,0x00,0x00,0",
+            "0.0003,0x10,0x00,0",
+            "0.0004,0x00,0x00,0",
+            "0.0005,0x00,0x00,1",
+        ]
+    )
+
+
 _CASES: list[FixtureCase] = [
     FixtureCase("01", "I2C Address NACK", "i2c", "case01_address_nack.csv", case_01_address_nack),
     FixtureCase(
@@ -473,11 +624,83 @@ _CASES: list[FixtureCase] = [
     FixtureCase(
         "20", "IPMB Checksum FAIL", "mctp", "case20_ipmb_checksum.hex", case_20_ipmb_checksum
     ),
+    FixtureCase(
+        "21",
+        "I2C Multi-Master Arbitration Loss",
+        "i2c",
+        "case21_i2c_arbitration_loss.csv",
+        case_21_i2c_multi_master_arbitration_loss,
+    ),
+    FixtureCase(
+        "22",
+        "SPI Flash JEDEC ID Read Failure",
+        "spi",
+        "case22_spi_jedec_failure.csv",
+        case_22_spi_jedec_id_read_failure,
+    ),
+    FixtureCase(
+        "23",
+        "UART Watchdog Reset Loop",
+        "uart",
+        "case23_uart_watchdog_reset_loop.log",
+        case_23_uart_watchdog_reset_loop,
+    ),
+    FixtureCase(
+        "24",
+        "I2C PMBus STATUS_WORD Multiple Faults",
+        "i2c",
+        "case24_pmbus_status_word_multiple_faults.csv",
+        case_24_pmbus_status_word_multiple_faults,
+    ),
+    FixtureCase(
+        "25",
+        "SPI Flash Write-Protect Violation",
+        "spi",
+        "case25_spi_write_protect_violation.csv",
+        case_25_spi_write_protect_violation,
+    ),
+    FixtureCase(
+        "26",
+        "PCIe AER Correctable Error Storm",
+        "pcie",
+        "case26_pcie_aer_correctable_storm.txt",
+        case_26_pcie_aer_correctable_error_storm,
+    ),
+    FixtureCase(
+        "27",
+        "I2C EEPROM Write Without Waiting tWR",
+        "i2c",
+        "case27_eeprom_twr_nack.csv",
+        case_27_i2c_eeprom_write_without_twr,
+    ),
+    FixtureCase(
+        "28",
+        "UART Bus Contention & Framing Error",
+        "uart",
+        "case28_uart_framing_error.log",
+        case_28_uart_framing_error_break,
+    ),
+    FixtureCase(
+        "29",
+        "I2C 10-Bit Addressing Transaction",
+        "i2c",
+        "case29_i2c_10bit_addressing.csv",
+        case_29_i2c_10bit_addressing,
+    ),
+    FixtureCase(
+        "30",
+        "SPI Dual/Quad Mode Mismatch",
+        "spi",
+        "case30_spi_quad_mode_mismatch.csv",
+        case_30_spi_dual_quad_mode_mismatch,
+    ),
 ]
+
+FIXTURE_CASES: list[FixtureCase] = _CASES
 
 
 class FaultArenaFixtures:
-    """Registry and generator for the 20 Fault Arena cases."""
+    """Registry and generator for the 30 Fault Arena cases."""
 
     @staticmethod
     def list_cases() -> list[FixtureCase]:

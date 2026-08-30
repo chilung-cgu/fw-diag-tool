@@ -79,10 +79,7 @@ def _detect_protocol_for_file(file_path: Path) -> str:
                 "aer:",
                 "pcieport",
             ]
-        ) or any(
-            re.match(r"^\s*[0-9a-fA-F]{2}:", line)
-            for line in text_head.splitlines()[:10]
-        ):
+        ) or any(re.match(r"^\s*[0-9a-fA-F]{2}:", line) for line in text_head.splitlines()[:10]):
             return "pcie"
         if any(kw in normalized_head for kw in ["dsp0236", "mctp", "ipmb"]):
             return "mctp"
@@ -134,7 +131,9 @@ def batch_analyze_directory(
 
     # Supported file extensions
     valid_suffixes = {".csv", ".log", ".txt", ".hex"}
-    files = sorted([f for f in dir_p.iterdir() if f.is_file() and f.suffix.lower() in valid_suffixes])
+    files = sorted(
+        [f for f in dir_p.iterdir() if f.is_file() and f.suffix.lower() in valid_suffixes]
+    )
 
     from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
     from fw_diag_tool.i2c.reporter import I2CReporter
@@ -168,15 +167,20 @@ def batch_analyze_directory(
                 if file_path.suffix.lower() == ".csv":
                     report = engine.analyze_csv_file(str(file_path))
                 else:
-                    report = engine.analyze_text(file_path.read_text(encoding="utf-8", errors="replace"))
+                    report = engine.analyze_text(
+                        file_path.read_text(encoding="utf-8", errors="replace")
+                    )
                 md_text = I2CReporter.generate_markdown(
-                    report, metadata={"tool": f"fw-diag-tool {__version__}", "input_name": file_path.name}
+                    report,
+                    metadata={"tool": f"fw-diag-tool {__version__}", "input_name": file_path.name},
                 )
                 findings = [
                     {
                         "code": i.code,
                         "title": i.title,
-                        "severity": i.severity.value if hasattr(i.severity, "value") else str(i.severity),
+                        "severity": i.severity.value
+                        if hasattr(i.severity, "value")
+                        else str(i.severity),
                         "message": i.description,
                         "file": str(file_path),
                     }
@@ -194,13 +198,18 @@ def batch_analyze_directory(
                     {
                         "code": i.code,
                         "title": i.title,
-                        "severity": i.severity.value if hasattr(i.severity, "value") else str(i.severity),
+                        "severity": i.severity.value
+                        if hasattr(i.severity, "value")
+                        else str(i.severity),
                         "message": i.description,
                         "file": str(file_path),
                     }
                     for i in report.anomalies
                 ]
-                if any(getattr(i.severity, "value", str(i.severity)) in ("CRITICAL", "ERROR") for i in report.anomalies):
+                if any(
+                    getattr(i.severity, "value", str(i.severity)) in ("CRITICAL", "ERROR")
+                    for i in report.anomalies
+                ):
                     status = "error"
                 elif report.anomalies or report.data_quality_issues:
                     status = "warning"
@@ -210,49 +219,61 @@ def batch_analyze_directory(
                 report = UARTCrashParser.parse_log_text(content)
                 md_text = UARTReporter.to_markdown(report)
                 if report.kernel_panic:
-                    findings.append({
-                        "code": "KERNEL_PANIC",
-                        "title": "Linux Kernel Panic",
-                        "severity": "CRITICAL",
-                        "message": report.kernel_panic.panic_reason,
-                        "file": str(file_path),
-                    })
+                    findings.append(
+                        {
+                            "code": "KERNEL_PANIC",
+                            "title": "Linux Kernel Panic",
+                            "severity": "CRITICAL",
+                            "message": report.kernel_panic.panic_reason,
+                            "file": str(file_path),
+                        }
+                    )
                     status = "error"
                 if report.arm_hardfault:
                     for flag in report.arm_hardfault.fault_flags:
-                        findings.append({
-                            "code": "ARM_HARDFAULT",
-                            "title": "ARM HardFault",
-                            "severity": "CRITICAL",
-                            "message": flag,
-                            "file": str(file_path),
-                        })
+                        findings.append(
+                            {
+                                "code": "ARM_HARDFAULT",
+                                "title": "ARM HardFault",
+                                "severity": "CRITICAL",
+                                "message": flag,
+                                "file": str(file_path),
+                            }
+                        )
                     status = "error"
                 if report.crash_type.value == "Hardware Watchdog Timeout Reset":
-                    findings.append({
-                        "code": "WATCHDOG_RESET",
-                        "title": "Watchdog Reset",
-                        "severity": "WARNING",
-                        "message": "Watchdog timeout reset detected",
-                        "file": str(file_path),
-                    })
+                    findings.append(
+                        {
+                            "code": "WATCHDOG_RESET",
+                            "title": "Watchdog Reset",
+                            "severity": "WARNING",
+                            "message": "Watchdog timeout reset detected",
+                            "file": str(file_path),
+                        }
+                    )
                     if status != "error":
                         status = "warning"
 
             elif protocol == "pcie":
                 content = file_path.read_text(encoding="utf-8", errors="replace")
-                if "PCIe Bus Error:" in content or ("AER:" in content and "lspci" not in content.lower() and not any(line.strip().startswith("00:") for line in content.splitlines())):
+                if "PCIe Bus Error:" in content or (
+                    "AER:" in content
+                    and "lspci" not in content.lower()
+                    and not any(line.strip().startswith("00:") for line in content.splitlines())
+                ):
                     events = PCIeAnalyzer.parse_dmesg_aer(content)
                     md_text = PCIeReporter.format_dmesg_events(events)
                     for ev in events:
                         is_fatal = ev.severity.lower() == "fatal"
-                        findings.append({
-                            "code": f"AER_{ev.error_name.upper().replace(' ', '_')}",
-                            "title": ev.error_name,
-                            "severity": "ERROR" if is_fatal else "WARNING",
-                            "message": ev.raw_line,
-                            "file": str(file_path),
-                        })
+                        findings.append(
+                            {
+                                "code": f"AER_{ev.error_name.upper().replace(' ', '_')}",
+                                "title": ev.error_name,
+                                "severity": "ERROR" if is_fatal else "WARNING",
+                                "message": ev.raw_line,
+                                "file": str(file_path),
+                            }
+                        )
                     if any(ev.severity.lower() == "fatal" for ev in events):
                         status = "error"
                     elif events:
@@ -268,31 +289,39 @@ def batch_analyze_directory(
                             for err in cfg.aer_analysis.uncorr_errors:
                                 if not err.is_active:
                                     continue
-                                findings.append({
-                                    "code": "AER_UNCORRECTABLE",
-                                    "title": err.name,
-                                    "severity": "CRITICAL" if err.severity == "Fatal" else "ERROR",
-                                    "message": err.root_cause_guide or err.name,
-                                    "file": str(file_path),
-                                })
+                                findings.append(
+                                    {
+                                        "code": "AER_UNCORRECTABLE",
+                                        "title": err.name,
+                                        "severity": "CRITICAL"
+                                        if err.severity == "Fatal"
+                                        else "ERROR",
+                                        "message": err.root_cause_guide or err.name,
+                                        "file": str(file_path),
+                                    }
+                                )
                             for err in cfg.aer_analysis.corr_errors:
                                 if not err.is_active:
                                     continue
-                                findings.append({
-                                    "code": "AER_CORRECTABLE",
-                                    "title": err.name,
-                                    "severity": "WARNING",
-                                    "message": err.root_cause_guide or err.name,
-                                    "file": str(file_path),
-                                })
+                                findings.append(
+                                    {
+                                        "code": "AER_CORRECTABLE",
+                                        "title": err.name,
+                                        "severity": "WARNING",
+                                        "message": err.root_cause_guide or err.name,
+                                        "file": str(file_path),
+                                    }
+                                )
                         if cfg.link_info and cfg.link_info.is_degraded:
-                            findings.append({
-                                "code": "PCIE_LINK_DEGRADED",
-                                "title": "PCIe Link Degraded",
-                                "severity": "WARNING",
-                                "message": f"{cfg.link_info.degradation_reason}",
-                                "file": str(file_path),
-                            })
+                            findings.append(
+                                {
+                                    "code": "PCIE_LINK_DEGRADED",
+                                    "title": "PCIe Link Degraded",
+                                    "severity": "WARNING",
+                                    "message": f"{cfg.link_info.degradation_reason}",
+                                    "file": str(file_path),
+                                }
+                            )
                     if any(f["severity"] in ("CRITICAL", "ERROR") for f in findings):
                         status = "error"
                     elif findings or any(cfg.data_quality_issues for cfg in devices):

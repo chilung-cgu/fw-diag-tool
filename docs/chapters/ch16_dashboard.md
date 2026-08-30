@@ -58,6 +58,7 @@
 | **協定分析與波形** | 📊 I2C / PMBus 診斷與波形檢視 | Saleae Decoded CSV、Raw Digital CSV (100k/400k)、Text Trace、.fwsession.json | I2C/SMBus/PMBus 通訊異常、NACK、時鐘延展、死鎖診斷 | [ch01_i2c_pmbus.md](ch01_i2c_pmbus.md) |
 | **協定分析與波形** | 🎨 I2C 封包模擬器與驅動產生 | 自訂 7-bit 位址、暫存器位移、讀寫長度、Payload | 產生 i2ctransfer CLI 命令與 Linux Kernel i2c_msg / C 驅動範本 | [ch02_packet_builder.md](ch02_packet_builder.md) |
 | **協定分析與波形** | ⚖️ 雙波形差分對比檢視 | 兩個 Saleae Decoded CSV（Golden vs Failing） | A/B 板卡比對、找出首次通訊分歧點（Timing、NACK 差異） | [ch03_waveform_diff.md](ch03_waveform_diff.md) |
+| **進階分析** | 🔗 跨協定時間線關聯分析 | I2C CSV、SPI CSV、UART 日誌（多協定輸入） | 跨協定時間軸對齊、全域異常標記與異常叢集（Cluster）偵測 | [ch17_correlation.md](ch17_correlation.md) |
 | **系統協定診斷** | 📟 UART 崩潰轉儲與 HardFault 分析 | 文字日誌 (.txt / .log)、Linux dmesg / Call Trace、ARM 暫存器傾印 | 解析 Kernel Panic / Oops / NULL Pointer 及 ARM Cortex-M HardFault | [ch04_uart_crash.md](ch04_uart_crash.md) |
 | **系統協定診斷** | 🌐 MCTP／IPMB 伺服器管理協定解析 | 十六進位位元組字串 (Hex Bytes) | BMC 管理協定除錯、MCTP (DSP0236/PLDM/SPDM) 與 IPMB 兩段校驗 | [ch05_mctp_ipmb.md](ch05_mctp_ipmb.md) |
 | **系統協定診斷** | 🚀 PCIe 設定空間與 AER 診斷 | lspci -xxxx / -vvv 傾印、Linux dmesg AER 錯誤日誌 | PCIe 裝置識別、Link 降速 (Gen4 -> Gen1)、Correctable/Fatal AER 診斷 | [ch07_pcie_aer.md](ch07_pcie_aer.md) |

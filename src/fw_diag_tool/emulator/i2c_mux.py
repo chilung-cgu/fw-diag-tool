@@ -20,7 +20,11 @@ class VirtualPCA9548A:
         self.downstream_devices: dict[int, list[Any]] = {ch: [] for ch in range(self.NUM_CHANNELS)}
 
     def select_channel(self, channel: int) -> None:
-        if isinstance(channel, bool) or not isinstance(channel, int) or not 0 <= channel < self.NUM_CHANNELS:
+        if (
+            isinstance(channel, bool)
+            or not isinstance(channel, int)
+            or not 0 <= channel < self.NUM_CHANNELS
+        ):
             raise ValueError(f"channel must be an integer in range 0..{self.NUM_CHANNELS - 1}")
         self.control_reg = 1 << channel
 
@@ -30,7 +34,9 @@ class VirtualPCA9548A:
         mask = 0
         for idx, ch in enumerate(channels):
             if isinstance(ch, bool) or not isinstance(ch, int) or not 0 <= ch < self.NUM_CHANNELS:
-                raise ValueError(f"channels[{idx}] must be an integer in range 0..{self.NUM_CHANNELS - 1}")
+                raise ValueError(
+                    f"channels[{idx}] must be an integer in range 0..{self.NUM_CHANNELS - 1}"
+                )
             mask |= 1 << ch
         self.control_reg = mask
 
@@ -53,17 +59,27 @@ class VirtualPCA9548A:
         self.control_reg = 0x00
 
     def attach_device(self, channel: int, device: Any) -> None:
-        if isinstance(channel, bool) or not isinstance(channel, int) or not 0 <= channel < self.NUM_CHANNELS:
+        if (
+            isinstance(channel, bool)
+            or not isinstance(channel, int)
+            or not 0 <= channel < self.NUM_CHANNELS
+        ):
             raise ValueError(f"channel must be an integer in range 0..{self.NUM_CHANNELS - 1}")
         if device is None:
             raise ValueError("device cannot be None")
         if not hasattr(device, "addr"):
-            raise ValueError("device must have an 'addr' attribute indicating its 7-bit I2C address")
+            raise ValueError(
+                "device must have an 'addr' attribute indicating its 7-bit I2C address"
+            )
         if device not in self.downstream_devices[channel]:
             self.downstream_devices[channel].append(device)
 
     def detach_device(self, channel: int, device: Any | None = None) -> None:
-        if isinstance(channel, bool) or not isinstance(channel, int) or not 0 <= channel < self.NUM_CHANNELS:
+        if (
+            isinstance(channel, bool)
+            or not isinstance(channel, int)
+            or not 0 <= channel < self.NUM_CHANNELS
+        ):
             raise ValueError(f"channel must be an integer in range 0..{self.NUM_CHANNELS - 1}")
         if device is None:
             self.downstream_devices[channel].clear()
@@ -71,7 +87,11 @@ class VirtualPCA9548A:
             self.downstream_devices[channel].remove(device)
 
     def get_devices_on_channel(self, channel: int) -> list[Any]:
-        if isinstance(channel, bool) or not isinstance(channel, int) or not 0 <= channel < self.NUM_CHANNELS:
+        if (
+            isinstance(channel, bool)
+            or not isinstance(channel, int)
+            or not 0 <= channel < self.NUM_CHANNELS
+        ):
             raise ValueError(f"channel must be an integer in range 0..{self.NUM_CHANNELS - 1}")
         return list(self.downstream_devices[channel])
 
@@ -110,7 +130,9 @@ class VirtualPCA9548A:
         if isinstance(num_bytes, bool) or not isinstance(num_bytes, int) or num_bytes < 0:
             raise ValueError("num_bytes must be a non-negative integer")
         if num_bytes > 1:
-            raise ValueError(f"read requests {num_bytes} byte(s), but control register provides 1 byte(s)")
+            raise ValueError(
+                f"read requests {num_bytes} byte(s), but control register provides 1 byte(s)"
+            )
         return bytes([self.control_reg][:num_bytes])
 
     def route_write(self, addr_7bit: int, data_bytes: list[int]) -> list[dict[str, Any]]:

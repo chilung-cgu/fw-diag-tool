@@ -710,7 +710,9 @@ def _render_eeprom_tab() -> None:
 
 def _render_ina219_tab() -> None:
     if "emulator_ina219" not in st.session_state:
-        st.session_state["emulator_ina219"] = VirtualINA219(addr_7bit=0x40, shunt_ohms=0.1, max_expected_amps=3.2)
+        st.session_state["emulator_ina219"] = VirtualINA219(
+            addr_7bit=0x40, shunt_ohms=0.1, max_expected_amps=3.2
+        )
         st.session_state["emulator_ina219"].write_calibration(4096)
 
     ina: VirtualINA219 = st.session_state["emulator_ina219"]
@@ -773,13 +775,19 @@ def _render_ina219_tab() -> None:
         st.write("")
         st.write("")
         if st.button("重設 INA219", key="btn_reset_ina219"):
-            st.session_state["emulator_ina219"] = VirtualINA219(addr_7bit=0x40, shunt_ohms=0.1, max_expected_amps=3.2)
+            st.session_state["emulator_ina219"] = VirtualINA219(
+                addr_7bit=0x40, shunt_ohms=0.1, max_expected_amps=3.2
+            )
             st.session_state["emulator_ina219"].write_calibration(4096)
             ina = st.session_state["emulator_ina219"]
             st.success("已恢復 INA219 預設狀態。")
 
         rec_cal = ina.calculate_expected_calibration(current_lsb_ma=c_lsb_in, shunt_ohms=r_shunt_in)
-        if st.button(f"寫入推薦校準值 (0x{rec_cal:04X})", key="btn_auto_cal_ina219", help="根據當前 R_shunt 與 Current LSB 自動計算並寫入校準暫存器"):
+        if st.button(
+            f"寫入推薦校準值 (0x{rec_cal:04X})",
+            key="btn_auto_cal_ina219",
+            help="根據當前 R_shunt 與 Current LSB 自動計算並寫入校準暫存器",
+        ):
             ina.write_calibration(rec_cal)
             st.success(f"已寫入 Calibration = 0x{rec_cal:04X} ({rec_cal})")
 
@@ -790,14 +798,30 @@ def _render_ina219_tab() -> None:
     meas_power_mw = ina.calculate_power()
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("匯流排電壓 (Bus V)", f"{ina.bus_voltage_v:.3f} V", delta=f"{ina.bus_voltage_v * 1000.0:.1f} mV")
-    m2.metric("分流電壓 (Shunt V)", f"{ina.shunt_voltage_uv / 1000.0:.2f} mV", delta=f"{ina.shunt_voltage_uv:.0f} µV")
+    m1.metric(
+        "匯流排電壓 (Bus V)",
+        f"{ina.bus_voltage_v:.3f} V",
+        delta=f"{ina.bus_voltage_v * 1000.0:.1f} mV",
+    )
+    m2.metric(
+        "分流電壓 (Shunt V)",
+        f"{ina.shunt_voltage_uv / 1000.0:.2f} mV",
+        delta=f"{ina.shunt_voltage_uv:.0f} µV",
+    )
     if ina.cal_reg == 0:
         m3.metric("晶片讀出電流 (Current)", "0.0 mA (未校準)", delta="⚠️ Cal=0")
         m4.metric("晶片讀出功率 (Power)", "0.0 mW (未校準)", delta="⚠️ Cal=0")
     else:
-        m3.metric("晶片讀出電流 (Current)", f"{meas_current_ma:.2f} mA", delta=f"理論值 {theo_current_ma:.2f} mA")
-        m4.metric("晶片讀出功率 (Power)", f"{meas_power_mw:.2f} mW", delta=f"理論值 {theo_power_mw:.2f} mW")
+        m3.metric(
+            "晶片讀出電流 (Current)",
+            f"{meas_current_ma:.2f} mA",
+            delta=f"理論值 {theo_current_ma:.2f} mA",
+        )
+        m4.metric(
+            "晶片讀出功率 (Power)",
+            f"{meas_power_mw:.2f} mW",
+            delta=f"理論值 {theo_power_mw:.2f} mW",
+        )
 
     st.markdown("---")
     st.markdown("#### 內部暫存器狀態表（Internal Registers Status）")
@@ -886,7 +910,14 @@ def _render_ina219_tab() -> None:
             try:
                 read_bytes = ina.read(2)
                 val_16 = (read_bytes[0] << 8) | read_bytes[1]
-                ptr_name = {0x00: "CONFIG", 0x01: "SHUNT_V", 0x02: "BUS_V", 0x03: "POWER", 0x04: "CURRENT", 0x05: "CALIBRATION"}.get(ina.last_cmd, "UNKNOWN")
+                ptr_name = {
+                    0x00: "CONFIG",
+                    0x01: "SHUNT_V",
+                    0x02: "BUS_V",
+                    0x03: "POWER",
+                    0x04: "CURRENT",
+                    0x05: "CALIBRATION",
+                }.get(ina.last_cmd, "UNKNOWN")
                 st.success(f"讀取成功！暫存器 [{ptr_name}] = 0x{val_16:04X} ({list(read_bytes)})")
             except Exception as exc:
                 st.error(f"讀取失敗：{exc}")
@@ -912,11 +943,15 @@ def _render_pca9548a_tab() -> None:
         pca = VirtualPCA9548A(addr_7bit=0x70)
         # Mount diverse virtual downstream devices on channels to demonstrate isolation and conflicts
         pca.attach_device(0, VirtualLM75(addr_7bit=0x48))  # CH0: LM75 Temp #1 (0x48)
-        pca.attach_device(1, VirtualLM75(addr_7bit=0x48))  # CH1: LM75 Temp #2 (0x48) - conflict with CH0!
+        pca.attach_device(
+            1, VirtualLM75(addr_7bit=0x48)
+        )  # CH1: LM75 Temp #2 (0x48) - conflict with CH0!
         pca.attach_device(2, VirtualEEPROM24C64(addr_7bit=0x50))  # CH2: EEPROM #1 (0x50)
         pca.attach_device(3, VirtualINA219(addr_7bit=0x40))  # CH3: INA219 Power Monitor (0x40)
         pca.attach_device(4, VirtualLM75(addr_7bit=0x49))  # CH4: LM75 Temp #3 (0x49)
-        pca.attach_device(5, VirtualEEPROM24C64(addr_7bit=0x50))  # CH5: EEPROM #2 (0x50) - conflict with CH2!
+        pca.attach_device(
+            5, VirtualEEPROM24C64(addr_7bit=0x50)
+        )  # CH5: EEPROM #2 (0x50) - conflict with CH2!
         pca.select_channel(0)
         st.session_state["emulator_pca9548a"] = pca
 
@@ -959,12 +994,20 @@ def _render_pca9548a_tab() -> None:
             pca.deselect_all()
             st.rerun()
     with btn_c3:
-        if st.button("硬體 RESET# 重設", key="btn_pca_hw_reset", help="模擬拉低 RESET# 腳位復位多工器"):
+        if st.button(
+            "硬體 RESET# 重設", key="btn_pca_hw_reset", help="模擬拉低 RESET# 腳位復位多工器"
+        ):
             pca.reset()
             st.rerun()
     with btn_c4:
-        active_str = ", ".join(f"CH{c}" for c in pca.get_active_channels()) if pca.get_active_channels() else "無 (全部隔離)"
-        st.info(f"Control Register: `0x{pca.read_control():02X}` (2進位: `{pca.read_control():08b}`) | 啟用中: **{active_str}**")
+        active_str = (
+            ", ".join(f"CH{c}" for c in pca.get_active_channels())
+            if pca.get_active_channels()
+            else "無 (全部隔離)"
+        )
+        st.info(
+            f"Control Register: `0x{pca.read_control():02X}` (2進位: `{pca.read_control():08b}`) | 啟用中: **{active_str}**"
+        )
 
     st.markdown("---")
     st.markdown("#### 下游掛載裝置與位址衝突偵測（Downstream Devices & Conflict Detector）")
@@ -974,7 +1017,9 @@ def _render_pca9548a_tab() -> None:
         conflict_details = []
         for addr, items in conflicts.items():
             ch_list = [f"CH{ch}" for ch, _ in items]
-            conflict_details.append(f"位址 `0x{addr:02X}` 同時存在於作用中通道 **{', '.join(ch_list)}**")
+            conflict_details.append(
+                f"位址 `0x{addr:02X}` 同時存在於作用中通道 **{', '.join(ch_list)}**"
+            )
         st.error(
             f"🚨 **偵測到 I2C 位址衝突 (Address Conflict Hazard)！**\n\n"
             f"{'；'.join(conflict_details)}。\n\n"
@@ -983,7 +1028,9 @@ def _render_pca9548a_tab() -> None:
         )
     else:
         if pca.get_active_channels():
-            st.success("🟢 **匯流排狀態正常**：當前所有啟用通道之下游裝置 7-bit 位址完全獨立，無位址衝突風險。")
+            st.success(
+                "🟢 **匯流排狀態正常**：當前所有啟用通道之下游裝置 7-bit 位址完全獨立，無位址衝突風險。"
+            )
         else:
             st.warning("⚪ **全部通道處於隔離狀態**：上游 I2C Master 無法存取任何下游分支裝置。")
 
@@ -993,26 +1040,34 @@ def _render_pca9548a_tab() -> None:
         devs = pca.get_devices_on_channel(ch)
         is_active = ch in pca.get_active_channels()
         if not devs:
-            dev_table_rows.append({
-                "通道 (Channel)": f"CH{ch}",
-                "導通狀態": "🟢 導通 (Active)" if is_active else "⚪ 隔離 (Disabled)",
-                "掛載虛擬裝置": "(無裝置)",
-                "7-bit I2C 位址": "-",
-                "衝突狀態": "正常",
-            })
+            dev_table_rows.append(
+                {
+                    "通道 (Channel)": f"CH{ch}",
+                    "導通狀態": "🟢 導通 (Active)" if is_active else "⚪ 隔離 (Disabled)",
+                    "掛載虛擬裝置": "(無裝置)",
+                    "7-bit I2C 位址": "-",
+                    "衝突狀態": "正常",
+                }
+            )
         else:
             for d in devs:
                 d_name = d.__class__.__name__.replace("Virtual", "")
                 d_addr = getattr(d, "addr", 0)
                 is_conflicted = is_active and (d_addr in conflicts)
-                status_str = "🚨 衝突中 (Conflict!)" if is_conflicted else ("🟢 作用中" if is_active else "⚪ 隔離中")
-                dev_table_rows.append({
-                    "通道 (Channel)": f"CH{ch}",
-                    "導通狀態": "🟢 導通 (Active)" if is_active else "⚪ 隔離 (Disabled)",
-                    "掛載虛擬裝置": d_name,
-                    "7-bit I2C 位址": f"0x{d_addr:02X}",
-                    "衝突狀態": status_str,
-                })
+                status_str = (
+                    "🚨 衝突中 (Conflict!)"
+                    if is_conflicted
+                    else ("🟢 作用中" if is_active else "⚪ 隔離中")
+                )
+                dev_table_rows.append(
+                    {
+                        "通道 (Channel)": f"CH{ch}",
+                        "導通狀態": "🟢 導通 (Active)" if is_active else "⚪ 隔離 (Disabled)",
+                        "掛載虛擬裝置": d_name,
+                        "7-bit I2C 位址": f"0x{d_addr:02X}",
+                        "衝突狀態": status_str,
+                    }
+                )
     st.table(pd.DataFrame(dev_table_rows))
 
     st.markdown("---")
@@ -1028,18 +1083,26 @@ def _render_pca9548a_tab() -> None:
                 t_bytes = parse_hex_bytes(rt_data_str)
                 w_res = pca.route_write(t_addr, t_bytes)
                 if not w_res:
-                    st.warning(f"無裝置回應：在當前導通通道中未找到位址 0x{t_addr:02X} 的裝置（或通道未開啟）。")
+                    st.warning(
+                        f"無裝置回應：在當前導通通道中未找到位址 0x{t_addr:02X} 的裝置（或通道未開啟）。"
+                    )
                 else:
                     st.success(f"成功路由至 {len(w_res)} 個裝置！")
                     for item in w_res:
-                        st.write(f"- 通道 CH{item['channel']} 裝置 `{item['device'].__class__.__name__}`: {item['result']}")
+                        st.write(
+                            f"- 通道 CH{item['channel']} 裝置 `{item['device'].__class__.__name__}`: {item['result']}"
+                        )
             except Exception as exc:
                 st.error(f"路由失敗：{exc}")
 
     with c_rt2:
         st.markdown("##### 📖 透過 Mux 發送 I2C Read 指令")
-        rt_rd_addr_str = st.text_input("讀取目標 7-bit I2C 位址", value="0x48", key="pca_rt_rd_addr_input")
-        rt_rd_len = st.number_input("讀取長度 (Bytes)", min_value=1, max_value=8, value=2, key="pca_rt_rd_len")
+        rt_rd_addr_str = st.text_input(
+            "讀取目標 7-bit I2C 位址", value="0x48", key="pca_rt_rd_addr_input"
+        )
+        rt_rd_len = st.number_input(
+            "讀取長度 (Bytes)", min_value=1, max_value=8, value=2, key="pca_rt_rd_len"
+        )
         if st.button("送出 I2C Read 路由", key="btn_pca_rt_read"):
             try:
                 t_addr = parse_hex_or_dec_int(rt_rd_addr_str, label="目標位址")
@@ -1047,12 +1110,18 @@ def _render_pca9548a_tab() -> None:
                 if not r_res:
                     st.warning(f"無裝置回應：在當前導通通道中未找到位址 0x{t_addr:02X} 的裝置。")
                 elif len(r_res) > 1:
-                    st.error(f"🚨 **多裝置同時回應碰撞！** 偵測到 {len(r_res)} 個裝置在不同通道同時回應資料：")
+                    st.error(
+                        f"🚨 **多裝置同時回應碰撞！** 偵測到 {len(r_res)} 個裝置在不同通道同時回應資料："
+                    )
                     for ch, dev, data in r_res:
-                        st.write(f"- CH{ch} `{dev.__class__.__name__}`: `{list(data)}` ({data.hex()})")
+                        st.write(
+                            f"- CH{ch} `{dev.__class__.__name__}`: `{list(data)}` ({data.hex()})"
+                        )
                 else:
                     ch, dev, data = r_res[0]
-                    st.success(f"讀取成功！來自 CH{ch} `{dev.__class__.__name__}`: `{list(data)}` (0x{data.hex().upper()})")
+                    st.success(
+                        f"讀取成功！來自 CH{ch} `{dev.__class__.__name__}`: `{list(data)}` (0x{data.hex().upper()})"
+                    )
             except Exception as exc:
                 st.error(f"讀取失敗：{exc}")
 

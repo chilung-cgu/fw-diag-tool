@@ -455,9 +455,7 @@ def validate_editor_state(state: dict[str, Any]) -> list[dict[str, str]]:
 
                 ch_addrs: dict[int, str] = {}
                 for cd_idx, ch_dev in enumerate(ch_dict.get("devices", [])):
-                    ch_dev_name = (
-                        str(ch_dev.get("name", "")).strip() or f"Ch{ch}-Dev{cd_idx + 1}"
-                    )
+                    ch_dev_name = str(ch_dev.get("name", "")).strip() or f"Ch{ch}-Dev{cd_idx + 1}"
                     ch_dev_loc = f"{mux_loc} -> Channel {ch} ->「{ch_dev_name}」"
                     c_addr = ch_dev.get("address_7bit")
 
@@ -960,9 +958,7 @@ def render() -> None:
                         # 晶片型號選擇
                         chip_options = ["自訂裝置（Custom）"] + list(CHIP_PRESET_MAP.keys())
                         cur_chip = dev.get("chip_model", "自訂裝置（Custom）")
-                        c_idx = (
-                            chip_options.index(cur_chip) if cur_chip in chip_options else 0
-                        )
+                        c_idx = chip_options.index(cur_chip) if cur_chip in chip_options else 0
 
                         selected_chip = st.selectbox(
                             "常用晶片型號（從資料庫載入預設）",
@@ -1123,7 +1119,9 @@ def render() -> None:
 
                         st.caption("MUX 下游各通道裝置配置：")
                         for ch_num in range(ch_count):
-                            with st.expander(f"📍 通道 {ch_num}（Channel {ch_num}）", expanded=False):
+                            with st.expander(
+                                f"📍 通道 {ch_num}（Channel {ch_num}）", expanded=False
+                            ):
                                 if ch_num not in channel_map:
                                     channel_map[ch_num] = {
                                         "channel": ch_num,

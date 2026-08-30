@@ -63,7 +63,7 @@ def test_localize_mctp_error():
 
 
 def test_fault_arena_cases_structure():
-    assert len(_FAULT_ARENA_CASES_ZH) == 20
+    assert len(_FAULT_ARENA_CASES_ZH) == 30
     for case in _FAULT_ARENA_CASES_ZH:
         assert "case_id" in case
         assert "label" in case

@@ -1,4 +1,4 @@
-# 附錄 B：16 個 GUI 頁面的閱讀地圖
+# 附錄 B：17 個 GUI 頁面的閱讀地圖
 
 這份附錄只回答「我現在在哪一頁、先放什麼、不能證明什麼、下一步去哪裡」。每一節都有該頁的直接章節連結；I2C 圖表細節請跳到[附錄 A：圖表與證據判讀](appendix_chart_guide.md)，不要在這張地圖重複定義 axes 或 thresholds。
 
@@ -9,7 +9,7 @@
 | [ch01 I2C/SMBus/PMBus](ch01_i2c_pmbus.md) | 第 1 頁輸入契約、fixture、五個 tabs 的操作流程與預期輸出 | 具體 workflow 與下一步 |
 | [附錄 A 圖表判讀](appendix_chart_guide.md) | frequency/timeline/health/anomaly 的軸、threshold、status 與 evidence 規則 | 第 1 頁連結 |
 | [ch02 Packet Builder](ch02_packet_builder.md) | 第 2 頁 canonical transfer、ideal waveform、四種模板與安全 gate | 第 2 頁欄位摘要 |
-| 本附錄 B | 16 個 GUI 頁面的導航與跨頁證據邊界 | 每頁入口、不能直接證明、下一步 |
+| 本附錄 B | 17 個 GUI 頁面的導航與跨頁證據邊界 | 每頁入口、不能直接證明、下一步 |
 
 ## 第一次導覽
 
@@ -115,3 +115,8 @@
 |---|---|---|---|
 | 欲排查的故障徵狀或學習目標 | 3 步快速上手流程、場景推薦起點、16 大模組卡片清單 | 總覽卡片與指引不包含特定板卡診斷結論 | 依推薦跳轉至對應專屬診斷頁面，並搭配 L1~L7 SOP 進行取證。 |
 
+### 17. [跨協定時間線關聯分析](ch17_correlation.md)
+
+| 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
+|---|---|---|---|
+| I2C CSV、SPI CSV 及/或 UART Crash Log | 跨協定對齊時間線、總事件數、異常標記（紅色星號）與跨協定異常叢集 | 時間相近不等於物理因果關係；UART 預設基準點不代表絕對時間戳 | 依時間差與涉及協定縮小範圍，以示波器量測共同電源軌（如 3.3V）與 Reset 訊號。 |

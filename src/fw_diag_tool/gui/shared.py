@@ -5,6 +5,7 @@ from typing import Any
 
 import streamlit as st
 
+from fw_diag_tool import __version__
 from fw_diag_tool.board_profile import load_board_profile
 from fw_diag_tool.gui.guide_resources import load_guide_text, prepare_guide_markdown
 from fw_diag_tool.gui.pages.i2c_page import analyze_i2c as analyze_i2c_controller
@@ -253,6 +254,76 @@ _FAULT_ARENA_CASES_ZH = [
         "hypothesis": "資料損毀或位址錯誤。",
         "check": "檢查 (sum+chk)&0xFF==0 並重新計算兩段 checksum。",
     },
+    {
+        "case_id": "21",
+        "label": "Case 21: I2C 多主控仲裁丟失（Multi-Master Arbitration Loss）",
+        "symptom": "仲裁失敗與傳輸中止（Arbitration Loss / Transfer Abort）。",
+        "hypothesis": "兩個 Master 同時發送資料，較高位址或較慢拉低的 Master 失去匯流排控制權。",
+        "check": "檢查 Master 硬體仲裁丟失中斷旗標（ARBLOST），並實作自動退避重傳機制（Backoff Retry）。",
+    },
+    {
+        "case_id": "22",
+        "label": "Case 22: SPI Flash JEDEC ID 讀取失敗（全 0xFF／晶片不在線）",
+        "symptom": "JEDEC ID 讀回全 0xFF（JEDEC ID Read Failure）。",
+        "hypothesis": "SPI Flash 晶片未上電、供電壓降、MISO 線路斷線或 CS# 未正確拉低。",
+        "check": "使用示波器量測 Flash VCC 供電與 CS#/MISO 訊號，確認晶片是否正常在線。",
+    },
+    {
+        "case_id": "23",
+        "label": "Case 23: UART 看門狗超時重啟循環（Watchdog Reset Loop）",
+        "symptom": "看門狗觸發反覆重啟（Watchdog Reset Loop / Boot Loop）。",
+        "hypothesis": "主執行緒死鎖、阻塞在中斷或未能定期餵狗（Kick Watchdog），導致硬體逾時重置。",
+        "check": "檢查各 Task 執行時間與餵狗排程，排查造成主迴圈阻塞之驅動或函式。",
+    },
+    {
+        "case_id": "24",
+        "label": "Case 24: I2C PMBus STATUS_WORD 多重電源故障（VIN_UV + IOUT_OC + OT）",
+        "symptom": "PMBus STATUS_WORD 報警（多重電源故障：欠壓／過流／過溫）。",
+        "hypothesis": "輸入電壓驟降、負載短路或散熱不良觸發 VR 晶片硬體保護機制。",
+        "check": "讀取 READ_VIN、READ_IOUT、READ_TEMPERATURE 確認即時數值並排查電源供應與散熱。",
+    },
+    {
+        "case_id": "25",
+        "label": "Case 25: SPI Flash 寫入防護違規（Write-Protect Violation；WEL 自動清除）",
+        "symptom": "Page Program 寫入被拒（Write-Protect Violation / WEL Cleared）。",
+        "hypothesis": "寫入目標落在 Status Register Block Protect (BP0..BP2) 防寫保護區塊，WEL 被硬體自動清除。",
+        "check": "讀取 Status Register-1 (0x05) 檢查 BP 位元防護設定，寫入前先解除目標區段保護。",
+    },
+    {
+        "case_id": "26",
+        "label": "Case 26: PCIe AER 可校正錯誤風暴（Correctable Error Storm：Bad TLP + Replay Timer）",
+        "symptom": "PCIe 頻繁觸發可校正錯誤（AER Correctable Error Storm）。",
+        "hypothesis": "PCIe 高速訊號品質劣化（SI Loss / Jitter）導致封包損毀頻繁重傳（Bad TLP / Replay Timeout）。",
+        "check": "排查 PCIe 插槽接觸品質、金手指抗氧化狀態與 Eye Diagram 訊號眼圖。",
+    },
+    {
+        "case_id": "27",
+        "label": "Case 27: I2C EEPROM 連續寫入未等待 tWR 週期（Data NACK）",
+        "symptom": "連續寫入遭裝置拒絕（Address/Data NACK after Page Write）。",
+        "hypothesis": "前次 Page Write 後未等待內部寫入週期 tWR（~5ms）即發送新寫入指令。",
+        "check": "於兩次 Page Write 間加入 5ms 延遲或實作 ACK Polling 機制直到 EEPROM 回應 ACK。",
+    },
+    {
+        "case_id": "28",
+        "label": "Case 28: UART 匯流排干擾與訊框錯誤（Framing Error / Break Condition）",
+        "symptom": "UART 接收亂碼或訊框錯誤（Framing Error / Break Condition）。",
+        "hypothesis": "傳輸線路受到強烈電磁干擾、鮑率不匹配（Baud Rate Mismatch）或接地電位差。",
+        "check": "檢查雙方 UART Baud Rate、Stop Bit 設定，並用示波器量測 RX/TX 訊號與雜訊位準。",
+    },
+    {
+        "case_id": "29",
+        "label": "Case 29: I2C 10-Bit 定址模式交易（10-Bit Addressing Mode）",
+        "symptom": "10-Bit 擴充定址交易（10-Bit Addressing Transaction）。",
+        "hypothesis": "系統使用 10-Bit I2C 定址協議（0x78 前綴 + 2nd Address Byte）存取擴充位址空間設備。",
+        "check": "確認 Master 控制器與 Slave 設備皆正確支援並配置 10-Bit 定址模式。",
+    },
+    {
+        "case_id": "30",
+        "label": "Case 30: SPI Dual/Quad 模式不匹配（QPI / Dummy Byte Mismatch）",
+        "symptom": "SPI Quad 讀取指令與 Dummy 時鐘不匹配（Dual/Quad Mode Mismatch）。",
+        "hypothesis": "使用標準 Single SPI 模式發送 QPI (0xEB) 指令，或未提供足夠 Dummy Clock 導致資料偏移。",
+        "check": "確認 Flash 是否已致能 Quad Enable (QE) 位元，並檢查 Dummy Clock 週期數量配置。",
+    },
 ]
 
 
@@ -487,12 +558,28 @@ def render_html_download(
 
 
 def render_guide_expander(
-    chapter_rel_path: str, label: str = "📖 點擊展開本功能詳細實戰教學手冊"
+    chapter_rel_path: str,
+    label: str = "📖 點擊展開本功能詳細實戰教學手冊",
+    fallback_title: str | None = None,
+    fallback_body: str | None = None,
 ) -> None:
     markdown = load_guide_text(chapter_rel_path)
     if markdown is not None:
         with st.expander(label, expanded=False):
             st.markdown(prepare_guide_markdown(markdown, chapter_rel_path))
+    elif fallback_body is not None:
+        with st.expander(fallback_title or label, expanded=False):
+            st.markdown(fallback_body)
+
+
+def render_page_footer() -> None:
+    """在頁面底部顯示統一的 footer 資訊。"""
+    st.divider()
+    st.caption(
+        f"fw-diag-tool v{__version__} • "
+        "專為韌體與嵌入式系統工程師打造的離線診斷分析套件 • "
+        "[GitHub](https://github.com/chilung-cgu/fw-diag-tool)"
+    )
 
 
 __all__ = [
@@ -513,4 +600,5 @@ __all__ = [
     "analyze_spi_input",
     "render_guide_expander",
     "render_html_download",
+    "render_page_footer",
 ]

@@ -219,11 +219,11 @@ class TestBackwardCompatibleBehavior:
 
 
 class TestFaultArenaFixtureRegistry:
-    def test_registry_lists_exactly_20_cases(self):
+    def test_registry_lists_all_cases(self):
         cases = FaultArenaFixtures.list_cases()
 
-        assert len(cases) == 20
-        assert [c.case_id for c in cases] == [f"{i:02d}" for i in range(1, 21)]
+        assert len(cases) == 30
+        assert [c.case_id for c in cases] == [f"{i:02d}" for i in range(1, 31)]
         kinds = {c.kind for c in cases}
         assert kinds <= {"i2c", "pcie", "spi", "uart", "mctp"}
 
@@ -234,7 +234,7 @@ class TestFaultArenaFixtureRegistry:
             FaultArenaFixtures.get_case("99")
 
     def test_generate_is_deterministic_and_nonempty(self):
-        for case_id in ("01", "10", "20"):
+        for case_id in ("01", "10", "20", "30"):
             first = FaultArenaFixtures.generate(case_id)
             assert first
             assert first == FaultArenaFixtures.generate(case_id)
@@ -242,13 +242,13 @@ class TestFaultArenaFixtureRegistry:
     def test_generate_all_covers_every_case(self):
         generated = FaultArenaFixtures.generate_all()
 
-        assert set(generated) == {f"{i:02d}" for i in range(1, 21)}
+        assert set(generated) == {f"{i:02d}" for i in range(1, 31)}
         assert all(text.strip() for text in generated.values())
 
     def test_write_all_creates_files(self, tmp_path: Path):
         written = FaultArenaFixtures.write_all(tmp_path)
 
-        assert len(written) == 20
+        assert len(written) == 30
         for path in written:
             assert path.exists() and path.stat().st_size > 0
 

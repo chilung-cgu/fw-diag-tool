@@ -17,6 +17,7 @@ from fw_diag_tool.gui.shared import (
     analyze_i2c_input,
     analyze_spi_input,
     render_guide_expander,
+    render_page_footer,
 )
 from fw_diag_tool.uart.parser import parse_uart_log
 
@@ -108,9 +109,7 @@ def build_timeline_events(
     # --- UART events ---
     if uart_report is not None:
         ts_base = 0.0
-        crash_type_val = getattr(
-            getattr(uart_report, "crash_type", None), "value", None
-        )
+        crash_type_val = getattr(getattr(uart_report, "crash_type", None), "value", None)
         if crash_type_val:
             events.append(
                 {
@@ -202,9 +201,7 @@ def _build_timeline_chart(events: list[dict[str, Any]]) -> go.Figure:
         xs = [e["timestamp"] * 1000 for e in proto_events]
         ys = [_PROTOCOL_Y[proto]] * len(proto_events)
         texts = [e["label"] for e in proto_events]
-        markers = [
-            "star" if e.get("anomaly") else "circle" for e in proto_events
-        ]
+        markers = ["star" if e.get("anomaly") else "circle" for e in proto_events]
         sizes = [14 if e.get("anomaly") else 8 for e in proto_events]
         colors = [
             "#ef4444" if e.get("anomaly") else _PROTOCOL_COLORS.get(proto, "#64748b")
@@ -280,7 +277,8 @@ def render() -> None:
     )
 
     render_guide_expander(
-        "correlation_guide",
+        "chapters/ch17_correlation.md",
+        label="📖 點擊展開：跨協定關聯分析使用指南",
         fallback_title="📖 跨協定關聯分析使用指南",
         fallback_body=(
             "### 使用場景\n\n"
@@ -307,9 +305,7 @@ def render() -> None:
         i2c_file = st.file_uploader(
             "上傳 I2C CSV", type=["csv"], key="corr_i2c_upload", label_visibility="collapsed"
         )
-        i2c_text = st.text_area(
-            "或貼上 I2C CSV 內容", key="corr_i2c_text", height=120
-        )
+        i2c_text = st.text_area("或貼上 I2C CSV 內容", key="corr_i2c_text", height=120)
         i2c_input = None
         if i2c_file is not None:
             i2c_input = i2c_file.getvalue().decode("utf-8", errors="replace")
@@ -319,9 +315,7 @@ def render() -> None:
         if i2c_input:
             try:
                 i2c_report, _ = analyze_i2c_input(i2c_input, "decoded", 25.0)
-                st.success(
-                    f"I2C: 解析完成 ({len(getattr(i2c_report, 'transactions', []))} 筆交易)"
-                )
+                st.success(f"I2C: 解析完成 ({len(getattr(i2c_report, 'transactions', []))} 筆交易)")
             except Exception as exc:
                 st.error(f"I2C 解析失敗: {exc}")
 
@@ -330,9 +324,7 @@ def render() -> None:
         spi_file = st.file_uploader(
             "上傳 SPI CSV", type=["csv"], key="corr_spi_upload", label_visibility="collapsed"
         )
-        spi_text = st.text_area(
-            "或貼上 SPI CSV 內容", key="corr_spi_text", height=120
-        )
+        spi_text = st.text_area("或貼上 SPI CSV 內容", key="corr_spi_text", height=120)
         spi_input = None
         if spi_file is not None:
             spi_input = spi_file.getvalue().decode("utf-8", errors="replace")
@@ -342,21 +334,19 @@ def render() -> None:
         if spi_input:
             try:
                 spi_report = analyze_spi_input(spi_input)
-                st.success(
-                    f"SPI: 解析完成 ({len(getattr(spi_report, 'operations', []))} 筆操作)"
-                )
+                st.success(f"SPI: 解析完成 ({len(getattr(spi_report, 'operations', []))} 筆操作)")
             except Exception as exc:
                 st.error(f"SPI 解析失敗: {exc}")
 
     with col_uart:
         st.markdown("**UART Crash Log**")
         uart_file = st.file_uploader(
-            "上傳 UART Log", type=["log", "txt"], key="corr_uart_upload",
+            "上傳 UART Log",
+            type=["log", "txt"],
+            key="corr_uart_upload",
             label_visibility="collapsed",
         )
-        uart_text = st.text_area(
-            "或貼上 UART 日誌內容", key="corr_uart_text", height=120
-        )
+        uart_text = st.text_area("或貼上 UART 日誌內容", key="corr_uart_text", height=120)
         uart_input = None
         if uart_file is not None:
             uart_input = uart_file.getvalue().decode("utf-8", errors="replace")
@@ -366,19 +356,13 @@ def render() -> None:
         if uart_input:
             try:
                 uart_report = parse_uart_log(uart_input)
-                crash_type = getattr(
-                    getattr(uart_report, "crash_type", None), "value", "Unknown"
-                )
+                crash_type = getattr(getattr(uart_report, "crash_type", None), "value", "Unknown")
                 st.success(f"UART: 解析完成 (類型: {crash_type})")
             except Exception as exc:
                 st.error(f"UART 解析失敗: {exc}")
 
     # --- Analysis ---
-    has_any = (
-        i2c_report is not None
-        or spi_report is not None
-        or uart_report is not None
-    )
+    has_any = i2c_report is not None or spi_report is not None or uart_report is not None
 
     if not has_any:
         st.info("👆 請至少上傳一組協定追蹤資料以啟動關聯分析。")
@@ -439,9 +423,7 @@ def render() -> None:
                     "暗示可能存在共同根因（如電源異常、匯流排干擾或系統重置）。"
                 )
     else:
-        st.success(
-            "✅ 未偵測到跨協定異常叢集。各協定異常事件在時間上未呈現顯著關聯。"
-        )
+        st.success("✅ 未偵測到跨協定異常叢集。各協定異常事件在時間上未呈現顯著關聯。")
 
     # --- Event table ---
     st.subheader("📋 事件明細")
@@ -460,3 +442,4 @@ def render() -> None:
         )
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
+    render_page_footer()

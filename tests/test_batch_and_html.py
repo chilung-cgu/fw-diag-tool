@@ -68,7 +68,10 @@ def test_detect_protocol_for_file(tmp_path: Path) -> None:
     """Test protocol detection for various file types and contents."""
     # I2C CSV
     i2c_csv = tmp_path / "i2c_trace.csv"
-    i2c_csv.write_text("Time,Packet ID,Address,Data,Read/Write,ACK/NACK\n0.001,1,0x50,0x00,W,ACK\n", encoding="utf-8")
+    i2c_csv.write_text(
+        "Time,Packet ID,Address,Data,Read/Write,ACK/NACK\n0.001,1,0x50,0x00,W,ACK\n",
+        encoding="utf-8",
+    )
     assert _detect_protocol_for_file(i2c_csv) == "i2c"
 
     # SPI CSV
@@ -78,7 +81,9 @@ def test_detect_protocol_for_file(tmp_path: Path) -> None:
 
     # UART Panic Log
     uart_log = tmp_path / "crash.log"
-    uart_log.write_text("Kernel panic - not syncing: Fatal exception\nCPU: 0 PID: 1\n", encoding="utf-8")
+    uart_log.write_text(
+        "Kernel panic - not syncing: Fatal exception\nCPU: 0 PID: 1\n", encoding="utf-8"
+    )
     assert _detect_protocol_for_file(uart_log) == "uart"
 
     # PCIe text
@@ -198,6 +203,7 @@ def test_render_html_download_helper(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
     import streamlit as st
+
     monkeypatch.setattr(st, "download_button", mock_download_button)
 
     # Empty markdown should be a no-op

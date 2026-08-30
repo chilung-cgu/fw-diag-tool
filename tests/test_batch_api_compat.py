@@ -10,8 +10,7 @@ def test_batch_directory_accepts_positional_protocols_and_output_dir(tmp_path: P
     output_dir = tmp_path / "outputs"
     input_dir.mkdir()
     (input_dir / "trace.csv").write_text(
-        "Time,Packet ID,Address,Data,Read/Write,ACK/NACK\n"
-        "0.001,1,0x50,0x00,Write,ACK\n",
+        "Time,Packet ID,Address,Data,Read/Write,ACK/NACK\n0.001,1,0x50,0x00,Write,ACK\n",
         encoding="utf-8",
     )
 

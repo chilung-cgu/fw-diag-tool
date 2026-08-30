@@ -25,7 +25,7 @@ nav:
       - 虛擬設備模擬器實驗室: chapters/ch14_emulator.md
       - 協定解析器 Fuzz 測試: chapters/ch15_fuzz_lab.md
       - 功能總覽與快速入門: chapters/ch16_dashboard.md
+      - 跨協定時間線關聯分析: chapters/ch17_correlation.md
   - 附錄:
       - 附錄 A 圖表判讀指南: chapters/appendix_chart_guide.md
-      - 附錄 B 16 個 GUI 頁面地圖: chapters/appendix_gui_reading_guide.md
-
+      - 附錄 B 17 個 GUI 頁面地圖: chapters/appendix_gui_reading_guide.md

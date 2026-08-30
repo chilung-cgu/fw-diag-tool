@@ -4,7 +4,7 @@
 目前提供 I2C/PMBus、PCIe AER、SPI Flash、UART Crash Dump、MCTP/IPMB 的檔案分析，以及協定示意圖、差分比較、程式碼產生器與 20 個 synthetic 練習情境。各模組的輸入能力與限制請先閱讀 [能力與限制](docs/LIMITATIONS.md)。
 
 👉 **完整新人圖文教學指南**：請參閱 [docs/index.md](docs/index.md)；若不知道某個 GUI 頁面或圖表怎麼讀，先看 [12 個 GUI 頁面的閱讀地圖](docs/chapters/appendix_gui_reading_guide.md)。
-> 📂 **各章節詳細文件**：[ch01 I2C波形](docs/chapters/ch01_i2c_pmbus.md) | [ch02 封包/驅動產生](docs/chapters/ch02_packet_builder.md) | [ch03 Waveform Diff](docs/chapters/ch03_waveform_diff.md) | [ch04 UART Crash](docs/chapters/ch04_uart_crash.md) | [ch05 MCTP/IPMB](docs/chapters/ch05_mctp_ipmb.md) | [ch06 Device Tree](docs/chapters/ch06_dts_generator.md) | [ch07 PCIe AER](docs/chapters/ch07_pcie_aer.md) | [ch08 SPI Flash](docs/chapters/ch08_spi_flash.md) | [ch09 Register/Codegen](docs/chapters/ch09_register_codegen.md) | [ch10 Fault Arena](docs/chapters/ch10_fault_arena.md) | [ch12 SOP](docs/chapters/ch12_sop.md) | [附錄A 圖表判讀](docs/chapters/appendix_chart_guide.md)
+> 📂 **各章節詳細文件**：[ch01 I2C波形](docs/chapters/ch01_i2c_pmbus.md) | [ch02 封包/驅動產生](docs/chapters/ch02_packet_builder.md) | [ch03 Waveform Diff](docs/chapters/ch03_waveform_diff.md) | [ch04 UART Crash](docs/chapters/ch04_uart_crash.md) | [ch05 MCTP/IPMB](docs/chapters/ch05_mctp_ipmb.md) | [ch06 Device Tree](docs/chapters/ch06_dts_generator.md) | [ch07 PCIe AER](docs/chapters/ch07_pcie_aer.md) | [ch08 SPI Flash](docs/chapters/ch08_spi_flash.md) | [ch09 Register/Codegen](docs/chapters/ch09_register_codegen.md) | [ch10 Fault Arena](docs/chapters/ch10_fault_arena.md) | [ch12 SOP](docs/chapters/ch12_sop.md) | [附錄A 圖表判讀](docs/chapters/appendix_chart_guide.md) | [ch13 晶片資料庫](docs/chapters/ch13_chip_db.md) | [ch14 模擬器](docs/chapters/ch14_emulator.md) | [ch15 Fuzz Lab](docs/chapters/ch15_fuzz_lab.md) | [ch16 Dashboard](docs/chapters/ch16_dashboard.md) | [ch17 關聯分析](docs/chapters/ch17_correlation.md)
 
 **專案連結**：[Source](https://github.com/chilung-cgu/fw-diag-tool) | [Documentation](https://github.com/chilung-cgu/fw-diag-tool#readme) | [Issues](https://github.com/chilung-cgu/fw-diag-tool/issues) | [Changelog](https://github.com/chilung-cgu/fw-diag-tool/blob/main/CHANGELOG.md)
 
@@ -33,7 +33,7 @@ fw-diag gui
 
 ---
 
-## 🌟 12 大核心功能模組一覽
+## 🌟 17 大核心功能模組一覽
 
 | 功能模組 | 協定 / 功能 | 核心特色與排查重點 |
 |---|---|---|
@@ -49,6 +49,11 @@ fw-diag gui
 | **10. C 語言 Register 巨集產生器** | MISRA-oriented CodeGen | 從 YAML 產出 Position、Mask 與 `REG_..._GET` / `REG_..._SET` 巨集；仍須依專案 compiler、coding standard 與靜態分析器驗證。 |
 | **11. 20 大實戰故障實驗室 (Fault Arena)** | Junior FW 演練 | 內建 20 個 synthetic 故障情境，用來練習從症狀建立假設與排查順序；不是實際公司 capture。 |
 | **12. 韌體除錯指南 & SOP** | L1~L7 心智模型 | 整合硬體電氣訊號、協定層封包與驅動狀態機之標準排查 SOP。 |
+| **13. Board Profile 拓撲編輯器** | YAML / JSON topology | 表單式拓撲定義、I2C 位址衝突偵測、保留位址警告、MUX/匯流排/晶片視覺化配置。 |
+| **14. 互動式教學導覽** | Step-by-step Guided | 3 學習路徑（入門/已有經驗/進階）、6 步互動教學、進度追蹤。 |
+| **15. 跨協定時間線關聯分析** | I2C + SPI + UART | 多協定時間線對齊、Plotly 暗色主題圖表、跨協定異常叢集偵測。 |
+| **16. HTML 報告 + 批次分析** | All protocols | 自包含暗色主題 HTML 報告、目錄級多協定批次分析 (CI 整合)。 |
+| **17. 虛擬設備模擬器** | INA219, PCA9548A, LM75, EEPROM, SPI Flash | 模擬常見韌體開發設備，附 GUI 互動實驗分頁。 |
 
 ---
 

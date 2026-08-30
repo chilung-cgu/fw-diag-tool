@@ -705,7 +705,9 @@ def batch_analyze(
             raise typer.Exit(code=2) from exc
 
     if not entries:
-        console.print("[bold yellow]未找到符合條件的檔案進行分析（No matching files found to analyze）。[/]")
+        console.print(
+            "[bold yellow]未找到符合條件的檔案進行分析（No matching files found to analyze）。[/]"
+        )
         return
 
     # Render summary table

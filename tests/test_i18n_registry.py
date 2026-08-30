@@ -59,7 +59,10 @@ def test_format_variable_substitution() -> None:
     registry.register(
         "common",
         "welcome_user",
-        {"zh-TW": "歡迎，{name}！您有 {count} 個待處理項目。", "en-US": "Welcome, {name}! You have {count} items."},
+        {
+            "zh-TW": "歡迎，{name}！您有 {count} 個待處理項目。",
+            "en-US": "Welcome, {name}! You have {count} items.",
+        },
     )
 
     res_zh = registry.t("welcome_user", name="Alice", count=3)
@@ -147,7 +150,10 @@ def test_bridge_i2c_localization() -> None:
     assert registry.t("decoded_csv", domain="i2c.input_format") == "解碼分析器 CSV（decoded_csv）"
     assert registry.t("decoded_csv", domain="i2c") == "解碼分析器 CSV（decoded_csv）"
     assert registry.t("decoded_csv", locale="en-US", domain="i2c") == "decoded_csv"
-    assert registry.t("I2C_SOURCE_EMPTY", domain="i2c.data_quality") == "輸入檔案內容為空，無法進行分析。"
+    assert (
+        registry.t("I2C_SOURCE_EMPTY", domain="i2c.data_quality")
+        == "輸入檔案內容為空，無法進行分析。"
+    )
 
 
 def test_create_default_registry() -> None:

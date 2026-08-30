@@ -323,10 +323,14 @@ def _inline_markdown_to_html(text: str) -> str:
         out,
     )
 
-    out = re.sub(r"\[(CRITICAL|ERROR|FATAL|嚴重|錯誤)\]", r'<span class="badge badge-error">\1</span>', out)
+    out = re.sub(
+        r"\[(CRITICAL|ERROR|FATAL|嚴重|錯誤)\]", r'<span class="badge badge-error">\1</span>', out
+    )
     out = re.sub(r"\[(WARNING|WARN|警告)\]", r'<span class="badge badge-warning">\1</span>', out)
     out = re.sub(r"\[(INFO|NOTE|提示|資訊)\]", r'<span class="badge badge-info">\1</span>', out)
-    out = re.sub(r"\[(OK|PASS|SUCCESS|通過|正常|成功)\]", r'<span class="badge badge-success">\1</span>', out)
+    out = re.sub(
+        r"\[(OK|PASS|SUCCESS|通過|正常|成功)\]", r'<span class="badge badge-success">\1</span>', out
+    )
 
     return out
 
@@ -412,7 +416,11 @@ def convert_markdown_to_html(
             body_html.append(f"<pre><code{lang_class}>{code_content}</code></pre>")
             continue
 
-        if "|" in stripped and idx + 1 < total_lines and re.match(r"^\s*\|?[-:\s|]+\|?\s*$", lines[idx + 1]):
+        if (
+            "|" in stripped
+            and idx + 1 < total_lines
+            and re.match(r"^\s*\|?[-:\s|]+\|?\s*$", lines[idx + 1])
+        ):
             table_lines: list[str] = []
             while idx < total_lines and "|" in lines[idx].strip():
                 table_lines.append(lines[idx])
@@ -453,7 +461,9 @@ def convert_markdown_to_html(
                 curr_match = re.match(r"^\s*([*-]|\d+\.)\s+(.+)$", curr_line)
                 if not curr_match:
                     if curr_line.strip() == "":
-                        if idx + 1 < total_lines and re.match(r"^\s*([*-]|\d+\.)\s+(.+)$", lines[idx + 1]):
+                        if idx + 1 < total_lines and re.match(
+                            r"^\s*([*-]|\d+\.)\s+(.+)$", lines[idx + 1]
+                        ):
                             idx += 1
                             continue
                         break
@@ -470,7 +480,16 @@ def convert_markdown_to_html(
         while idx < total_lines:
             p_line = lines[idx]
             p_strip = p_line.strip()
-            if not p_strip or p_strip.startswith(("#", ">", "```", "---", "***")) or re.match(r"^\s*([*-]|\d+\.)\s+", p_line) or ("|" in p_strip and idx + 1 < total_lines and re.match(r"^\s*\|?[-:\s|]+\|?\s*$", lines[idx + 1])):
+            if (
+                not p_strip
+                or p_strip.startswith(("#", ">", "```", "---", "***"))
+                or re.match(r"^\s*([*-]|\d+\.)\s+", p_line)
+                or (
+                    "|" in p_strip
+                    and idx + 1 < total_lines
+                    and re.match(r"^\s*\|?[-:\s|]+\|?\s*$", lines[idx + 1])
+                )
+            ):
                 break
             para_lines.append(p_strip)
             idx += 1
