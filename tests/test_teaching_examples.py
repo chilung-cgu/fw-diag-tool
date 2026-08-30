@@ -9,7 +9,6 @@ from fw_diag_tool.pcie.reporter import PCIeReporter
 from fw_diag_tool.resources import load_pcie_dmesg_sample, load_waveform_diff_samples
 
 ROOT = Path(__file__).parents[1]
-APP_PATH = ROOT / "src" / "fw_diag_tool" / "gui" / "app.py"
 
 
 def test_waveform_diff_packaged_pair_matches_documented_examples() -> None:
@@ -22,8 +21,12 @@ def test_waveform_diff_packaged_pair_matches_documented_examples() -> None:
 
 
 def test_waveform_diff_gui_loads_packaged_pair_and_reports_expected_mismatch() -> None:
-    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
-    at.sidebar.radio[0].set_value("⚖️ 雙波形對比檢視（Waveform Diff）").run()
+    def app() -> None:
+        from fw_diag_tool.gui.pages.waveform_diff_ui import render
+
+        render()
+
+    at = AppTest.from_function(app, default_timeout=30).run()
     at.button[0].click().run()
 
     assert not at.exception
@@ -48,8 +51,12 @@ def test_pcie_dmesg_packaged_sample_is_parser_compatible() -> None:
 
 
 def test_pcie_gui_loads_packaged_dmesg_sample_and_renders_tlp_header() -> None:
-    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
-    at.sidebar.radio[0].set_value("🚀 PCIe 設定空間（Config Space）與 AER 診斷").run()
+    def app() -> None:
+        from fw_diag_tool.gui.pages.pcie_ui import render
+
+        render()
+
+    at = AppTest.from_function(app, default_timeout=30).run()
 
     next(button for button in at.button if button.label == "載入內建 dmesg AER 範例").click().run()
     assert not at.exception

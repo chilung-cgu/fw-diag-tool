@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fw_diag_tool.gui.app import GUI_ANALYSIS_LIMITS
+from fw_diag_tool.gui.shared import GUI_ANALYSIS_LIMITS
 from fw_diag_tool.limits import DEFAULT_ANALYSIS_LIMITS
 
 

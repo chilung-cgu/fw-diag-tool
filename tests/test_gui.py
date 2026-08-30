@@ -8,9 +8,9 @@ def test_gui_app_syntax():
     assert app_path.exists()
     code = app_path.read_text(encoding="utf-8")
     assert "st.set_page_config" in code
-    assert "I2CDiagnosticEngine" in code
-    assert "PCIeAnalyzer" in code
-    assert "if csv_text is not None:" in code
+    assert "st.navigation" in code
+    assert "i2c_diagnosis" in code
+    assert "pcie_ui" in code
 
 
 def test_builtin_register_yamls():

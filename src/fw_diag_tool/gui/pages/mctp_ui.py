@@ -1,0 +1,97 @@
+from __future__ import annotations
+
+import streamlit as st
+
+from fw_diag_tool.gui.shared import _localize_mctp_error, render_guide_expander
+from fw_diag_tool.gui.uploads import (
+    MAX_TEXT_BYTES,
+    decode_uploaded_text,
+    validate_pasted_text,
+)
+from fw_diag_tool.mctp.parser import ServerMgmtParser
+from fw_diag_tool.mctp.reporter import ServerMgmtReporter
+
+
+def render() -> None:
+    st.header("伺服器管理協定解碼：MCTP（DSP0236；PLDM／SPDM）與 IPMB")
+    render_guide_expander(
+        "chapters/ch05_mctp_ipmb.md", "📖 點擊展開：MCTP 與 IPMB 伺服器協定解析教學"
+    )
+    m_sample = "01 08 00 C0 01 00 02 01 00\n20 18 C8 81 00 01 7E"
+    uploaded_mctp = st.file_uploader(
+        "上傳 MCTP/IPMB Hex Dump 檔案",
+        type=["txt", "hex", "log"],
+    )
+    m_pasted = st.text_area(
+        "請貼上 MCTP／IPMB 封包的十六進位位元組（Hex Dump；每行一個完整封包）：",
+        height=150,
+        max_chars=MAX_TEXT_BYTES,
+        value=m_sample,
+        help=(
+            "每行一個封包；位元組可用空白、逗號或分號分隔，也可使用 0x 前綴。"
+            "請保留原始擷取資料（capture）與協定標頭（header）供核對。"
+        ),
+    )
+    m_raw = m_pasted
+    if uploaded_mctp is not None:
+        try:
+            m_raw = decode_uploaded_text(
+                uploaded_mctp,
+                allowed_extensions={".txt", ".hex", ".log"},
+            )
+        except ValueError as exc:
+            st.error(f"MCTP／IPMB 檔案讀取錯誤：{exc}")
+    st.download_button(
+        "下載內建 MCTP／IPMB 範例",
+        data=m_sample,
+        file_name="mctp_ipmb_minimal.hex",
+        mime="text/plain",
+        key="mctp_download_example",
+    )
+    m_protocol_mode = st.selectbox(
+        "協定模式（Protocol mode）",
+        ["auto", "mctp", "ipmb"],
+        format_func=lambda value: {
+            "auto": "自動判斷（auto；依結構／Checksum 證據）",
+            "mctp": "強制 MCTP（DSP0236）",
+            "ipmb": "強制 IPMB（IPMI v2.0／Checksum）",
+        }[value],
+        help="自動判斷會依 MCTP Header Version 與 IPMB Checksum 證據選擇協定；必要時可強制指定模式。",
+        key="mctp_protocol_mode",
+    )
+    st.caption(
+        "證據範圍：本頁只根據貼上的十六進位內容離線解碼（offline decode）MCTP／IPMB；"
+        "可呈現 DSP0236 標頭（Header）、EID、SOM/EOM/Seq/Tag、PLDM 欄位、"
+        "SPDM 訊息類型（message type）與 IPMB Checksum。"
+        "報告屬輸入 bytes 的解碼／重建證據（Source-provided／Reconstructed），"
+        "不是實體鏈路的 Measured 量測；不會確認 BMC／端點的即時狀態，也不能單靠一行封包證明根因。"
+        "請保留原始擷取資料（capture）、時間戳與協定設定，依 DSP0236／PLDM／SPDM／IPMB 規格人工核對。"
+    )
+    if st.button("執行 MCTP／IPMB 伺服器管理協定解碼") and m_raw.strip():
+        try:
+            m_report = ServerMgmtParser.parse_text_dump(
+                validate_pasted_text(m_raw, label="MCTP/IPMB 十六進位輸入"),
+                protocol_mode=m_protocol_mode,
+            )
+        except (TypeError, ValueError) as exc:
+            st.error(f"MCTP／IPMB 輸入錯誤：{_localize_mctp_error(exc)}")
+        else:
+            if not m_report.total_frames:
+                st.warning(
+                    "沒有解出可辨識的 MCTP／IPMB 封包框架（frame）；"
+                    "請確認每行都是完整的十六進位位元組（hex bytes），"
+                    "並保留原始擷取資料（capture）與協定標頭（header）以便人工核對。"
+                )
+            else:
+                mctp_md = ServerMgmtReporter.to_markdown(m_report)
+                st.markdown(mctp_md)
+                st.download_button(
+                    "下載 MCTP／IPMB Markdown 診斷報告",
+                    data=mctp_md,
+                    file_name="mctp_ipmb_report.md",
+                    mime="text/markdown",
+                    key="mctp_download_report",
+                )
+
+
+__all__ = ["render"]

@@ -32,7 +32,7 @@ def _reset_i2c_session_state() -> None:
     st.session_state.pop("i2c_loaded_session_identity", None)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner="正在解析 I2C 輸入資料…")
 def analyze_i2c_input(
     csv_content: str,
     input_mode: str,
@@ -50,7 +50,7 @@ def analyze_i2c_input(
     )
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner="正在解析 SPI 輸入資料…")
 def analyze_spi_input(csv_content: str, max_page_size: int = 256) -> Any:
     return SPIDiagnosticEngine(max_page_size=max_page_size).analyze_csv_content(csv_content)
 

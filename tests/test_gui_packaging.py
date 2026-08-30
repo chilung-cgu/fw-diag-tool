@@ -26,6 +26,72 @@ from fw_diag_tool.resources import load_i2c_sample, load_pcie_lspci_sample
 APP_PATH = Path(__file__).resolve().parents[1] / "src" / "fw_diag_tool" / "gui" / "app.py"
 
 
+def i2c_diagnosis_render() -> None:
+    from fw_diag_tool.gui.pages.i2c_diagnosis import render
+
+    render()
+
+
+def pcie_render() -> None:
+    from fw_diag_tool.gui.pages.pcie_ui import render
+
+    render()
+
+
+def register_render() -> None:
+    from fw_diag_tool.gui.pages.register_ui import render
+
+    render()
+
+
+def codegen_render() -> None:
+    from fw_diag_tool.gui.pages.codegen_ui import render
+
+    render()
+
+
+def i2c_builder_render() -> None:
+    from fw_diag_tool.gui.pages.i2c_builder_ui import render
+
+    render()
+
+
+def dts_render() -> None:
+    from fw_diag_tool.gui.pages.dts_ui import render
+
+    render()
+
+
+def sop_render() -> None:
+    from fw_diag_tool.gui.pages.sop_ui import render
+
+    render()
+
+
+def spi_render() -> None:
+    from fw_diag_tool.gui.pages.spi_ui import render
+
+    render()
+
+
+def uart_render() -> None:
+    from fw_diag_tool.gui.pages.uart_ui import render
+
+    render()
+
+
+def mctp_render() -> None:
+    from fw_diag_tool.gui.pages.mctp_ui import render
+
+    render()
+
+
+def fault_arena_render() -> None:
+    from fw_diag_tool.gui.pages.fault_arena_ui import render
+
+    render()
+
+
 @dataclass
 class FakeUpload:
     name: str
@@ -151,7 +217,7 @@ def test_pasted_text_limit_is_enforced_by_utf8_bytes():
 
 
 def test_gui_builtin_sample_runs_from_package_resource():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
 
     at.button[0].click().run()
 
@@ -166,7 +232,7 @@ def test_gui_builtin_sample_runs_from_package_resource():
 
 
 def test_gui_builtin_sample_survives_configuration_rerun():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
     at.button[0].click().run()
 
     at.number_input[0].set_value(30.0).run()
@@ -176,7 +242,7 @@ def test_gui_builtin_sample_survives_configuration_rerun():
 
 
 def test_gui_builtin_sample_is_cleared_when_input_format_changes():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
     at.button[0].click().run()
     assert any(metric.label == "總傳輸次數" and metric.value == "18" for metric in at.metric)
 
@@ -188,7 +254,7 @@ def test_gui_builtin_sample_is_cleared_when_input_format_changes():
 
 
 def test_gui_teaching_selector_routes_text_and_raw_samples_to_declared_parsers():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
 
     at.selectbox[0].set_value("文字追蹤記錄（2 筆）").run()
     at.button[0].click().run()
@@ -205,7 +271,7 @@ def test_gui_teaching_selector_routes_text_and_raw_samples_to_declared_parsers()
 
 
 def test_gui_waveform_explains_clock_stretch_byte_evidence():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
     stretch_csv = Path("examples/data/i2c_clock_stretch.csv").read_bytes()
     at.file_uploader[1].upload("i2c_clock_stretch.csv", stretch_csv, "text/csv").run()
 
@@ -219,7 +285,7 @@ def test_gui_waveform_explains_clock_stretch_byte_evidence():
 
 
 def test_gui_waveform_keeps_aggregate_clock_stretch_unattributed():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
     aggregate_csv = (
         "Time,Packet ID,Address,Data,Read/Write,ACK/NACK,Duration,Clock Stretch [s]\n"
         '0.001000,0,0x50,"0x10 0x20",Write,ACK,0.000090,0.000250\n'
@@ -247,7 +313,7 @@ def test_gui_session_restores_raw_input_format_before_replay():
         input_mode="raw_digital",
         smbus_timeout_ms=30.0,
     )
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
     at.file_uploader[0].upload("raw.fwsession.json", session.encode(), "application/json").run()
     at.file_uploader[1].upload("raw.csv", raw, "text/csv").run()
 
@@ -266,7 +332,7 @@ def test_gui_session_without_capture_clears_previous_teaching_sample():
         smbus_timeout_ms=30.0,
     )
 
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
     at.button[0].click().run()
     assert any(metric.label == "總傳輸次數" and metric.value == "18" for metric in at.metric)
 
@@ -291,7 +357,7 @@ def test_gui_session_without_sha_does_not_claim_replay():
         }
     ).encode("utf-8")
 
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
     at.file_uploader[0].upload("legacy.fwsession.json", legacy_session, "application/json").run()
     assert at.radio[0].value == "decoded_csv"
     assert at.number_input[0].value == 25.0
@@ -303,7 +369,7 @@ def test_gui_session_without_sha_does_not_claim_replay():
 
 
 def test_gui_accepts_version_alias_session_without_streamlit_exception():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
     content = b'{"version":"2.0","config":{},"report":{}}'
     at.file_uploader[0].upload("malformed.fwsession.json", content, "application/json").run()
 
@@ -313,7 +379,7 @@ def test_gui_accepts_version_alias_session_without_streamlit_exception():
 
 
 def test_gui_invalid_session_json_is_localized():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
     at.file_uploader[0].upload(
         "invalid.fwsession.json", b"not-json", "application/json"
     ).run()
@@ -332,7 +398,7 @@ def test_gui_loads_session_settings_and_replays_matching_capture():
         input_mode="Saleae Analyzer table / text trace",
         smbus_timeout_ms=30.0,
     )
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
 
     at.file_uploader[0].upload(
         "analysis.fwsession.json", session.encode("utf-8"), "application/json"
@@ -384,7 +450,7 @@ def test_gui_session_replacement_resets_missing_saved_settings():
         second_payload["config"].pop(key, None)
     second_session = json.dumps(second_payload).encode("utf-8")
 
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
     at.file_uploader[0].upload(
         "first.fwsession.json", first_session.encode("utf-8"), "application/json"
     ).run()
@@ -424,7 +490,7 @@ def test_gui_invalid_session_settings_clear_previous_state():
     bad_payload["config"] = dict(session_payload["config"])
     bad_payload["config"]["smbus_timeout_ms"] = "bad"
 
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
+    at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
     at.file_uploader[0].upload(
         "valid.fwsession.json", json.dumps(session_payload).encode("utf-8"), "application/json"
     ).run()
@@ -444,8 +510,7 @@ def test_gui_invalid_session_settings_clear_previous_state():
 
 
 def test_gui_respects_pcie_mode_and_rejects_invalid_register_value():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🚀 PCIe 設定空間（Config Space）與 AER 診斷").run()
+    at = AppTest.from_function(pcie_render, default_timeout=15).run()
     at.radio[0].set_value("貼上 Linux dmesg AER 錯誤日誌（AER Error Log）")
     at.text_area[0].input("AER: Corrected error received: 0000:00:1c.0")
     next(button for button in at.button if button.label == "執行 PCIe 分析").click().run()
@@ -453,17 +518,16 @@ def test_gui_respects_pcie_mode_and_rejects_invalid_register_value():
     assert not at.exception
     assert any("Kernel dmesg AER 診斷結果" in item.value for item in at.subheader)
 
-    at.sidebar.radio[0].set_value("🎛 晶片暫存器 Bitfield 解碼器").run()
-    at.text_input[0].input("not-hex").run()
+    at_reg = AppTest.from_function(register_render, default_timeout=15).run()
+    at_reg.text_input[0].input("not-hex").run()
 
-    assert not at.exception
-    assert any("暫存器值格式錯誤" in error.value for error in at.error)
-    assert not at.table
+    assert not at_reg.exception
+    assert any("暫存器值格式錯誤" in error.value for error in at_reg.error)
+    assert not at_reg.table
 
 
 def test_gui_register_decoder_localizes_builtin_descriptions():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🎛 晶片暫存器 Bitfield 解碼器").run()
+    at = AppTest.from_function(register_render, default_timeout=15).run()
 
     assert not at.exception
     assert any(
@@ -472,8 +536,7 @@ def test_gui_register_decoder_localizes_builtin_descriptions():
 
 
 def test_gui_pcie_invalid_dump_is_reported_without_streamlit_exception():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🚀 PCIe 設定空間（Config Space）與 AER 診斷").run()
+    at = AppTest.from_function(pcie_render, default_timeout=15).run()
     at.text_area[0].input("not a config dump").run()
     next(button for button in at.button if button.label == "執行 PCIe 分析").click().run()
 
@@ -483,8 +546,7 @@ def test_gui_pcie_invalid_dump_is_reported_without_streamlit_exception():
 
 
 def test_gui_pcie_loads_lspci_sample_and_shows_vendor_id():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
-    at.sidebar.radio[0].set_value("🚀 PCIe 設定空間（Config Space）與 AER 診斷").run()
+    at = AppTest.from_function(pcie_render, default_timeout=30).run()
 
     assert load_pcie_lspci_sample().rstrip("\n") == Path(
         "examples/data/pcie_aer_lspci.txt"
@@ -519,8 +581,7 @@ def test_gui_pcie_loads_lspci_sample_and_shows_vendor_id():
 
 
 def test_gui_c_header_invalid_module_name_is_reported():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🛠 C 語言 Register 巨集產生器").run()
+    at = AppTest.from_function(codegen_render, default_timeout=15).run()
     at.text_input[0].input("9-not-a-c-identifier").run()
 
     assert not at.exception
@@ -532,8 +593,7 @@ def test_gui_c_header_invalid_module_name_is_reported():
 
 
 def test_gui_c_header_prompt_is_chinese_first_and_keeps_codegen_tokens():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🛠 C 語言 Register 巨集產生器").run()
+    at = AppTest.from_function(codegen_render, default_timeout=15).run()
 
     assert not at.exception
     assert any(
@@ -545,8 +605,7 @@ def test_gui_c_header_prompt_is_chinese_first_and_keeps_codegen_tokens():
 
 
 def test_gui_packet_builder_read_template_is_explicit_about_length():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🎨 I2C 封包模擬器與驅動產生").run()
+    at = AppTest.from_function(i2c_builder_render, default_timeout=15).run()
     at.selectbox[0].set_value("Temperature sensor：combined register read")
     at.button[0].click().run()
     at.number_input[1].set_value(4).run()
@@ -558,8 +617,7 @@ def test_gui_packet_builder_read_template_is_explicit_about_length():
 
 
 def test_gui_packet_builder_supports_direct_read_without_register_field():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🎨 I2C 封包模擬器與驅動產生").run()
+    at = AppTest.from_function(i2c_builder_render, default_timeout=15).run()
     at.selectbox[0].set_value("Sensor：direct read")
     at.button[0].click().run()
 
@@ -570,8 +628,7 @@ def test_gui_packet_builder_supports_direct_read_without_register_field():
 
 
 def test_gui_packet_builder_uses_little_endian_register_bytes_and_safe_cli():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🎨 I2C 封包模擬器與驅動產生").run()
+    at = AppTest.from_function(i2c_builder_render, default_timeout=15).run()
     at.selectbox[0].set_value("EEPROM：16-bit little-endian register write")
     at.button[0].click().run()
 
@@ -583,8 +640,7 @@ def test_gui_packet_builder_uses_little_endian_register_bytes_and_safe_cli():
 
 
 def test_gui_packet_builder_validates_before_rendering_or_codegen():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🎨 I2C 封包模擬器與驅動產生").run()
+    at = AppTest.from_function(i2c_builder_render, default_timeout=15).run()
     at.text_input(key="i2c_builder_address").set_value("0x78").run()
 
     assert not at.exception
@@ -594,8 +650,7 @@ def test_gui_packet_builder_validates_before_rendering_or_codegen():
 
 
 def test_gui_dts_generator_localizes_device_validation_error():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🌲 Device Tree（.dts）產生器").run()
+    at = AppTest.from_function(dts_render, default_timeout=15).run()
     at.text_area[0].set_value("- bad: x").run()
     at.button[0].click().run()
 
@@ -605,8 +660,7 @@ def test_gui_dts_generator_localizes_device_validation_error():
 
 
 def test_gui_dts_generator_requires_and_renders_explicit_device_topology():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🌲 Device Tree（.dts）產生器").run()
+    at = AppTest.from_function(dts_render, default_timeout=15).run()
     at.button[0].click().run()
 
     assert not at.exception
@@ -617,8 +671,7 @@ def test_gui_dts_generator_requires_and_renders_explicit_device_topology():
 
 
 def test_gui_sop_page_explains_all_layers_and_evidence_terms():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("📚 韌體除錯指南與 SOP").run()
+    at = AppTest.from_function(sop_render, default_timeout=15).run()
 
     assert not at.exception
     assert any("L1" in item.value and "L7" in item.value for item in at.subheader)
@@ -626,8 +679,7 @@ def test_gui_sop_page_explains_all_layers_and_evidence_terms():
 
 
 def test_gui_spi_flash_page_sample_runs_without_exception():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("⚡ SPI Flash 協定診斷").run()
+    at = AppTest.from_function(spi_render, default_timeout=15).run()
     at.button[0].click().run()
 
     assert not at.exception
@@ -643,8 +695,7 @@ def test_gui_spi_flash_page_sample_runs_without_exception():
 
 
 def test_gui_spi_invalid_csv_localizes_parser_error():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("⚡ SPI Flash 協定診斷").run()
+    at = AppTest.from_function(spi_render, default_timeout=15).run()
     at.file_uploader[0].upload("invalid.csv", b"garbage\n", "text/csv").run()
 
     assert not at.exception
@@ -655,8 +706,7 @@ def test_gui_spi_invalid_csv_localizes_parser_error():
 
 
 def test_gui_register_decoder_localizes_decode_error():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🎛 晶片暫存器 Bitfield 解碼器").run()
+    at = AppTest.from_function(register_render, default_timeout=15).run()
     at.text_input[0].set_value("0x100000000").run()
 
     assert not at.exception
@@ -665,8 +715,7 @@ def test_gui_register_decoder_localizes_decode_error():
 
 
 def test_gui_uart_crash_page_sample_runs_without_exception():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("📟 UART 崩潰轉儲與 HardFault 分析（Crash Dump）").run()
+    at = AppTest.from_function(uart_render, default_timeout=15).run()
     assert at.radio[0].options == [
         "貼上 UART 日誌（UART Log）／崩潰轉儲（Crash Dump）",
         "載入範例：Linux 核心 Panic 日誌（Kernel Panic Log）",
@@ -684,8 +733,7 @@ def test_gui_uart_crash_page_sample_runs_without_exception():
 
 
 def test_gui_mctp_page_sample_runs_without_exception():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🌐 MCTP／IPMB 伺服器管理協定解析").run()
+    at = AppTest.from_function(mctp_render, default_timeout=15).run()
     at.button[0].click().run()
 
     assert not at.exception
@@ -695,8 +743,7 @@ def test_gui_mctp_page_sample_runs_without_exception():
 
 
 def test_gui_mctp_protocol_mode_is_visible_before_execute_and_persists():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🌐 MCTP／IPMB 伺服器管理協定解析").run()
+    at = AppTest.from_function(mctp_render, default_timeout=15).run()
 
     assert not at.exception
     assert len(at.selectbox) == 1
@@ -709,8 +756,7 @@ def test_gui_mctp_protocol_mode_is_visible_before_execute_and_persists():
 
 
 def test_gui_mctp_page_is_zh_tw_first_and_states_evidence_boundary():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🌐 MCTP／IPMB 伺服器管理協定解析").run()
+    at = AppTest.from_function(mctp_render, default_timeout=15).run()
 
     assert not at.exception
     assert at.text_area[0].label.startswith("請貼上 MCTP／IPMB 封包的十六進位位元組")
@@ -740,8 +786,7 @@ def test_gui_mctp_page_is_zh_tw_first_and_states_evidence_boundary():
 
 
 def test_gui_fault_arena_mctp_cases_render_protocol_reports():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🏆 初階 Firmware 實戰除錯實驗室（Fault Arena）").run()
+    at = AppTest.from_function(fault_arena_render, default_timeout=15).run()
 
     at.selectbox[0].set_value("Case 19: MCTP PLDM 感測器數值傳輸異常與封包順序錯亂").run()
     at.button[0].click().run()
@@ -755,8 +800,7 @@ def test_gui_fault_arena_mctp_cases_render_protocol_reports():
 
 
 def test_gui_fault_arena_case04_uses_eeprom_profile_and_case_sop_metadata():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🏆 初階 Firmware 實戰除錯實驗室（Fault Arena）").run()
+    at = AppTest.from_function(fault_arena_render, default_timeout=15).run()
     at.selectbox[0].set_value(
         "Case 04: I2C EEPROM Page Boundary 跨頁覆蓋風險（Page Rollover）"
     ).run()
@@ -770,8 +814,7 @@ def test_gui_fault_arena_case04_uses_eeprom_profile_and_case_sop_metadata():
 
 
 def test_gui_pcie_dmesg_event_shows_captured_tlp_header():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🚀 PCIe 設定空間（Config Space）與 AER 診斷").run()
+    at = AppTest.from_function(pcie_render, default_timeout=15).run()
     at.radio[0].set_value("貼上 Linux dmesg AER 錯誤日誌（AER Error Log）")
     at.text_area[0].input(
         "[  124.582910] pcieport 0000:00:01.0: AER: Uncorrected (Fatal) error received: 0000:01:00.0\n"
@@ -786,8 +829,7 @@ def test_gui_pcie_dmesg_event_shows_captured_tlp_header():
 
 
 def test_gui_fault_arena_runs_without_exception():
-    at = AppTest.from_file(str(APP_PATH), default_timeout=15).run()
-    at.sidebar.radio[0].set_value("🏆 初階 Firmware 實戰除錯實驗室（Fault Arena）").run()
+    at = AppTest.from_function(fault_arena_render, default_timeout=15).run()
 
     assert not at.exception
     assert any("案例分析" in item.value for item in at.info)
