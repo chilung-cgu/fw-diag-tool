@@ -157,6 +157,12 @@ PAGE_INDEX: list[dict[str, str]] = [
         "keywords": "batch parallel multi file directory analysis zip report",
     },
     {
+        "title": "Unified Multi-Protocol Report",
+        "url": "unified-report",
+        "category": "Advanced Analysis",
+        "keywords": "unified multi protocol report generator health score markdown html signoff executive summary",
+    },
+    {
         "title": "Settings & Preferences",
         "url": "settings",
         "category": "Tools",

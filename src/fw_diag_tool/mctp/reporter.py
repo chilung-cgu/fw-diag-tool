@@ -7,6 +7,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .models import ServerMgmtReport
+from .statistics import compute_mctp_statistics
 
 _SUMMARY_RE = re.compile(
     r"^Decoded (\d+) MCTP packet\(s\) and (\d+) IPMB frame\(s\)\."
@@ -439,6 +440,33 @@ class ServerMgmtReporter:
                 lines.append(
                     f"| #{idx} | `0x{f.rq_addr:02X}` | `0x{f.rs_addr:02X}` | {_localize_netfn(f.netfn_name)} | {_localize_command(f.cmd_name)} | `{data_str}` | {status_str} |"
                 )
+            lines.append("")
+
+        stats = compute_mctp_statistics(report)
+        lines.append("## MCTP/IPMB 統計摘要")
+        lines.append(f"- **MCTP 封包總數（Total Packets）**: {stats.total_packets}")
+        lines.append(f"- **重組訊息總數（Total Messages）**: {stats.total_messages}")
+        lines.append(
+            f"- **訊息重組成功率（Reassembly Success Rate）**: {stats.reassembly_success_rate * 100:.1f}%"
+        )
+        lines.append(f"- **IPMB 訊框數（IPMB Frame Count）**: {stats.ipmb_frame_count}")
+        lines.append(f"- **Checksum 錯誤數（Checksum Errors）**: {stats.checksum_error_count}")
+        lines.append(f"- **錯誤數（Errors）**: {stats.error_count}")
+        lines.append(f"- **警告數（Warnings）**: {stats.warning_count}")
+        lines.append("")
+        if stats.eid_matrix:
+            lines.append("### 端點通訊統計（EID Matrix）")
+            lines.append("| 來源 EID -> 目的 EID（Src -> Dest） | 封包數（Packets） |")
+            lines.append("|---|---|")
+            for pair, count in sorted(stats.eid_matrix.items()):
+                lines.append(f"| `{pair}` | {count} |")
+            lines.append("")
+        if stats.message_type_distribution:
+            lines.append("### 訊息類型分佈（Message Type Distribution）")
+            lines.append("| 訊息類型（Message Type） | 訊息數（Messages） |")
+            lines.append("|---|---|")
+            for msg_t, count in sorted(stats.message_type_distribution.items()):
+                lines.append(f"| {_localize_msg_type(msg_t)} | {count} |")
             lines.append("")
 
         return "\n".join(lines)

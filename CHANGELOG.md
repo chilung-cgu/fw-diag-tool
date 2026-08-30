@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2026-08-30
+
+### Added
+- SPI Statistics Module: command frequency distribution, throughput, busy-poll count, page-program stats
+- UART Timing Module: boot-phase duration detection, crash-to-reset interval, multi-format timestamp parsing
+- PCIe Statistics Module: AER error rate, link degradation count, topology/speed distribution
+- MCTP Statistics Module: reassembly success rate, EID communication matrix, message-type distribution
+- CSV Data Export: all 5 protocols export to UTF-8 BOM CSV for Excel/Sheets analysis
+- Unified Multi-Protocol Report Generator: combined HTML/Markdown reports with health score and sign-off checklist
+- CLI: `fw-diag report` subcommand for multi-file unified report generation
+- GUI: Unified Report page with batch upload, protocol-specific upload, and example data tabs
+- GUI: Statistics expanders added to SPI, UART, PCIe, MCTP pages
+- GUI: CSV download buttons added to all 5 protocol pages
+- GUI: UART timing analysis panel with boot-phase breakdown
+- i18n: all new UI elements have zh-TW and en-US translations
+- PDF report test coverage: CJK font fallback, heading levels, table rendering
+- Reporter branch coverage: SPI/UART reporter edge-case tests
+
+### Changed
+- Test suite grown from 1034 to 1157 tests
+- pyproject.toml version bumped to 1.6.0
+
+### Fixed
+- mypy: ServerMgmtReport.packets -> mctp_packets attribute access in unified report
+- ruff: combined nested with-statements and specific exception types in PDF tests
+
 ## [1.5.0] - 2026-08-30
 
 ### Added

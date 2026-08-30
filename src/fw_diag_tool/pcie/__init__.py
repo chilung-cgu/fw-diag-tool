@@ -15,6 +15,7 @@ from .models import (
 )
 from .parser import PCIeAnalyzer
 from .reporter import PCIeReporter
+from .statistics import PCIeStatistics, compute_pcie_statistics
 
 __all__ = [
     "ROOT_CAUSE_GUIDES",
@@ -31,7 +32,9 @@ __all__ = [
     "PCIeDiffEngine",
     "PCIeDiffResult",
     "PCIeReporter",
+    "PCIeStatistics",
     "StandardCapability",
     "TLPHeaderDecoded",
+    "compute_pcie_statistics",
     "get_root_cause_guide",
 ]

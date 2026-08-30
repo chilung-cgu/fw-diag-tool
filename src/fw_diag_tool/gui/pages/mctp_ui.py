@@ -18,6 +18,8 @@ from fw_diag_tool.gui.uploads import (
 )
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
+from fw_diag_tool.mctp.statistics import compute_mctp_statistics
+from fw_diag_tool.reporting.csv_export import export_mctp_csv
 from fw_diag_tool.resources import load_mctp_sample
 
 
@@ -116,6 +118,40 @@ def render() -> None:
                     mime="text/markdown",
                     key="mctp_download_report",
                 )
+                st.download_button(
+                    "📥 下載 CSV",
+                    data=export_mctp_csv(m_report),
+                    file_name="mctp_ipmb_analysis.csv",
+                    mime="text/csv",
+                    key="mctp_download_csv",
+                    help="將分析結果匯出為 CSV 格式檔案",
+                )
+                mctp_stats = compute_mctp_statistics(m_report)
+                with st.expander("📊 MCTP/IPMB 統計摘要", expanded=False):
+                    s_c1, s_c2, s_c3, s_c4 = st.columns(4)
+                    s_c1.metric("MCTP 封包總數", mctp_stats.total_packets)
+                    s_c2.metric("重組訊息數", mctp_stats.total_messages)
+                    s_c3.metric(
+                        "訊息重組成功率",
+                        f"{mctp_stats.reassembly_success_rate * 100:.1f}%",
+                    )
+                    s_c4.metric("IPMB 訊框數", mctp_stats.ipmb_frame_count)
+
+                    s_c5, s_c6, s_c7 = st.columns(3)
+                    s_c5.metric("Checksum 錯誤數", mctp_stats.checksum_error_count)
+                    s_c6.metric("錯誤計數", mctp_stats.error_count)
+                    s_c7.metric("警告計數", mctp_stats.warning_count)
+
+                    if mctp_stats.message_type_distribution:
+                        st.markdown("##### 訊息類型分佈（Message Type Distribution）")
+                        for msg_type, count in sorted(mctp_stats.message_type_distribution.items()):
+                            st.write(f"- **{msg_type}**: {count}")
+
+                    if mctp_stats.eid_matrix:
+                        st.markdown("##### 端點通訊統計（EID Matrix: Src -> Dest）")
+                        for pair, count in sorted(mctp_stats.eid_matrix.items()):
+                            st.write(f"- `{pair}`: {count} 個封包")
+
                 report_dict = dataclasses.asdict(m_report)
                 anomaly_count = (
                     len(m_report.errors)

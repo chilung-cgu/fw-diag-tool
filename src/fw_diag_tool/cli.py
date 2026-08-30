@@ -40,6 +40,7 @@ from fw_diag_tool.spi.reporter import SPIReporter
 from fw_diag_tool.uart.diff import UARTDiffEngine
 from fw_diag_tool.uart.parser import UARTCrashParser
 from fw_diag_tool.uart.reporter import UARTReporter
+from fw_diag_tool.uart.timing import analyze_uart_timing
 
 app = typer.Typer(
     name="fw-diag",
@@ -748,9 +749,10 @@ def analyze_uart_crash(
             if p.exists():
                 content = p.read_text(encoding="utf-8")
         report = UARTCrashParser.parse_log_text(content)
-        UARTReporter.render_terminal(report, console=console)
+        timing = analyze_uart_timing(report, content)
+        UARTReporter.render_terminal(report, console=console, timing=timing)
         if markdown_out:
-            markdown_out.write_text(UARTReporter.to_markdown(report), encoding="utf-8")
+            markdown_out.write_text(UARTReporter.to_markdown(report, timing=timing), encoding="utf-8")
             console.print(
                 f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]"
             )
@@ -761,7 +763,7 @@ def analyze_uart_crash(
                 )
             else:
                 write_pdf_report(
-                    UARTReporter.to_markdown(report),
+                    UARTReporter.to_markdown(report, timing=timing),
                     pdf_out,
                     title="UART 崩潰日誌診斷報告",
                 )
@@ -1341,6 +1343,102 @@ def batch_analyze(
     )
     if output_dir:
         console.print(f"[green]✔ 所有報告與 manifest 已寫入: {output_dir}[/]")
+
+
+@app.command("report")
+def generate_unified_report_cli(
+    files: list[Path] = typer.Argument(
+        ..., help="One or more trace or log files across protocols to include in the report"
+    ),
+    format: str = typer.Option(
+        "markdown", "--format", "-f", help="Report format to export (markdown, html, all)"
+    ),
+    output: Path | None = typer.Option(
+        None, "--output", "-o", help="Output file path (e.g. report.md, report.html)"
+    ),
+) -> None:
+    """Generate a unified multi-protocol diagnostic report from multiple files."""
+    from fw_diag_tool.reporting.unified_report import (
+        analyze_file_for_unified_report,
+        build_unified_report,
+    )
+
+    if not files:
+        console.print("[bold red]錯誤：未指定任何輸入檔案（Error: No files specified!）[/]")
+        raise typer.Exit(code=1)
+
+    results = []
+    for f in files:
+        if not f.exists():
+            console.print(f"[bold red]錯誤：找不到檔案（File not found）: {f}[/]")
+            raise typer.Exit(code=1)
+        res = analyze_file_for_unified_report(f)
+        results.append(res)
+
+    report = build_unified_report(results)
+
+    status_style = {
+        "success": "[bold green]✔ 正常 (PASS)[/]",
+        "warning": "[bold yellow]⚠ 警告 (WARN)[/]",
+        "error": "[bold red]✖ 異常 (FAIL)[/]",
+    }.get(report.overall_status, report.overall_status)
+
+    console.print(
+        Panel(
+            f"[bold cyan]韌體診斷統一報告（Unified Multi-Protocol Diagnostic Report）[/]\n"
+            f"整體狀態（Overall Status）: {status_style}\n"
+            f"整體健康分數（Health Score）: [bold]{report.overall_health_score:.1f} / 100.0[/]\n"
+            f"分析檔案數量（Total Files）: {len(files)}",
+            expand=False,
+        )
+    )
+
+    table = Table(title="協定分析概況（Protocol Analysis Summary）", show_header=True)
+    table.add_column("檔案（File）", style="cyan")
+    table.add_column("協定（Protocol）", style="magenta")
+    table.add_column("狀態（Status）")
+    table.add_column("項目數（Items）", justify="right")
+    table.add_column("異常數（Anomalies）", justify="right")
+    table.add_column("摘要（Summary）")
+
+    for f, r in zip(files, report.results):
+        r_status = {
+            "success": "[green]PASS[/]",
+            "warning": "[yellow]WARN[/]",
+            "error": "[red]FAIL[/]",
+        }.get(r.status, r.status)
+        table.add_row(
+            f.name,
+            r.protocol,
+            r_status,
+            str(r.total_items),
+            str(r.anomaly_count),
+            r.summary,
+        )
+
+    console.print(table)
+
+    if output is not None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        fmt = format.lower()
+        if fmt == "html" or output.suffix.lower() == ".html":
+            output.write_text(report.to_html(), encoding="utf-8")
+            console.print(f"[bold green]✔ HTML 統一報告已成功寫入: {output}[/]")
+        elif fmt == "all":
+            md_path = output if output.suffix.lower() == ".md" else output.with_suffix(".md")
+            html_path = output.with_suffix(".html")
+            md_path.write_text(report.to_markdown(), encoding="utf-8")
+            html_path.write_text(report.to_html(), encoding="utf-8")
+            console.print(f"[bold green]✔ 統一報告已成功寫入: {md_path} 與 {html_path}[/]")
+        else:
+            output.write_text(report.to_markdown(), encoding="utf-8")
+            console.print(f"[bold green]✔ Markdown 統一報告已成功寫入: {output}[/]")
+    else:
+        fmt = format.lower()
+        if fmt == "html":
+            console.print(report.to_html())
+        elif fmt != "markdown":
+            console.print(report.to_markdown())
 
 
 @app.command()

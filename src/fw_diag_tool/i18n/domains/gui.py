@@ -12,6 +12,11 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
     "btn_export": {"zh-TW": "匯出報告", "en-US": "Export Report"},
     "btn_copy": {"zh-TW": "複製內容", "en-US": "Copy Content"},
     "btn_download_csv": {"zh-TW": "下載 CSV", "en-US": "Download CSV"},
+    "csv_download_btn": {"zh-TW": "📥 下載 CSV", "en-US": "📥 Download CSV"},
+    "csv_download_tooltip": {
+        "zh-TW": "將分析結果匯出為 CSV 格式檔案",
+        "en-US": "Export analysis results as a CSV file",
+    },
     "btn_download_json": {"zh-TW": "下載 JSON", "en-US": "Download JSON"},
     "btn_download_html": {"zh-TW": "下載 HTML 報告", "en-US": "Download HTML Report"},
     "btn_download_sarif": {"zh-TW": "下載 SARIF 報告", "en-US": "Download SARIF Report"},
@@ -121,6 +126,110 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
     "title_batch_analysis": {
         "zh-TW": "批次分析",
         "en-US": "Batch Analysis",
+    },
+    "title_unified_report": {
+        "zh-TW": "統一多協定報告",
+        "en-US": "Unified Multi-Protocol Report",
+    },
+    "title_unified_report_full": {
+        "zh-TW": "統一多協定診斷報告產生器",
+        "en-US": "Unified Multi-Protocol Diagnostic Report Generator",
+    },
+    "desc_unified_report": {
+        "zh-TW": "整合 I2C、SPI、UART、PCIe、MCTP 等多協定診斷結果，計算整體健康分數與簽核檢查清單，產出標準化 Markdown 與 HTML 報告。",
+        "en-US": "Aggregate I2C, SPI, UART, PCIe, MCTP diagnostics, compute overall health score and sign-off checklist, and export standardized Markdown and HTML reports.",
+    },
+    "tab_multi_upload": {
+        "zh-TW": "批次多檔上傳",
+        "en-US": "Multi-File Upload",
+    },
+    "tab_dedicated_upload": {
+        "zh-TW": "各協定獨立上傳",
+        "en-US": "Per-Protocol Upload",
+    },
+    "tab_sample_presets": {
+        "zh-TW": "載入範例資料",
+        "en-US": "Preset Examples",
+    },
+    "lbl_multi_upload_title": {
+        "zh-TW": "批次多協定日誌／擷取檔上傳",
+        "en-US": "Multi-Protocol Log / Capture File Upload",
+    },
+    "lbl_multi_upload_desc": {
+        "zh-TW": "上傳多個檔案（支援 .csv, .log, .txt, .hex），系統將自動識別協定類型",
+        "en-US": "Upload multiple files (.csv, .log, .txt, .hex), auto-detecting protocol type",
+    },
+    "lbl_dedicated_upload_title": {
+        "zh-TW": "指定協定專用上傳區",
+        "en-US": "Dedicated Per-Protocol Upload Area",
+    },
+    "lbl_sample_title": {
+        "zh-TW": "快速載入多協定範例資料進行體驗",
+        "en-US": "Quickly load multi-protocol sample datasets",
+    },
+    "lbl_sample_select": {
+        "zh-TW": "選擇要納入統一報告的範例協定",
+        "en-US": "Select sample protocols to include in report",
+    },
+    "btn_generate_unified_report": {
+        "zh-TW": "🚀 產生統一多協定報告",
+        "en-US": "🚀 Generate Unified Multi-Protocol Report",
+    },
+    "msg_no_files_uploaded": {
+        "zh-TW": "請先上傳檔案或載入範例資料再產生報告。",
+        "en-US": "Please upload files or load sample datasets before generating report.",
+    },
+    "msg_generating_report": {
+        "zh-TW": "正在平行分析各協定數據並編制統一報告…",
+        "en-US": "Analyzing protocol datasets and building unified report...",
+    },
+    "msg_report_ready": {
+        "zh-TW": "統一多協定診斷報告已成功產生！",
+        "en-US": "Unified multi-protocol diagnostic report generated successfully!",
+    },
+    "lbl_report_dashboard_title": {
+        "zh-TW": "診斷報告總覽",
+        "en-US": "Diagnostic Executive Overview",
+    },
+    "lbl_health_score": {
+        "zh-TW": "整體健康分數",
+        "en-US": "Overall Health Score",
+    },
+    "lbl_overall_status": {
+        "zh-TW": "整體狀態",
+        "en-US": "Overall Status",
+    },
+    "lbl_protocol_count": {
+        "zh-TW": "納入協定數",
+        "en-US": "Protocol Count",
+    },
+    "lbl_total_anomalies": {
+        "zh-TW": "累計異常數",
+        "en-US": "Total Anomalies",
+    },
+    "lbl_export_section": {
+        "zh-TW": "匯出與下載報告",
+        "en-US": "Export & Downloads",
+    },
+    "btn_download_unified_md": {
+        "zh-TW": "⬇️ 下載 Markdown 報告",
+        "en-US": "⬇️ Download Markdown Report",
+    },
+    "btn_download_unified_html": {
+        "zh-TW": "⬇️ 下載 HTML 報告",
+        "en-US": "⬇️ Download HTML Report",
+    },
+    "lbl_report_preview": {
+        "zh-TW": "報告內容即時預覽",
+        "en-US": "Live Report Preview",
+    },
+    "tab_rendered_md": {
+        "zh-TW": "視覺化排版",
+        "en-US": "Rendered View",
+    },
+    "tab_raw_md": {
+        "zh-TW": "原始 Markdown",
+        "en-US": "Raw Markdown",
     },
     "title_settings": {
         "zh-TW": "偏好設定",

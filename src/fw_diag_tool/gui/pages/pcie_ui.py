@@ -16,6 +16,8 @@ from fw_diag_tool.gui.uploads import MAX_TEXT_BYTES, decode_uploaded_text, valid
 from fw_diag_tool.pcie.diagnostics import diagnose_pcie_device
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
+from fw_diag_tool.pcie.statistics import compute_pcie_statistics
+from fw_diag_tool.reporting.csv_export import export_pcie_csv
 from fw_diag_tool.resources import load_pcie_dmesg_sample, load_pcie_lspci_sample
 
 
@@ -121,6 +123,19 @@ def render() -> None:
                 st.warning(
                     "沒有找到可解析的 AER 事件；請確認貼上的內容包含完整核心 dmesg 日誌（kernel dmesg）。"
                 )
+            stats = compute_pcie_statistics([], dmesg_events=events)
+            with st.expander("📊 PCIe 統計摘要", expanded=True):
+                c1, c2, c3 = st.columns(3)
+                c1.metric("AER 錯誤總數", stats.total_aer_errors)
+                c2.metric(
+                    "不可更正 / 可更正", f"{stats.uncorrectable_count} / {stats.correctable_count}"
+                )
+                rate_str = (
+                    f"{stats.error_rate_per_sec:.4f} 次/秒"
+                    if stats.error_rate_per_sec is not None
+                    else "N/A"
+                )
+                c3.metric("錯誤發生率", rate_str)
             pcie_dmesg_md = PCIeReporter.format_dmesg_events(events)
             show_success_toast("PCIe AER 分析完成")
             st.markdown(pcie_dmesg_md)
@@ -130,6 +145,14 @@ def render() -> None:
                 file_name="pcie_dmesg_aer_report.md",
                 mime="text/markdown",
                 key="pcie_dmesg_download_report",
+            )
+            st.download_button(
+                "📥 下載 CSV",
+                data=export_pcie_csv([], events=events),
+                file_name="pcie_aer_events.csv",
+                mime="text/csv",
+                key="pcie_dmesg_download_csv",
+                help="將分析結果匯出為 CSV 格式檔案",
             )
             dmesg_findings = [
                 {
@@ -240,6 +263,32 @@ def render() -> None:
                     key=f"pcie_config_download_{cfg_index}",
                 )
             if devices:
+                st.download_button(
+                    "📥 下載 CSV",
+                    data=export_pcie_csv(devices),
+                    file_name="pcie_devices.csv",
+                    mime="text/csv",
+                    key="pcie_devices_download_csv",
+                    help="將分析結果匯出為 CSV 格式檔案",
+                )
+                stats = compute_pcie_statistics(devices)
+                with st.expander("📊 PCIe 統計摘要", expanded=True):
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("裝置總數", stats.device_count)
+                    c2.metric("AER 錯誤總數", stats.total_aer_errors)
+                    c3.metric(
+                        "不可更正 / 可更正",
+                        f"{stats.uncorrectable_count} / {stats.correctable_count}",
+                    )
+                    c4.metric("連線降級數量", stats.link_degradation_count)
+                    if stats.topology_summary:
+                        st.markdown("**裝置類別分佈（Topology Summary）**")
+                        for cls_name, count in sorted(stats.topology_summary.items()):
+                            st.write(f"- {PCIeReporter.localize_class_name(cls_name)}: {count}")
+                    if stats.link_speed_distribution:
+                        st.markdown("**速率世代分佈（Link Speed Distribution）**")
+                        for spd, count in sorted(stats.link_speed_distribution.items()):
+                            st.write(f"- {spd}: {count}")
                 render_sarif_download(all_findings, protocol="PCIe", filename_prefix="pcie_config")
                 total_anomalies = len(all_findings)
                 report_dict = {

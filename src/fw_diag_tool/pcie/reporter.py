@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from .models import DmesgAEREvent, HeaderType, PCIeConfigSpace
+from .statistics import PCIeStatistics, compute_pcie_statistics
 
 _ROOT_CAUSE_GUIDE_ZH = {
     "Completion Timeout (CTO): Requester did not receive completion in time.": "完成逾時（Completion Timeout；CTO）：請求端（Requester）未在期限內收到 completion。",
@@ -683,6 +684,9 @@ class PCIeReporter:
             lines.append(
                 "*找不到 AER Extended Capability（Configuration Space 未偵測到 AER Extended Capability）。*\n"
             )
+        stats = compute_pcie_statistics([cfg])
+        lines.append(PCIeReporter.format_statistics(stats))
+        lines.append("")
         return "\n".join(lines)
 
     @staticmethod
@@ -703,4 +707,43 @@ class PCIeReporter:
             if ev.tlp_header:
                 lines.append(f"- **擷取到的 TLP Header（Captured TLP Header）**: `{ev.tlp_header}`")
             lines.append(f"\n```text\n{_localize_root_cause(ev.root_cause_guide)}\n```\n")
+        stats = compute_pcie_statistics([], dmesg_events=events)
+        lines.append(PCIeReporter.format_statistics(stats))
+        lines.append("")
+        return "\n".join(lines)
+
+    @staticmethod
+    def format_statistics(stats: PCIeStatistics) -> str:
+        """Format PCIeStatistics dataclass into a Markdown summary section."""
+        lines: list[str] = ["## PCIe 統計摘要（PCIe Statistics Summary）"]
+        lines.append(f"- **裝置總數（Device Count）**: `{stats.device_count}`")
+        lines.append(
+            f"- **AER 錯誤總數（Total AER Errors）**: `{stats.total_aer_errors}` "
+            f"（不可更正（Uncorrectable）: `{stats.uncorrectable_count}`，"
+            f"可更正（Correctable）: `{stats.correctable_count}`）"
+        )
+        if stats.error_rate_per_sec is not None:
+            lines.append(
+                f"- **錯誤發生率（Error Rate）**: `{stats.error_rate_per_sec:.4f} 次/秒（errors/sec）`"
+            )
+        else:
+            lines.append("- **錯誤發生率（Error Rate）**: `N/A`")
+        lines.append(
+            f"- **連線降級數量（Link Degradation Count）**: `{stats.link_degradation_count}`"
+        )
+
+        if stats.topology_summary:
+            lines.append("- **裝置類別分佈（Device Class Distribution）**:")
+            for cls_name, count in sorted(stats.topology_summary.items()):
+                lines.append(f"  - {_localize_class_name(cls_name)}: `{count}`")
+        else:
+            lines.append("- **裝置類別分佈（Device Class Distribution）**: `無（None）`")
+
+        if stats.link_speed_distribution:
+            lines.append("- **速率世代分佈（Link Speed Distribution）**:")
+            for gen_name, count in sorted(stats.link_speed_distribution.items()):
+                lines.append(f"  - `{gen_name}`: `{count}`")
+        else:
+            lines.append("- **速率世代分佈（Link Speed Distribution）**: `無（None）`")
+
         return "\n".join(lines)

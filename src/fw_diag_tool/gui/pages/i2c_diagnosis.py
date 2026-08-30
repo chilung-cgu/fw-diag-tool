@@ -58,6 +58,7 @@ from fw_diag_tool.i2c.timing import frequency_samples_khz
 from fw_diag_tool.i2c.timing_charts import I2CTimingCharts
 from fw_diag_tool.i2c.waveform import I2CWaveformReconstructor
 from fw_diag_tool.i18n import t
+from fw_diag_tool.reporting.csv_export import export_i2c_csv
 from fw_diag_tool.resources import load_i2c_sample
 from fw_diag_tool.session.session_manager import SessionManager
 
@@ -690,6 +691,14 @@ def render() -> None:
             with st.expander("📄 檢視原始 Markdown 原始碼", expanded=False):
                 st.code(md_out, language="markdown")
             st.download_button("下載 Markdown 報告", md_out, file_name="i2c_report.md")
+            st.download_button(
+                "📥 下載 CSV",
+                export_i2c_csv(report.transactions),
+                file_name="i2c_transactions.csv",
+                mime="text/csv",
+                key="i2c_download_csv",
+                help="將分析結果匯出為 CSV 格式檔案",
+            )
             render_html_download(md_out, protocol="I2C", filename_prefix="i2c_report")
             render_pdf_download(
                 md_out, protocol="I2C", filename_prefix="i2c_report", metadata=metadata

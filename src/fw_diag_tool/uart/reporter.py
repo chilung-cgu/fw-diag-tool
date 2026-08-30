@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
 from .models import UARTReport
+
+if TYPE_CHECKING:
+    from .timing import UARTTimingAnalysis
 
 _CRASH_TYPE_ZH = {
     "Linux Kernel Panic / Oops": "Linux 核心 Panic／Oops（Linux Kernel Panic / Oops）",
@@ -141,7 +145,11 @@ def _localize_hardfault_summary(value: str) -> str:
 
 class UARTReporter:
     @staticmethod
-    def render_terminal(report: UARTReport, console: Console | None = None) -> None:
+    def render_terminal(
+        report: UARTReport,
+        console: Console | None = None,
+        timing: UARTTimingAnalysis | None = None,
+    ) -> None:
         c = console or Console()
         c.print(
             Panel(
@@ -159,6 +167,49 @@ class UARTReporter:
                     border_style="yellow",
                 )
             )
+            effective_timing = timing or getattr(report, "timing", None)
+            if effective_timing is not None:
+                timing_tbl = Table(
+                    title="UART 時序分析摘要（UART Timing Summary）",
+                    show_header=True,
+                )
+                timing_tbl.add_column("項目（Item）", style="cyan")
+                timing_tbl.add_column("值（Value）", style="bold white")
+                timing_tbl.add_row(
+                    "總記錄時間（Total Log Duration）",
+                    f"{effective_timing.total_log_duration_s:.3f} 秒"
+                    if effective_timing.total_log_duration_s is not None
+                    else "N/A",
+                )
+                timing_tbl.add_row(
+                    "時間戳覆蓋率（Timestamp Coverage）",
+                    f"{effective_timing.timestamp_coverage * 100:.1f}%",
+                )
+                timing_tbl.add_row(
+                    "原始日誌行數（Line Count）",
+                    f"{effective_timing.line_count}",
+                )
+                bl_dur = effective_timing.boot_phase_durations.get("bootloader")
+                k_dur = effective_timing.boot_phase_durations.get("kernel")
+                us_dur = effective_timing.boot_phase_durations.get("userspace")
+                timing_tbl.add_row(
+                    "Bootloader 耗時",
+                    f"{bl_dur:.3f} 秒" if bl_dur is not None else "N/A",
+                )
+                timing_tbl.add_row(
+                    "Kernel 耗時",
+                    f"{k_dur:.3f} 秒" if k_dur is not None else "N/A",
+                )
+                timing_tbl.add_row(
+                    "Userspace 耗時",
+                    f"{us_dur:.3f} 秒" if us_dur is not None else "N/A",
+                )
+                if effective_timing.crash_to_reset_interval_s is not None:
+                    timing_tbl.add_row(
+                        "崩潰至重置間隔（Crash-to-Reset Interval）",
+                        f"{effective_timing.crash_to_reset_interval_s:.3f} 秒",
+                    )
+                c.print(timing_tbl)
             return
 
         if report.kernel_panic:
@@ -252,8 +303,54 @@ class UARTReporter:
                 )
             )
 
+        effective_timing = timing or getattr(report, "timing", None)
+        if effective_timing is not None:
+            timing_tbl = Table(
+                title="UART 時序分析摘要（UART Timing Summary）",
+                show_header=True,
+            )
+            timing_tbl.add_column("項目（Item）", style="cyan")
+            timing_tbl.add_column("值（Value）", style="bold white")
+            timing_tbl.add_row(
+                "總記錄時間（Total Log Duration）",
+                f"{effective_timing.total_log_duration_s:.3f} 秒"
+                if effective_timing.total_log_duration_s is not None
+                else "N/A",
+            )
+            timing_tbl.add_row(
+                "時間戳覆蓋率（Timestamp Coverage）",
+                f"{effective_timing.timestamp_coverage * 100:.1f}%",
+            )
+            timing_tbl.add_row(
+                "原始日誌行數（Line Count）",
+                f"{effective_timing.line_count}",
+            )
+            bl_dur = effective_timing.boot_phase_durations.get("bootloader")
+            k_dur = effective_timing.boot_phase_durations.get("kernel")
+            us_dur = effective_timing.boot_phase_durations.get("userspace")
+            timing_tbl.add_row(
+                "Bootloader 耗時",
+                f"{bl_dur:.3f} 秒" if bl_dur is not None else "N/A",
+            )
+            timing_tbl.add_row(
+                "Kernel 耗時",
+                f"{k_dur:.3f} 秒" if k_dur is not None else "N/A",
+            )
+            timing_tbl.add_row(
+                "Userspace 耗時",
+                f"{us_dur:.3f} 秒" if us_dur is not None else "N/A",
+            )
+            if effective_timing.crash_to_reset_interval_s is not None:
+                timing_tbl.add_row(
+                    "崩潰至重置間隔（Crash-to-Reset Interval）",
+                    f"{effective_timing.crash_to_reset_interval_s:.3f} 秒",
+                )
+            c.print(timing_tbl)
+
     @staticmethod
-    def to_markdown(report: UARTReport) -> str:
+    def to_markdown(
+        report: UARTReport, timing: UARTTimingAnalysis | None = None
+    ) -> str:
         lines = [
             (
                 "# UART 崩潰轉儲分析（UART Crash Dump Analysis）: "
@@ -323,4 +420,36 @@ class UARTReporter:
                     "- 保留完整 UART log，確認內容包含 Kernel Panic、Oops、HardFault 或相關暫存器標記。",
                 ]
             )
+
+        effective_timing = timing or getattr(report, "timing", None)
+        if effective_timing is not None:
+            lines.append("")
+            lines.append("## UART 時序分析（UART Timing Analysis）")
+            lines.append(
+                f"- **總記錄時間（Total Log Duration）**: `{f'{effective_timing.total_log_duration_s:.3f} 秒' if effective_timing.total_log_duration_s is not None else 'N/A'}`"
+            )
+            lines.append(
+                f"- **原始日誌行數（Line Count）**: `{effective_timing.line_count} 行`"
+            )
+            lines.append(
+                f"- **時間戳覆蓋率（Timestamp Coverage）**: `{effective_timing.timestamp_coverage * 100:.1f}%`"
+            )
+            lines.append("- **開機階段耗時（Boot Phase Durations）**:")
+            bl_dur = effective_timing.boot_phase_durations.get("bootloader")
+            k_dur = effective_timing.boot_phase_durations.get("kernel")
+            us_dur = effective_timing.boot_phase_durations.get("userspace")
+            lines.append(
+                f"  - **Bootloader**: `{f'{bl_dur:.3f} 秒' if bl_dur is not None else 'N/A'}`"
+            )
+            lines.append(
+                f"  - **Kernel**: `{f'{k_dur:.3f} 秒' if k_dur is not None else 'N/A'}`"
+            )
+            lines.append(
+                f"  - **Userspace**: `{f'{us_dur:.3f} 秒' if us_dur is not None else 'N/A'}`"
+            )
+            if effective_timing.crash_to_reset_interval_s is not None:
+                lines.append(
+                    f"- **崩潰至重置間隔（Crash-to-Reset Interval）**: `{effective_timing.crash_to_reset_interval_s:.3f} 秒`"
+                )
+
         return "\n".join(lines)

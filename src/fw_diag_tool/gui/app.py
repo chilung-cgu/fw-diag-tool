@@ -34,6 +34,7 @@ from fw_diag_tool.gui.pages import (
     spi_ui,
     tutorial_ui,
     uart_ui,
+    unified_report_ui,
     waveform_diff_ui,
 )
 from fw_diag_tool.gui.shared import (
@@ -104,6 +105,12 @@ pages = {
             title=t("title_session_compare", domain="gui"),
             icon="⚖️",
             url_path="session-compare",
+        ),
+        st.Page(
+            unified_report_ui.render,
+            title=t("title_unified_report", domain="gui"),
+            icon="📑",
+            url_path="unified-report",
         ),
     ],
     t("nav_category_overview", domain="gui"): [

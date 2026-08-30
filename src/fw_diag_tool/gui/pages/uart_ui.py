@@ -14,11 +14,13 @@ from fw_diag_tool.gui.uploads import (
     decode_uploaded_text,
     validate_pasted_text,
 )
+from fw_diag_tool.reporting.csv_export import export_uart_csv
 from fw_diag_tool.resources import load_uart_sample
 from fw_diag_tool.uart.diff import UARTDiffEngine
 from fw_diag_tool.uart.models import CrashType
 from fw_diag_tool.uart.parser import UARTCrashParser
 from fw_diag_tool.uart.reporter import UARTReporter
+from fw_diag_tool.uart.timing import analyze_uart_timing
 
 
 def render() -> None:
@@ -154,9 +156,9 @@ def render() -> None:
         )
     if st.button("執行 UART 崩潰轉儲分析（Crash Dump）") and u_raw.strip():
         try:
-            u_report = UARTCrashParser.parse_log_text(
-                validate_pasted_text(u_raw, label="UART 日誌（UART Log）")
-            )
+            valid_text = validate_pasted_text(u_raw, label="UART 日誌（UART Log）")
+            u_report = UARTCrashParser.parse_log_text(valid_text)
+            timing_analysis = analyze_uart_timing(u_report, valid_text)
         except (TypeError, ValueError) as exc:
             st.error(f"UART 輸入錯誤：{_localize_gui_error(exc, domain='uart')}")
             show_error_toast("UART 分析失敗")
@@ -167,7 +169,41 @@ def render() -> None:
                 "以確認根因（root cause）。"
             )
             show_success_toast("UART 分析完成")
-            uart_md = UARTReporter.to_markdown(u_report)
+            with st.expander("⏱️ UART 時序分析", expanded=True):
+                col_t1, col_t2, col_t3 = st.columns(3)
+                with col_t1:
+                    st.metric(
+                        "總記錄時間",
+                        f"{timing_analysis.total_log_duration_s:.3f} s"
+                        if timing_analysis.total_log_duration_s is not None
+                        else "N/A",
+                    )
+                with col_t2:
+                    st.metric(
+                        "時間戳覆蓋率",
+                        f"{timing_analysis.timestamp_coverage * 100:.1f}%",
+                    )
+                with col_t3:
+                    st.metric(
+                        "崩潰至重置間隔",
+                        f"{timing_analysis.crash_to_reset_interval_s:.3f} s"
+                        if timing_analysis.crash_to_reset_interval_s is not None
+                        else "N/A",
+                    )
+
+                st.markdown("**開機階段耗時（Boot Phase Durations）**")
+                p_col1, p_col2, p_col3 = st.columns(3)
+                bl_s = timing_analysis.boot_phase_durations.get("bootloader")
+                k_s = timing_analysis.boot_phase_durations.get("kernel")
+                u_s = timing_analysis.boot_phase_durations.get("userspace")
+                with p_col1:
+                    st.metric("Bootloader", f"{bl_s:.3f} s" if bl_s is not None else "N/A")
+                with p_col2:
+                    st.metric("Kernel", f"{k_s:.3f} s" if k_s is not None else "N/A")
+                with p_col3:
+                    st.metric("Userspace", f"{u_s:.3f} s" if u_s is not None else "N/A")
+
+            uart_md = UARTReporter.to_markdown(u_report, timing=timing_analysis)
             st.markdown(uart_md)
             st.download_button(
                 "下載 UART Markdown 診斷報告",
@@ -176,6 +212,14 @@ def render() -> None:
                 mime="text/markdown",
                 key="uart_download_report",
             )
+            st.download_button(
+                "📥 下載 CSV",
+                data=export_uart_csv(u_report),
+                file_name="uart_analysis.csv",
+                mime="text/csv",
+                key="uart_download_csv",
+                help="將分析結果匯出為 CSV 格式檔案",
+            )
             report_dict = u_report.to_dict()
             anomaly_count = 0 if u_report.crash_type == CrashType.GENERIC_LOG else 1
             if u_report.arm_hardfault and u_report.arm_hardfault.fault_flags:
@@ -183,6 +227,13 @@ def render() -> None:
             report_dict["protocol"] = "UART"
             report_dict["summary"] = u_report.summary_title
             report_dict["anomaly_count"] = anomaly_count
+            report_dict["timing"] = {
+                "total_log_duration_s": timing_analysis.total_log_duration_s,
+                "timestamp_coverage": timing_analysis.timestamp_coverage,
+                "line_count": timing_analysis.line_count,
+                "boot_phase_durations": timing_analysis.boot_phase_durations,
+                "crash_to_reset_interval_s": timing_analysis.crash_to_reset_interval_s,
+            }
             render_session_controls(
                 protocol="UART",
                 report_data=report_dict,

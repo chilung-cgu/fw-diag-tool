@@ -15,10 +15,12 @@ from fw_diag_tool.gui.shared import (
     render_pdf_download,
 )
 from fw_diag_tool.gui.uploads import MAX_UPLOAD_BYTES, decode_uploaded_text
+from fw_diag_tool.reporting.csv_export import export_spi_csv
 from fw_diag_tool.resources import load_spi_sample
 from fw_diag_tool.session.session_manager import SessionManager
 from fw_diag_tool.spi.diff import SPIDiffEngine
 from fw_diag_tool.spi.reporter import SPIReporter
+from fw_diag_tool.spi.statistics import compute_spi_statistics
 
 MAX_UPLOAD_MIB = MAX_UPLOAD_BYTES // (1024 * 1024)
 
@@ -220,6 +222,37 @@ def render() -> None:
             s4.metric("異常事件", rep.summary.anomaly_count)
             if rep.summary.detected_flash_chip:
                 st.info(f"識別晶片型號：{rep.summary.detected_flash_chip}")
+            stats = compute_spi_statistics(rep)
+            with st.expander("📊 SPI 操作統計", expanded=False):
+                stat_col1, stat_col2, stat_col3 = st.columns(3)
+                stat_col1.metric("總傳輸資料量", f"{stats.total_bytes_transferred} Bytes")
+                stat_col2.metric(
+                    "預估吞吐量",
+                    f"{stats.throughput_bytes_per_sec:.2f} B/s"
+                    if stats.throughput_bytes_per_sec is not None
+                    else "無時間戳資料",
+                )
+                stat_col3.metric(
+                    "平均指令延遲",
+                    f"{stats.avg_command_latency_us:.2f} µs"
+                    if stats.avg_command_latency_us is not None
+                    else "無時間戳資料",
+                )
+                stat_col4, stat_col5 = st.columns(2)
+                stat_col4.metric("BUSY 輪詢次數", f"{stats.busy_poll_count} 次")
+                stat_col5.metric(
+                    "平均 BUSY 等待時間",
+                    f"{stats.avg_busy_wait_us:.2f} µs"
+                    if stats.avg_busy_wait_us is not None
+                    else "無資料",
+                )
+                if stats.command_distribution:
+                    st.markdown("**指令頻率分佈（Command Distribution）**")
+                    dist_data = [
+                        {"指令名稱": k, "次數": v}
+                        for k, v in sorted(stats.command_distribution.items(), key=lambda x: -x[1])
+                    ]
+                    st.dataframe(dist_data, use_container_width=True)
             spi_md = SPIReporter.to_markdown(rep)
             st.markdown(spi_md)
             st.download_button(
@@ -228,6 +261,14 @@ def render() -> None:
                 file_name="spi_flash_report.md",
                 mime="text/markdown",
                 key="spi_download_report",
+            )
+            st.download_button(
+                "📥 下載 CSV",
+                data=export_spi_csv(rep),
+                file_name="spi_flash_commands.csv",
+                mime="text/csv",
+                key="spi_download_csv",
+                help="將分析結果匯出為 CSV 格式檔案",
             )
             render_html_download(spi_md, protocol="SPI", filename_prefix="spi_flash")
             render_pdf_download(spi_md, protocol="SPI", filename_prefix="spi_flash")

@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .models import SPIReport, SPISeverity
+from .statistics import compute_spi_statistics
 
 _JEDEC_TITLE_RE = re.compile(
     r"^JEDEC ID Read Returned All (?P<value>0x(?:FF|00)) "
@@ -446,6 +447,41 @@ class SPIReporter:
         lines.append(
             f"- **偵測到的異常（Anomalies Detected）**: `{report.summary.anomaly_count}`\n"
         )
+
+        stats = compute_spi_statistics(report)
+        lines.append("## 📊 SPI 操作統計（SPI Operation Statistics）")
+        lines.append(
+            f"- **總傳輸位元組數（Total Bytes Transferred）**: `{stats.total_bytes_transferred}` bytes"
+        )
+        throughput_str = (
+            f"`{stats.throughput_bytes_per_sec:.2f}` B/s"
+            if stats.throughput_bytes_per_sec is not None
+            else "無時間戳資料（Unavailable）"
+        )
+        lines.append(f"- **傳輸吞吐量（Throughput）**: {throughput_str}")
+        latency_str = (
+            f"`{stats.avg_command_latency_us:.2f}` µs"
+            if stats.avg_command_latency_us is not None
+            else "無時間戳資料（Unavailable）"
+        )
+        lines.append(f"- **平均指令延遲（Avg Command Latency）**: {latency_str}")
+        lines.append(f"- **BUSY 輪詢次數（BUSY Poll Count）**: `{stats.busy_poll_count}`")
+        busy_wait_str = (
+            f"`{stats.avg_busy_wait_us:.2f}` µs"
+            if stats.avg_busy_wait_us is not None
+            else "無（None）"
+        )
+        lines.append(f"- **平均 BUSY 等待時間（Avg BUSY Wait Duration）**: {busy_wait_str}\n")
+
+        if stats.command_distribution:
+            lines.append("### 指令頻率分佈（Command Distribution）")
+            lines.append("| 指令名稱（Command Name） | 次數（Count） |")
+            lines.append("|---|---|")
+            for cmd_name, count in sorted(
+                stats.command_distribution.items(), key=lambda x: -x[1]
+            ):
+                lines.append(f"| {_localize_opcode_name(cmd_name)} | `{count}` |")
+            lines.append("")
 
         if report.data_quality_issues:
             lines.append("## ⚠ 資料品質限制（Data Quality Limitations）")

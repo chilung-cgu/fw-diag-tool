@@ -28,6 +28,7 @@ PAGE_MODULES = [
     "fw_diag_tool.gui.pages.fuzz_lab_ui",
     "fw_diag_tool.gui.pages.tutorial_ui",
     "fw_diag_tool.gui.pages.dashboard_ui",
+    "fw_diag_tool.gui.pages.unified_report_ui",
 ]
 
 
