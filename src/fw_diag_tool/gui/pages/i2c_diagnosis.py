@@ -9,6 +9,7 @@ import streamlit as st
 from fw_diag_tool import __version__
 from fw_diag_tool.board_profile import load_board_profile
 from fw_diag_tool.errors import ResourceLimitError
+from fw_diag_tool.gui.sarif_export import render_sarif_download
 from fw_diag_tool.gui.session_io import (
     capture_matches,
     restore_i2c_board_profile,
@@ -475,7 +476,7 @@ def render() -> None:
                     stretch_details = []
                     for event in selected_tx.clock_stretching_events:
                         duration_text = f"{float(event.get('duration_ms', 0.0)):.3f} ms"
-                        evidence_text = localize_evidence(event.get('evidence', 'unknown'))
+                        evidence_text = localize_evidence(event.get("evidence", "unknown"))
                         if event.get("attribution") == "aggregate_unattributable":
                             stretch_details.append(
                                 f"彙總列：持續時間 {duration_text}；{evidence_text}；"
@@ -618,6 +619,18 @@ def render() -> None:
             with st.expander("📄 檢視原始 Markdown 原始碼", expanded=False):
                 st.code(md_out, language="markdown")
             st.download_button("下載 Markdown 報告", md_out, file_name="i2c_report.md")
+            sarif_findings = [
+                {
+                    "code": issue.code,
+                    "title": issue.title,
+                    "severity": issue.severity.value
+                    if hasattr(issue.severity, "value")
+                    else str(issue.severity),
+                    "message": issue.description,
+                }
+                for issue in report.issues
+            ]
+            render_sarif_download(sarif_findings, protocol="I2C", filename_prefix="i2c_analysis")
             if input_name is not None and input_bytes is not None:
                 session_json = serialize_i2c_session(
                     report.to_dict(),

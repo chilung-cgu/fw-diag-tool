@@ -10,9 +10,13 @@ import streamlit as st
 
 from fw_diag_tool import __version__
 from fw_diag_tool.gui.pages import (
+    chip_db_ui,
     codegen_ui,
+    dashboard_ui,
     dts_ui,
+    emulator_ui,
     fault_arena_ui,
+    fuzz_lab_ui,
     i2c_builder_ui,
     i2c_diagnosis,
     mctp_ui,
@@ -26,11 +30,35 @@ from fw_diag_tool.gui.pages import (
 
 st.set_page_config(page_title="韌體訊號與協定診斷套件", page_icon="⚡", layout="wide")
 
+from fw_diag_tool.gui.theme import inject_custom_theme
+
+inject_custom_theme()
+
 pages = {
     "協定分析與波形": [
-        st.Page(i2c_diagnosis.render, title="I2C / PMBus 診斷與波形檢視", icon="📊", url_path="i2c-diagnosis"),
-        st.Page(i2c_builder_ui.render, title="I2C 封包模擬器與驅動產生", icon="🎨", url_path="i2c-builder"),
-        st.Page(waveform_diff_ui.render, title="雙波形對比檢視", icon="⚖️", url_path="waveform-diff"),
+        st.Page(
+            i2c_diagnosis.render,
+            title="I2C / PMBus 診斷與波形檢視",
+            icon="📊",
+            url_path="i2c-diagnosis",
+        ),
+        st.Page(
+            i2c_builder_ui.render,
+            title="I2C 封包模擬器與驅動產生",
+            icon="🎨",
+            url_path="i2c-builder",
+        ),
+        st.Page(
+            waveform_diff_ui.render, title="雙波形對比檢視", icon="⚖️", url_path="waveform-diff"
+        ),
+    ],
+    "總覽": [
+        st.Page(
+            dashboard_ui.render,
+            title="功能總覽與快速入門",
+            icon="🏠",
+            url_path="dashboard",
+        ),
     ],
     "系統協定診斷": [
         st.Page(uart_ui.render, title="UART 崩潰轉儲與 HardFault 分析", icon="📟", url_path="uart"),
@@ -44,8 +72,31 @@ pages = {
         st.Page(codegen_ui.render, title="C Register 巨集產生器", icon="🛠", url_path="codegen"),
     ],
     "實驗室與學習": [
-        st.Page(fault_arena_ui.render, title="Firmware 實戰除錯實驗室", icon="🏆", url_path="fault-arena"),
+        st.Page(
+            fault_arena_ui.render,
+            title="Firmware 實戰除錯實驗室",
+            icon="🏆",
+            url_path="fault-arena",
+        ),
         st.Page(sop_ui.render, title="韌體除錯指南與 SOP", icon="📚", url_path="sop"),
+        st.Page(
+            chip_db_ui.render,
+            title="I2C 晶片資料庫瀏覽器",
+            icon="🔍",
+            url_path="chip-db",
+        ),
+        st.Page(
+            emulator_ui.render,
+            title="虛擬設備模擬器實驗室",
+            icon="🧪",
+            url_path="emulator",
+        ),
+        st.Page(
+            fuzz_lab_ui.render,
+            title="協定解析器 Fuzz 測試",
+            icon="🎲",
+            url_path="fuzz-lab",
+        ),
     ],
 }
 

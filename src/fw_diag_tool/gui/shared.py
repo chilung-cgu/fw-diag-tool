@@ -297,7 +297,7 @@ def _localize_gui_error(value: object, *, domain: str) -> str:
             label = text[: -len(" must be an integer such as 0x50")]
             return f"{label} 必須是整數，例如 0x50。"
         if text.endswith(" is required"):
-            return f"{text[:-len(' is required')]} 為必填。"
+            return f"{text[: -len(' is required')]} 為必填。"
         match = re.fullmatch(r"(.+) has (\d+) bytes; limit is (\d+)", text)
         if match:
             return f"{match.group(1)} 有 {match.group(2)} 個位元組，超過 {match.group(3)} 個位元組上限。"
@@ -333,7 +333,9 @@ def _localize_gui_error(value: object, *, domain: str) -> str:
             return f"SPI CSV 含有多組可能的 {match.group(1)} 欄位，無法判定。"
         match = re.fullmatch(r"CSV row (\d+) has (\d+) fields; expected (\d+)", text)
         if match:
-            return f"CSV 第 {match.group(1)} 列有 {match.group(2)} 個欄位，預期 {match.group(3)} 個。"
+            return (
+                f"CSV 第 {match.group(1)} 列有 {match.group(2)} 個欄位，預期 {match.group(3)} 個。"
+            )
         match = re.fullmatch(r"invalid timestamp at CSV row (\d+): (.+)", text)
         if match:
             return f"CSV 第 {match.group(1)} 列的 timestamp 無效：{match.group(2)}。"
@@ -343,10 +345,16 @@ def _localize_gui_error(value: object, *, domain: str) -> str:
         match = re.fullmatch(r"timestamps decrease at CSV row (\d+)", text)
         if match:
             return f"CSV 第 {match.group(1)} 列的 timestamp 倒退。"
-        match = re.fullmatch(r"invalid (MOSI|MISO) byte at CSV row (\d+): (.+); expected 0\.\.255 or 0x00\.\.0xFF", text)
+        match = re.fullmatch(
+            r"invalid (MOSI|MISO) byte at CSV row (\d+): (.+); expected 0\.\.255 or 0x00\.\.0xFF",
+            text,
+        )
         if match:
             return f"CSV 第 {match.group(2)} 列的 {match.group(1)} 位元組無效：{match.group(3)}；預期 0..255 或 0x00..0xFF。"
-        match = re.fullmatch(r"CSV row (\d+) must provide both MOSI and MISO bytes; empty channel data is incomplete evidence", text)
+        match = re.fullmatch(
+            r"CSV row (\d+) must provide both MOSI and MISO bytes; empty channel data is incomplete evidence",
+            text,
+        )
         if match:
             return f"CSV 第 {match.group(1)} 列必須同時提供 MOSI 與 MISO 位元組；空白通道屬於不完整證據。"
         match = re.fullmatch(r"invalid chip-select state at CSV row (\d+): (.+)", text)
@@ -452,7 +460,6 @@ def render_guide_expander(
     if markdown is not None:
         with st.expander(label, expanded=False):
             st.markdown(prepare_guide_markdown(markdown, chapter_rel_path))
-
 
 
 __all__ = [

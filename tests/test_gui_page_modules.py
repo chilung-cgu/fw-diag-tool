@@ -22,6 +22,10 @@ PAGE_MODULES = [
     "fw_diag_tool.gui.pages.codegen_ui",
     "fw_diag_tool.gui.pages.fault_arena_ui",
     "fw_diag_tool.gui.pages.sop_ui",
+    "fw_diag_tool.gui.pages.emulator_ui",
+    "fw_diag_tool.gui.pages.chip_db_ui",
+    "fw_diag_tool.gui.pages.fuzz_lab_ui",
+    "fw_diag_tool.gui.pages.dashboard_ui",
 ]
 
 

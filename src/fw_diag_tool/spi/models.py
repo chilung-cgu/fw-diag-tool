@@ -133,6 +133,23 @@ class SPITransaction:
     wel_state_before: bool | None = None
     busy_state_after: bool | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "index": self.index,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "duration_us": self.duration_us,
+            "mosi_bytes": list(self.mosi_bytes),
+            "miso_bytes": list(self.miso_bytes),
+            "opcode": self.opcode,
+            "opcode_name": self.opcode_name,
+            "address": self.address,
+            "data_payload_len": self.data_payload_len,
+            "decoded_details": dict(self.decoded_details),
+            "wel_state_before": self.wel_state_before,
+            "busy_state_after": self.busy_state_after,
+        }
+
 
 @dataclass
 class SPIDiagnosticIssue:
@@ -145,6 +162,20 @@ class SPIDiagnosticIssue:
     root_cause_guide: str
     details: dict[str, Any] = field(default_factory=dict)
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "title": self.title,
+            "severity": self.severity.value
+            if hasattr(self.severity, "value")
+            else str(self.severity),
+            "timestamp": self.timestamp,
+            "transaction_id": self.transaction_id,
+            "description": self.description,
+            "root_cause_guide": self.root_cause_guide,
+            "details": dict(self.details),
+        }
+
 
 @dataclass
 class SPIReportSummary:
@@ -156,12 +187,30 @@ class SPIReportSummary:
     anomaly_count: int = 0
     detected_flash_chip: str | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_transactions": self.total_transactions,
+            "read_count": self.read_count,
+            "write_count": self.write_count,
+            "erase_count": self.erase_count,
+            "status_poll_count": self.status_poll_count,
+            "anomaly_count": self.anomaly_count,
+            "detected_flash_chip": self.detected_flash_chip,
+        }
+
 
 @dataclass
 class SPIDataQualityIssue:
     code: str
     message: str
     count: int = 1
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "message": self.message,
+            "count": self.count,
+        }
 
 
 @dataclass
@@ -170,3 +219,17 @@ class SPIReport:
     transactions: list[SPITransaction] = field(default_factory=list)
     anomalies: list[SPIDiagnosticIssue] = field(default_factory=list)
     data_quality_issues: list[SPIDataQualityIssue] = field(default_factory=list)
+
+    @property
+    def issues(self) -> list[SPIDiagnosticIssue]:
+        """Alias for anomalies to provide a unified issue model across engines."""
+        return self.anomalies
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "summary": self.summary.to_dict(),
+            "transactions": [t.to_dict() for t in self.transactions],
+            "anomalies": [a.to_dict() for a in self.anomalies],
+            "issues": [a.to_dict() for a in self.anomalies],
+            "data_quality_issues": [q.to_dict() for q in self.data_quality_issues],
+        }

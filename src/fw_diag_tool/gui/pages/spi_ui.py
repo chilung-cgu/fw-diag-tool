@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+
 import streamlit as st
 
+from fw_diag_tool.gui.sarif_export import render_sarif_download
 from fw_diag_tool.gui.shared import (
     _localize_gui_error,
     analyze_spi_input,
@@ -9,6 +12,7 @@ from fw_diag_tool.gui.shared import (
 )
 from fw_diag_tool.gui.uploads import MAX_UPLOAD_BYTES, decode_uploaded_text
 from fw_diag_tool.resources import load_spi_sample
+from fw_diag_tool.session.session_manager import SessionManager
 from fw_diag_tool.spi.reporter import SPIReporter
 
 MAX_UPLOAD_MIB = MAX_UPLOAD_BYTES // (1024 * 1024)
@@ -19,6 +23,23 @@ def render() -> None:
     render_guide_expander(
         "chapters/ch08_spi_flash.md", "📖 點擊展開：SPI Flash 協定與狀態機診斷教學"
     )
+    session_upload = st.file_uploader(
+        "載入可重現 Session（.fwsession.json）",
+        type=["json"],
+        max_upload_size=SessionManager.MAX_SESSION_BYTES // (1024 * 1024),
+        key="spi_session_upload",
+    )
+    if session_upload is not None:
+        try:
+            loaded_session = SessionManager.deserialize_session(session_upload.getvalue())
+            st.info(
+                f"已載入 Session：{loaded_session.name or 'SPI Analysis'}｜"
+                f"工具版本：{loaded_session.tool_version}"
+            )
+            with st.expander("檢視 Session 報告摘要", expanded=False):
+                st.json(loaded_session.report, expanded=False)
+        except (TypeError, ValueError) as exc:
+            st.error(f"無法載入 Session：{_localize_gui_error(exc, domain='session')}")
     spi_col1, spi_col2 = st.columns([3, 1])
     with spi_col1:
         uploaded_spi = st.file_uploader(
@@ -64,10 +85,7 @@ def render() -> None:
         try:
             rep = analyze_spi_input(csv_text, int(spi_page_size))
         except (TypeError, ValueError) as exc:
-            st.error(
-                "無法解析 SPI 追蹤記錄（trace）："
-                f"{_localize_gui_error(exc, domain='spi')}"
-            )
+            st.error(f"無法解析 SPI 追蹤記錄（trace）：{_localize_gui_error(exc, domain='spi')}")
         else:
             st.caption(
                 "本頁分析的是分析器已解碼的 MOSI／MISO／CS 交易（analyzer-decoded transaction）。"
@@ -90,4 +108,32 @@ def render() -> None:
                 file_name="spi_flash_report.md",
                 mime="text/markdown",
                 key="spi_download_report",
+            )
+            findings = [
+                {
+                    "code": issue.code,
+                    "title": issue.title,
+                    "severity": issue.severity.value
+                    if hasattr(issue.severity, "value")
+                    else str(issue.severity),
+                    "message": issue.description,
+                }
+                for issue in rep.issues
+            ]
+            render_sarif_download(findings, protocol="SPI", filename_prefix="spi_flash")
+            report_dict = rep.to_dict()
+            session_json = SessionManager.serialize_session(
+                name="SPI Analysis",
+                data=report_dict,
+                config={"max_page_size": int(spi_page_size)},
+                capture_sha256=hashlib.sha256(csv_text.encode("utf-8")).hexdigest()
+                if csv_text
+                else None,
+            )
+            st.download_button(
+                "💾 儲存分析 Session",
+                data=session_json,
+                file_name="spi_analysis.fwsession.json",
+                mime="application/json",
+                key="spi_download_session",
             )
