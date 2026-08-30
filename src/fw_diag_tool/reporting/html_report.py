@@ -304,6 +304,33 @@ hr {
     font-size: 0.8rem;
     text-align: center;
 }
+/* Collapsible sections */
+details {
+    margin: 1.5rem 0;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem 1rem 1rem;
+    background-color: rgba(30, 41, 59, 0.2);
+}
+
+summary {
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+}
+
+@media print {
+    body { background-color: #fff !important; color: #000 !important; padding: 0; }
+    .container { max-width: 100%; }
+    .report-header { box-shadow: none; border: 1px solid #ccc; }
+    pre { background-color: #f5f5f5 !important; color: #000 !important; }
+    code { background-color: #f0f0f0 !important; color: #000 !important; border-color: #ccc !important; }
+    a { color: #000 !important; text-decoration: underline; }
+    .badge { border: 1px solid #999 !important; }
+    thead th { background-color: #eee !important; color: #000 !important; }
+    tbody td { color: #000 !important; }
+    .report-footer { display: none; }
+}
 """
 
 # Light theme CSS aligned with fw-diag GUI light mode (#ffffff, #f1f5f9, #0369a1, #1e293b)
@@ -596,6 +623,33 @@ hr {
     font-size: 0.8rem;
     text-align: center;
 }
+/* Collapsible sections */
+details {
+    margin: 1.5rem 0;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.5rem 1rem 1rem;
+    background-color: rgba(241, 245, 249, 0.4);
+}
+
+summary {
+    cursor: pointer;
+    user-select: none;
+    outline: none;
+}
+
+@media print {
+    body { background-color: #fff !important; color: #000 !important; padding: 0; }
+    .container { max-width: 100%; }
+    .report-header { box-shadow: none; border: 1px solid #ccc; }
+    pre { background-color: #f5f5f5 !important; color: #000 !important; }
+    code { background-color: #f0f0f0 !important; color: #000 !important; border-color: #ccc !important; }
+    a { color: #000 !important; text-decoration: underline; }
+    .badge { border: 1px solid #999 !important; }
+    thead th { background-color: #eee !important; color: #000 !important; }
+    tbody td { color: #000 !important; }
+    .report-footer { display: none; }
+}
 """
 
 
@@ -625,6 +679,23 @@ def _inline_markdown_to_html(text: str) -> str:
     )
 
     return out
+
+def _slugify(text: str) -> str:
+    """Generate URL-friendly and anchor-friendly slug ID from heading text."""
+    cleaned = re.sub(r"[`*_~]", "", text)
+    cleaned = cleaned.lower().strip()
+    cleaned = re.sub(r"[\s_]+", "-", cleaned)
+    cleaned = re.sub(r"[^\w-]", "", cleaned)
+    cleaned = re.sub(r"-+", "-", cleaned)
+    return cleaned.strip("-")
+
+
+def _convert_heading(level: int, raw_title: str) -> str:
+    """Convert Markdown heading into HTML heading tag with anchor id."""
+    heading_content = _inline_markdown_to_html(raw_title)
+    slug = _slugify(raw_title)
+    id_attr = f' id="{slug}"' if slug else ""
+    return f"<h{level}{id_attr}>{heading_content}</h{level}>"
 
 
 def _parse_table(lines: list[str]) -> str:
@@ -688,6 +759,7 @@ def convert_markdown_to_html(
     lines = markdown_text.splitlines()
     body_html: list[str] = []
     idx = 0
+    in_details = False
     total_lines = len(lines)
 
     while idx < total_lines:
@@ -727,8 +799,22 @@ def convert_markdown_to_html(
         header_match = re.match(r"^(#{1,6})\s+(.+)$", stripped)
         if header_match:
             level = len(header_match.group(1))
-            heading_content = _inline_markdown_to_html(header_match.group(2))
-            body_html.append(f"<h{level}>{heading_content}</h{level}>")
+            raw_title = header_match.group(2).strip()
+            if level == 1:
+                if in_details:
+                    body_html.append("</details>")
+                    in_details = False
+                heading_content = _inline_markdown_to_html(raw_title)
+                body_html.append(f"<h1>{heading_content}</h1>")
+            elif level == 2:
+                if in_details:
+                    body_html.append("</details>")
+                in_details = True
+                h2_tag = _convert_heading(2, raw_title)
+                body_html.append("<details open>")
+                body_html.append(f"<summary>{h2_tag}</summary>")
+            else:
+                body_html.append(_convert_heading(level, raw_title))
             idx += 1
             continue
 

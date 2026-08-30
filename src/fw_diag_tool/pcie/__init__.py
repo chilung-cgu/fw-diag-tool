@@ -1,4 +1,5 @@
 from .diagnostics import ROOT_CAUSE_GUIDES, get_root_cause_guide
+from .diff import PCIeDiffEngine, PCIeDiffResult
 from .models import (
     AERAnalysisResult,
     AERCorrectableError,
@@ -27,6 +28,8 @@ __all__ = [
     "HeaderType",
     "PCIeAnalyzer",
     "PCIeConfigSpace",
+    "PCIeDiffEngine",
+    "PCIeDiffResult",
     "PCIeReporter",
     "StandardCapability",
     "TLPHeaderDecoded",

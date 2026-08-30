@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2026-08-30
+
+### Added
+- PCIe Diff Engine (pcie/diff.py) -- AER error diff, link degradation detection, vendor/device comparison
+- MCTP Diff Engine (mctp/diff.py) -- message count delta, error diff, protocol pattern comparison
+- Protocol A/B Diff extended to PCIe and MCTP (5 protocols total: I2C/SPI/UART/PCIe/MCTP)
+- Batch Analysis GUI page (batch_ui) -- multi-file upload, auto protocol detection, ZIP report download
+- Settings & Preferences GUI page (settings_ui) -- I2C timeout, language, theme, row limit, SPI page size
+- HTML report enhancements -- print-friendly CSS, TOC heading anchors with slug IDs, collapsible details sections
+- Accessibility: skip-to-content navigation link, main-content anchor in app.py
+- Dashboard: Recent Sessions panel, page count updated to 26
+- Localization maps module (localization_maps.py) -- extracted from shared.py for cleaner separation
+- MkDocs documentation: Ch20 Protocol Diff, Ch21 Session Compare, Ch22 Batch Analysis, Ch23 Settings
+- PAGE_INDEX entries for Batch Analysis and Settings pages
+- i18n keys: title_batch_analysis, title_settings, whats_new updated to v1.4.0
+
+### Fixed
+- fuzz_lab_ui.py mypy error -- split shared report variable into per-protocol locals
+- Unused import in test_settings_ui.py
+
+### Changed
+- shared.py refactored: PAGE_INDEX unified from page_index.py, localization dicts extracted to localization_maps.py
+- Navigation pages expanded from 24 to 26 (Batch Analysis, Settings)
+- Dashboard Whats New content updated from v1.2.0 to v1.4.0
+- pyproject.toml version bumped to 1.4.0
+- Test suite grown to 977+ tests across 90+ files
+
 ## [1.3.0] - 2026-08-30
 
 ### Added

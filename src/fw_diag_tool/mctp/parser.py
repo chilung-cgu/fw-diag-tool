@@ -346,6 +346,16 @@ class ServerMgmtParser:
         return cls.parse_text_dump(text, protocol_mode=protocol_mode)
 
     @classmethod
+    def parse_hex_input(
+        cls,
+        text: str,
+        *,
+        protocol_mode: ProtocolMode | str = ProtocolMode.AUTO,
+    ) -> ServerMgmtReport:
+        """Parse MCTP and IPMB hex dump text."""
+        return cls.parse_text_dump(text, protocol_mode=protocol_mode)
+
+    @classmethod
     def parse_text_dump(
         cls,
         text: str,
@@ -482,4 +492,7 @@ class ServerMgmtParser:
             summary_text=summary_str,
             unparsed_lines=unparsed_lines,
             source_errors=source_errors,
+            protocol_mode=protocol_mode,
+            errors=source_errors,
+            warnings=[],
         )

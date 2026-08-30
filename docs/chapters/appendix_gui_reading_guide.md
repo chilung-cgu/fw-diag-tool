@@ -1,4 +1,4 @@
-# 附錄 B：20 個 GUI 頁面的閱讀地圖
+# 附錄 B：26+ 個 GUI 頁面的閱讀地圖
 
 這份附錄只回答「我現在在哪一頁、先放什麼、不能證明什麼、下一步去哪裡」。每一節都有該頁的直接章節連結；I2C 圖表細節請跳到[附錄 A：圖表與證據判讀](appendix_chart_guide.md)，不要在這張地圖重複定義 axes 或 thresholds。
 
@@ -9,7 +9,7 @@
 | [ch01 I2C/SMBus/PMBus](ch01_i2c_pmbus.md) | 第 1 頁輸入契約、fixture、五個 tabs 的操作流程與預期輸出 | 具體 workflow 與下一步 |
 | [附錄 A 圖表判讀](appendix_chart_guide.md) | frequency/timeline/health/anomaly 的軸、threshold、status 與 evidence 規則 | 第 1 頁連結 |
 | [ch02 Packet Builder](ch02_packet_builder.md) | 第 2 頁 canonical transfer、ideal waveform、四種模板與安全 gate | 第 2 頁欄位摘要 |
-| 本附錄 B | 20 個 GUI 頁面的導航與跨頁證據邊界 | 每頁入口、不能直接證明、下一步 |
+| 本附錄 B | 26+ 個 GUI 頁面的導航與跨頁證據邊界 | 每頁入口、不能直接證明、下一步 |
 
 ## 第一次導覽
 
@@ -138,3 +138,39 @@
 | 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
 |---|---|---|---|
 | 第 1 頁產生的五個 Tabs 分析圖表與異常代碼 | Measured / Source-provided / Reconstructed / Inferred / Hypothesis / Unavailable 證據標籤分類與閾值定義 | 圖表統計數據不代表類比訊號完整性或物理損壞 | 對照證據等級補足示波器實體量測或硬體電源測試。 |
+
+### 21. [多工作階段趨勢分析](ch18_session_analytics.md)
+
+| 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
+|---|---|---|---|
+| 多個 `.fwsession.json` 檔案 | 趨勢雙軸折線圖（異常數 vs 交易數）、Session 列表與健康狀態 | 趨勢改善不代表底層硬體無未擷取到的零星異常 | 針對異常尖峰的特定 Session 載入原始 capture 做協定層深度分析。 |
+
+### 22. [PDF 報告匯出](ch19_pdf_export.md)
+
+| 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
+|---|---|---|---|
+| 各協定分析產生的結構化診斷結果 | PDF 匯出預覽、標題、中繼資料橫幅、表格與程式碼區塊 | 靜態 PDF 報告不包含互動式圖表與原始未解碼波形 | 保存 PDF 作為驗收記錄，原始 capture 與 JSON 檔另外歸檔保存。 |
+
+### 23. [協定 A/B 對比分析（Protocol Diff）](ch20_protocol_diff.md)
+
+| 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
+|---|---|---|---|
+| 目標協定（I2C/SPI/UART/PCIe/MCTP）、Baseline 與 Candidate 雙側追蹤或日誌 | 4 組 KPI 指標卡片、判定 Banner、新增/已解決/共同項目清單 | 協定層差異不代表實體層類比電氣特性相同 | 對照差異清單鎖定首個分歧點，結合示波器量測電源與匯流排訊號。 |
+
+### 24. [Session A/B 對比（Session Comparison）](ch21_session_compare.md)
+
+| 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
+|---|---|---|---|
+| Baseline 與 Candidate 兩份 `.fwsession.json` 檔案或示範資料 | 改善/退化/持平判定徽章、Delta 指標卡片、詳細指標對比矩陣 | 結構化摘要對比不等於重新解碼底層波形；跨協定比對僅供參考 | 核對 Delta 數據，若判定退化則依 Session 的 `capture_sha256` 取出原始檔深查。 |
+
+### 25. [批次分析（Batch Analysis）](ch22_batch_analysis.md)
+
+| 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
+|---|---|---|---|
+| 多個 `.csv`、`.log`、`.txt` 或 `.hex` 檔案，選擇自動偵測或指定協定 | 總檔案數/成功/警告/錯誤統計卡片、結果彙總表、ZIP 報告打包 | 批次分析成功只代表無已知異常，不保證覆蓋所有硬體 corner case | 下載 ZIP 報告包檢閱各檔案詳情，將 SARIF 匯入 CI/CD 或集中管理系統。 |
+
+### 26. [偏好設定（Settings & Preferences）](ch23_settings.md)
+
+| 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
+|---|---|---|---|
+| I2C Timeout、語系、主題、資料列數上限、SPI Page Size 參數 | 目前生效設定摘要看板（5 組指標）、即時套用狀態 | 偏好設定僅調整本機分析門檻與介面外觀，不改變實體硬體暫存器 | 依測試規格微調門檻後，返回協定診斷頁面進行標準化判定。 |

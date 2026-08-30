@@ -1,4 +1,4 @@
-"""I2C、SPI、UART 協定 A/B 對比分析頁面。"""
+"""I2C、SPI、UART、PCIe、MCTP 協定 A/B 對比分析頁面。"""
 
 from __future__ import annotations
 
@@ -17,13 +17,17 @@ from fw_diag_tool.gui.uploads import (
 from fw_diag_tool.i2c.diff import I2CDiffEngine
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i18n import t
+from fw_diag_tool.mctp.diff import MCTPDiffEngine
+from fw_diag_tool.mctp.parser import ServerMgmtParser
+from fw_diag_tool.pcie.diff import PCIeDiffEngine
+from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.spi.diff import SPIDiffEngine
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.uart.diff import UARTDiffEngine
 from fw_diag_tool.uart.parser import UARTCrashParser
 
 MAX_UPLOAD_MIB = max(1, MAX_UPLOAD_BYTES // (1024 * 1024))
-_PROTOCOLS = ("I2C", "SPI", "UART")
+_PROTOCOLS = ("I2C", "SPI", "UART", "PCIe", "MCTP")
 
 
 def _tr(key: str, fallback: str, **kwargs: Any) -> str:
@@ -32,7 +36,7 @@ def _tr(key: str, fallback: str, **kwargs: Any) -> str:
 
 
 def _uploaded_text(uploaded: Any) -> str:
-    return decode_uploaded_text(uploaded, allowed_extensions={".csv", ".txt", ".log"})
+    return decode_uploaded_text(uploaded, allowed_extensions={".csv", ".txt", ".log", ".hex"})
 
 
 def _write_temp_input(text: str, suffix: str = ".csv") -> Path:
@@ -62,6 +66,13 @@ def _analyze_input(protocol: str, text: str, source_name: str | None = None) -> 
             path.unlink(missing_ok=True)
     if protocol == "UART":
         return UARTCrashParser.parse_log_text(text)
+    if protocol == "PCIe":
+        results = PCIeAnalyzer.parse_multi_lspci_text(text)
+        if not results:
+            raise ValueError("無有效的 PCIe 配置空間資料")
+        return results[0]
+    if protocol == "MCTP":
+        return ServerMgmtParser.parse_hex_input(text)
     raise ValueError(f"不支援的協定：{protocol}")
 
 
@@ -72,12 +83,20 @@ def _compare(protocol: str, baseline: Any, candidate: Any) -> Any:
         return SPIDiffEngine.compare(baseline, candidate)
     if protocol == "UART":
         return UARTDiffEngine.compare(baseline, candidate)
+    if protocol == "PCIe":
+        return PCIeDiffEngine.compare(baseline, candidate)
+    if protocol == "MCTP":
+        return MCTPDiffEngine.compare(baseline, candidate)
     raise ValueError(f"不支援的協定：{protocol}")
 
 
 def _diff_lists(protocol: str, result: Any) -> tuple[list[str], list[str], list[str]]:
     if protocol == "UART":
         return result.new_symbols, result.resolved_symbols, result.common_symbols
+    if protocol == "PCIe":
+        return result.new_aer_errors, result.resolved_aer_errors, result.common_aer_errors
+    if protocol == "MCTP":
+        return result.new_errors, result.resolved_errors, result.common_errors
     return result.new_anomalies, result.resolved_anomalies, result.common_anomalies
 
 
@@ -108,12 +127,21 @@ def format_protocol_diff_markdown(
         lines.append(f"- 交易數變化：{result.transaction_count_delta:+d}")
         lines.append(f"- Baseline 晶片：{result.baseline_detected_chip or '未識別'}")
         lines.append(f"- Candidate 晶片：{result.candidate_detected_chip or '未識別'}")
-    else:
+    elif protocol == "UART":
         lines.append(f"- 崩潰類型：{result.baseline_crash_type} -> {result.candidate_crash_type}")
         lines.append(
             f"- 故障位址：{result.baseline_fault_address or 'N/A'} -> "
             f"{result.candidate_fault_address or 'N/A'}"
         )
+    elif protocol == "PCIe":
+        lines.append(f"- Vendor 變更：{result.vendor_changed}")
+        lines.append(f"- Device 變更：{result.device_changed}")
+        lines.append(f"- Link 降級變更：{result.link_degradation_changed}")
+        lines.append(f"- Baseline Link：{result.baseline_link_summary}")
+        lines.append(f"- Candidate Link：{result.candidate_link_summary}")
+    elif protocol == "MCTP":
+        lines.append(f"- 訊息數變化：{result.message_count_delta:+d}")
+        lines.append(f"- 協定模式變更：{result.protocol_mode_changed}")
     for title, items in (
         ("新增項目（New）", new_items),
         ("已解決項目（Resolved）", resolved_items),
@@ -154,6 +182,20 @@ def _render_metrics(protocol: str, result: Any) -> None:
         columns[2].metric("共同符號", len(common_items))
         columns[3].metric("故障位址", "變更" if result.fault_address_changed else "相同")
         return
+    if protocol == "PCIe":
+        columns = st.columns(4)
+        columns[0].metric("新增 AER 錯誤", len(new_items))
+        columns[1].metric("已解決 AER 錯誤", len(resolved_items))
+        columns[2].metric("共同 AER 錯誤", len(common_items))
+        columns[3].metric("Link 降級", "變更" if result.link_degradation_changed else "相同")
+        return
+    if protocol == "MCTP":
+        columns = st.columns(4)
+        columns[0].metric("新增錯誤", len(new_items))
+        columns[1].metric("已解決錯誤", len(resolved_items))
+        columns[2].metric("共同錯誤", len(common_items))
+        columns[3].metric("訊息數變化", f"{result.message_count_delta:+d}")
+        return
     columns = st.columns(4)
     columns[0].metric("新增異常", len(new_items))
     columns[1].metric("已解決異常", len(resolved_items))
@@ -168,7 +210,12 @@ def render() -> None:
         _PROTOCOLS,
         key="protocol_diff_protocol",
     )
-    file_types = ["txt", "log"] if protocol == "UART" else ["csv", "txt"]
+    if protocol == "UART":
+        file_types = ["txt", "log"]
+    elif protocol in ("PCIe", "MCTP"):
+        file_types = ["txt", "hex", "log"]
+    else:
+        file_types = ["csv", "txt"]
     columns = st.columns(2)
     uploaded: list[Any] = []
     pasted: list[str] = []

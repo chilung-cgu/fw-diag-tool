@@ -6,9 +6,11 @@ import pytest
 
 from fw_diag_tool.gui.pages.protocol_diff_ui import (
     _analyze_input,
+    _compare,
     _diff_lists,
     format_protocol_diff_markdown,
 )
+from fw_diag_tool.resources import load_pcie_lspci_sample
 
 
 def _result(protocol: str = "I2C") -> SimpleNamespace:
@@ -24,6 +26,29 @@ def _result(protocol: str = "I2C") -> SimpleNamespace:
             candidate_crash_type="arm_hardfault",
             baseline_fault_address="0x10",
             candidate_fault_address="0x10",
+            is_identical=False,
+        )
+    if protocol == "PCIe":
+        return SimpleNamespace(
+            summary="PCIe 對比結果：Link 狀態變更。",
+            new_aer_errors=["Unsupported Request"],
+            resolved_aer_errors=["Bad TLP"],
+            common_aer_errors=["Receiver Error"],
+            vendor_changed=False,
+            device_changed=False,
+            link_degradation_changed=True,
+            baseline_link_summary="Gen3 x8",
+            candidate_link_summary="Gen3 x4",
+            is_identical=False,
+        )
+    if protocol == "MCTP":
+        return SimpleNamespace(
+            summary="MCTP/IPMB 對比結果：訊息數變化 +3。",
+            new_errors=["line 2: bad checksum"],
+            resolved_errors=["line 1: timeout"],
+            common_errors=["line 3: unknown type"],
+            message_count_delta=3,
+            protocol_mode_changed=True,
             is_identical=False,
         )
     return SimpleNamespace(
@@ -82,3 +107,69 @@ def test_analyze_input_rejects_empty_content() -> None:
 def test_analyze_input_parses_uart_text() -> None:
     report = _analyze_input("UART", "normal boot output")
     assert report.crash_type.value == "Generic Serial Log / Boot Trace"
+
+
+def test_analyze_input_parses_pcie_text() -> None:
+    lspci_text = load_pcie_lspci_sample()
+    report = _analyze_input("PCIe", lspci_text)
+    assert report.vendor_id == 0x10EE
+    assert report.device_id == 0x7024
+
+
+def test_analyze_input_parses_mctp_text() -> None:
+    hex_text = "01 08 00 C0 01"
+    report = _analyze_input("MCTP", hex_text)
+    assert len(report.mctp_messages) >= 1
+
+
+def test_compare_pcie_and_mctp() -> None:
+    lspci_text = load_pcie_lspci_sample()
+    pcie_dev = _analyze_input("PCIe", lspci_text)
+    pcie_res = _compare("PCIe", pcie_dev, pcie_dev)
+    assert pcie_res.is_identical is True
+
+    hex_text = "01 08 00 C0 01"
+    mctp_rep = _analyze_input("MCTP", hex_text)
+    mctp_res = _compare("MCTP", mctp_rep, mctp_rep)
+    assert mctp_res.is_identical is True
+
+
+def test_diff_lists_selects_pcie_aer_errors() -> None:
+    result = _result("PCIe")
+    assert _diff_lists("PCIe", result) == (
+        ["Unsupported Request"],
+        ["Bad TLP"],
+        ["Receiver Error"],
+    )
+
+
+def test_diff_lists_selects_mctp_errors() -> None:
+    result = _result("MCTP")
+    assert _diff_lists("MCTP", result) == (
+        ["line 2: bad checksum"],
+        ["line 1: timeout"],
+        ["line 3: unknown type"],
+    )
+
+
+def test_pcie_markdown_contains_link_metrics() -> None:
+    report = format_protocol_diff_markdown("PCIe", _result("PCIe"))
+    assert "# PCIe A/B 對比報告" in report
+    assert "Vendor 變更：False" in report
+    assert "Device 變更：False" in report
+    assert "Link 降級變更：True" in report
+    assert "Baseline Link：Gen3 x8" in report
+    assert "Candidate Link：Gen3 x4" in report
+    assert "- Unsupported Request" in report
+    assert "- Bad TLP" in report
+    assert "- Receiver Error" in report
+
+
+def test_mctp_markdown_contains_message_delta() -> None:
+    report = format_protocol_diff_markdown("MCTP", _result("MCTP"))
+    assert "# MCTP A/B 對比報告" in report
+    assert "訊息數變化：+3" in report
+    assert "協定模式變更：True" in report
+    assert "- line 2: bad checksum" in report
+    assert "- line 1: timeout" in report
+    assert "- line 3: unknown type" in report

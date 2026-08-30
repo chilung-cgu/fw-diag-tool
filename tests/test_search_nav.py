@@ -16,7 +16,7 @@ class TestPageIndex:
     """Validate the PAGE_INDEX data structure."""
 
     def test_has_21_entries(self) -> None:
-        assert len(PAGE_INDEX) == 20
+        assert len(PAGE_INDEX) == 24
 
     def test_all_entries_have_required_keys(self) -> None:
         required = {"title", "url", "category", "keywords"}
@@ -50,7 +50,7 @@ class TestPageIndex:
 class TestRenderFunctions:
     """Test render functions don't raise when called with mocked st."""
 
-    @patch("fw_diag_tool.gui.shared.st")
+    @patch("fw_diag_tool.gui.page_index.st")
     def test_render_breadcrumb_no_error(self, mock_st: MagicMock) -> None:
         render_breadcrumb("Protocol Analysis", "I2C Diagnosis")
         mock_st.markdown.assert_called_once()
@@ -59,25 +59,25 @@ class TestRenderFunctions:
         assert "Protocol Analysis" in html
         assert "I2C Diagnosis" in html
 
-    @patch("fw_diag_tool.gui.shared.st")
+    @patch("fw_diag_tool.gui.page_index.st")
     def test_render_global_search_empty(self, mock_st: MagicMock) -> None:
         mock_st.sidebar.text_input.return_value = ""
         render_global_search()
         mock_st.sidebar.text_input.assert_called_once()
 
-    @patch("fw_diag_tool.gui.shared.st")
+    @patch("fw_diag_tool.gui.page_index.st")
     def test_render_global_search_with_query(self, mock_st: MagicMock) -> None:
         mock_st.sidebar.text_input.return_value = "i2c"
         render_global_search()
         assert mock_st.sidebar.markdown.called
 
-    @patch("fw_diag_tool.gui.shared.st")
+    @patch("fw_diag_tool.gui.page_index.st")
     def test_render_global_search_no_results(self, mock_st: MagicMock) -> None:
         mock_st.sidebar.text_input.return_value = "zzzznonexistent"
         render_global_search()
         mock_st.sidebar.caption.assert_called_once()
 
-    @patch("fw_diag_tool.gui.shared.st")
+    @patch("fw_diag_tool.gui.page_index.st")
     def test_render_keyboard_shortcuts_no_error(self, mock_st: MagicMock) -> None:
         expander_ctx = MagicMock()
         mock_st.sidebar.expander.return_value.__enter__ = MagicMock(return_value=expander_ctx)

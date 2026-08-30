@@ -148,6 +148,18 @@ PAGE_INDEX: list[dict[str, str]] = [
         "category": "Labs",
         "keywords": "fuzz fuzzing test stress parser edge case random",
     },
+    {
+        "title": "Batch Analysis",
+        "url": "batch-analysis",
+        "category": "Advanced Analysis",
+        "keywords": "batch parallel multi file directory analysis zip report",
+    },
+    {
+        "title": "Settings & Preferences",
+        "url": "settings",
+        "category": "Tools",
+        "keywords": "settings preferences config timeout language theme spi page size",
+    },
 ]
 
 

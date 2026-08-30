@@ -13,6 +13,7 @@ from fw_diag_tool.gui.shared import _FAULT_ARENA_CASES_ZH, render_page_footer
 from fw_diag_tool.gui.theme import get_plotly_template
 from fw_diag_tool.i18n import t
 from fw_diag_tool.metrics import get_metrics_collector
+from fw_diag_tool.session.session_manager import SessionManager
 
 
 def _get_example_data_count() -> int:
@@ -56,7 +57,7 @@ def _render_system_info() -> None:
     metrics = (
         ("Python 版本", platform.python_version()),
         ("工具版本", f"v{__version__}"),
-        ("頁面數", "21"),
+        ("頁面數", "26"),
         ("協定數", "5"),
     )
     columns = st.columns(4)
@@ -116,6 +117,39 @@ def _render_health_check() -> None:
             st.warning("系統部分健康：部分核心套件缺失")
         else:
             st.error("系統異常：Python 版本或核心套件不符合要求")
+
+
+def _render_recent_sessions() -> None:
+    """Render a recent analysis sessions panel."""
+    with st.expander("📂 最近分析記錄", expanded=False):
+        try:
+            manager = SessionManager()
+            sessions = manager.list_sessions() if hasattr(manager, "list_sessions") else []
+            if not sessions:
+                st.info("尚無已儲存的分析記錄。請在各協定分析頁面使用「儲存 Session」功能。")
+                return
+            # Show at most 10 recent sessions
+            recent = sessions[:10]
+            rows = []
+            for s in recent:
+                if isinstance(s, dict):
+                    name = s.get("name") or (str(s["session_id"])[:8] if "session_id" in s else "—")
+                    protocol = s.get("protocol", "—")
+                    created_at = s.get("created_at", "—")
+                else:
+                    name = getattr(s, "name", str(s.session_id)[:8] if hasattr(s, "session_id") else "—")
+                    protocol = getattr(s, "protocol", "—")
+                    created_at = getattr(s, "created_at", "—")
+                rows.append({
+                    "名稱": name,
+                    "協定": protocol,
+                    "建立時間": created_at,
+                })
+            if rows:
+                import pandas as pd
+                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        except Exception:
+            st.caption("無法載入最近記錄。")
 
 
 def _render_usage_metrics() -> None:
@@ -192,7 +226,7 @@ def render() -> None:
     with stat_col2:
         st.metric(
             label=t("installed_modules_protocols", domain="gui"),
-            value="20 Pages",
+            value="26 Pages",
             delta="6 大協定 (I2C, SPI, UART, PCIe, MCTP, DTS)",
             delta_color="off",
         )
@@ -359,15 +393,16 @@ def render() -> None:
     st.subheader(t("whats_new_title", domain="gui"))
     with st.expander(t("whats_new_expander", domain="gui"), expanded=True):
         st.markdown(
-            "- **🔗 跨協定時間線關聯分析 (Cross-Protocol Correlation)**：同步整合 I2C、SPI、UART、PCIe 異常事件時間軸，自動識別叢集並分析跨介面連鎖故障根因。\n"
-            "- **📋 Board Profile 視覺化編輯器**：支援板級拓撲、匯流排裝置、中斷與暫存器對映視覺化編輯、語意驗證與 YAML 匯入匯出。\n"
-            "- **🧪 虛擬設備模擬器升級 (Emulator Playground)**：新增 TMP102、PCA9548A、24C02、W25Q128 等週邊晶片模擬與暫存器/記憶體注入測試。\n"
-            "- **🛡️ SARIF 2.1.0 靜態分析匯出**：診斷報告全面支援標準 SARIF 格式，無縫整合 CI/CD 流程與 GitHub Code Scanning。\n"
-            "- **📄 獨立 HTML 診斷報告匯出**：支援一鍵將 Markdown 診斷報告封裝為美觀的離線獨立 HTML 網頁。\n"
-            "- **🎓 互動式教學導覽 (Tutorial UI)**：提供步驟式操作教學引導與 20 個實戰 Fault Arena 案例深度解析。\n"
-            "- **🌐 全介面繁體中文與體驗優化**：全模組落實繁體中文語意本地化、統一頁尾與主題樣式。"
+            "- **🔀 協定 A/B 對比分析 (Protocol Diff)**：I2C / SPI / UART / PCIe / MCTP 五大協定雙檔差分比對，新增 PCIe AER 與 MCTP 差分引擎。\n"
+            "- **⚖️ Session A/B 對比分析**：雙 .fwsession.json 記錄比對，異常與交易數量 Delta 指標、改善 / 退化 / 持平 Verdict 判定。\n"
+            "- **📦 批次分析 (Batch Analysis)**：多檔平行上傳、智慧協定自動偵測、彙總表格與 ZIP 報告一鍵下載。\n"
+            "- **⚙️ 偏好設定 (Settings)**：I2C Timeout、語系、主題、資料列數上限、SPI Page Size 集中管理與即時生效。\n"
+            "- **🖨️ HTML 報告增強**：列印友善 CSS、TOC 錨點導覽、可摺疊 Details 區段。\n"
+            "- **♿ 無障礙改善**：Skip-to-content 導覽連結、Dashboard 最近 Sessions 面板。\n"
+            "- **🛠 shared.py 重構**：本地化字典抽離至 localization_maps.py、PAGE_INDEX 統一由 page_index.py 管理。"
         )
 
+    _render_recent_sessions()
     _render_usage_metrics()
     render_page_footer()
 

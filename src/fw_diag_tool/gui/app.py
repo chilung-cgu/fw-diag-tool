@@ -9,7 +9,9 @@ from __future__ import annotations
 import streamlit as st
 
 from fw_diag_tool import __version__
+from fw_diag_tool.gui.accessibility import render_skip_nav_link
 from fw_diag_tool.gui.pages import (
+    batch_ui,
     board_profile_ui,
     chip_db_ui,
     codegen_ui,
@@ -27,6 +29,7 @@ from fw_diag_tool.gui.pages import (
     register_ui,
     session_analytics_ui,
     session_compare_ui,
+    settings_ui,
     sop_ui,
     spi_ui,
     tutorial_ui,
@@ -45,6 +48,8 @@ st.set_page_config(page_title="韌體訊號與協定診斷套件", page_icon="�
 from fw_diag_tool.gui.theme import inject_custom_theme, render_theme_toggle
 
 inject_custom_theme()
+
+st.markdown(render_skip_nav_link(), unsafe_allow_html=True)
 
 render_language_selector()
 
@@ -76,6 +81,12 @@ pages = {
         ),
     ],
     t("nav_category_advanced", domain="gui"): [
+        st.Page(
+            batch_ui.render,
+            title=t("title_batch_analysis", domain="gui"),
+            icon="📦",
+            url_path="batch-analysis",
+        ),
         st.Page(
             correlation_ui.render,
             title=t("title_correlation", domain="gui"),
@@ -130,6 +141,12 @@ pages = {
         ),
     ],
     t("nav_category_tools", domain="gui"): [
+        st.Page(
+            settings_ui.render,
+            title=t("title_settings", domain="gui"),
+            icon="⚙️",
+            url_path="settings",
+        ),
         st.Page(
             board_profile_ui.render,
             title=t("title_board_profile", domain="gui"),
@@ -202,5 +219,7 @@ render_global_search()
 render_keyboard_shortcuts()
 
 st.sidebar.caption(f"fw-diag-tool v{__version__}")
+
+st.markdown('<div id="main-content"></div>', unsafe_allow_html=True)
 
 nav.run()

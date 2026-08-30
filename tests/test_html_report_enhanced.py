@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from fw_diag_tool.reporting.html_report import (
     build_html_report,
     convert_markdown_to_html,
@@ -70,13 +68,11 @@ class TestLightTheme:
 class TestPrintCSS:
     """Tests for print-friendly CSS stylesheet and rules."""
 
-    @pytest.mark.skip(reason="Print CSS (@media print) not yet implemented in html_report.py")
     def test_print_media_query_present(self) -> None:
         """Verify that @media print stylesheet rule is present."""
         html = convert_markdown_to_html(SAMPLE_MD, title="Print Test")
         assert "@media print" in html
 
-    @pytest.mark.skip(reason="Print-specific element visibility rules not yet implemented")
     def test_print_hides_non_essential_elements(self) -> None:
         """Verify that print CSS hides interactive/non-essential elements."""
         html = convert_markdown_to_html(SAMPLE_MD, title="Print Test")
@@ -91,12 +87,11 @@ class TestTableOfContents:
         """Verify that all markdown headings are rendered into appropriate HTML tags."""
         html = convert_markdown_to_html(SAMPLE_MD, title="TOC Test")
         assert "<h1>診斷報告</h1>" in html
-        assert "<h2>總覽</h2>" in html
-        assert "<h3>I2C 分析結果</h3>" in html
-        assert "<h2>SPI 分析結果</h2>" in html
-        assert "<h2>結論</h2>" in html
+        assert '<h2 id="總覽">總覽</h2>' in html
+        assert '<h3 id="i2c-分析結果">I2C 分析結果</h3>' in html
+        assert '<h2 id="spi-分析結果">SPI 分析結果</h2>' in html
+        assert '<h2 id="結論">結論</h2>' in html
 
-    @pytest.mark.skip(reason="Heading ID attributes and auto-generated TOC nav not yet implemented")
     def test_headings_have_id_attributes(self) -> None:
         """Verify that headings include id attributes for anchor navigation."""
         html = convert_markdown_to_html(SAMPLE_MD, title="ID Test")
@@ -112,7 +107,6 @@ class TestCollapsibleSections:
         assert "細節" in html
         assert "<table" in html
 
-    @pytest.mark.skip(reason="Automatic <details>/<summary> collapsible sections not yet implemented")
     def test_details_elements_present(self) -> None:
         """Verify that collapsible sections render as <details> elements."""
         html = convert_markdown_to_html(SAMPLE_MD, title="Collapse Test")

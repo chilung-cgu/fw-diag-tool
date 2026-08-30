@@ -118,6 +118,14 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-TW": "協定解析器 Fuzz 測試",
         "en-US": "Protocol Parser Fuzzing Lab",
     },
+    "title_batch_analysis": {
+        "zh-TW": "批次分析",
+        "en-US": "Batch Analysis",
+    },
+    "title_settings": {
+        "zh-TW": "偏好設定",
+        "en-US": "Settings & Preferences",
+    },
     # Navigation Categories
     "nav_category_protocols": {"zh-TW": "協定分析與波形", "en-US": "Protocol Analysis & Waveforms"},
     "nav_category_advanced": {"zh-TW": "進階分析", "en-US": "Advanced Analysis"},
@@ -175,12 +183,12 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
     "session_management": {"zh-TW": "💾 Session 管理", "en-US": "💾 Session Management"},
     "module_overview": {"zh-TW": "🛠 功能模組總覽", "en-US": "🛠 Feature Modules Overview"},
     "whats_new_title": {
-        "zh-TW": "📢 最近更新紀錄 (What's New in v1.2.0)",
-        "en-US": "📢 What's New in v1.2.0",
+        "zh-TW": "📢 最近更新紀錄 (What's New in v1.4.0)",
+        "en-US": "📢 What's New in v1.4.0",
     },
     "whats_new_expander": {
-        "zh-TW": "🎉 檢視 v1.2.0 重點更新項目",
-        "en-US": "🎉 View Key Updates in v1.2.0",
+        "zh-TW": "🎉 檢視 v1.4.0 重點更新項目",
+        "en-US": "🎉 View Key Updates in v1.4.0",
     },
     "language_selector_label": {
         "zh-TW": "🌐 語言 / Language",

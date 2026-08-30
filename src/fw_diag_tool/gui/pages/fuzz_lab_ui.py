@@ -48,15 +48,15 @@ def _analyze_single_fuzz(proto_key: str, data: str) -> tuple[str, str, dict[str,
     """執行單次 Fuzz 資料解析並分類結果為 success / handled_error / crash。"""
     if proto_key == "i2c":
         try:
-            report = I2CDiagnosticEngine().analyze_csv_content(data)
+            i2c_report = I2CDiagnosticEngine().analyze_csv_content(data)
             return (
                 "success",
-                f"成功解析 {report.total_transactions} 筆交易，發現 {len(report.anomalies)} 個異常事件。",
+                f"成功解析 {i2c_report.total_transactions} 筆交易，發現 {len(i2c_report.anomalies)} 個異常事件。",
                 {
-                    "總交易數": report.total_transactions,
-                    "異常事件數": len(report.anomalies),
-                    "偵測裝置位址數": len(report.devices_detected),
-                    "資料品質警告數": len(report.data_quality_issues),
+                    "總交易數": i2c_report.total_transactions,
+                    "異常事件數": len(i2c_report.anomalies),
+                    "偵測裝置位址數": len(i2c_report.devices_detected),
+                    "資料品質警告數": len(i2c_report.data_quality_issues),
                 },
             )
         except (ValueError, KeyError, TypeError) as exc:
@@ -74,14 +74,14 @@ def _analyze_single_fuzz(proto_key: str, data: str) -> tuple[str, str, dict[str,
 
     if proto_key == "spi":
         try:
-            report = SPIDiagnosticEngine().analyze_csv_content(data)
+            spi_report = SPIDiagnosticEngine().analyze_csv_content(data)
             return (
                 "success",
-                f"成功解析 {len(report.transactions)} 筆交易，發現 {len(report.anomalies)} 個異常事件。",
+                f"成功解析 {len(spi_report.transactions)} 筆交易，發現 {len(spi_report.anomalies)} 個異常事件。",
                 {
-                    "總交易數": len(report.transactions),
-                    "異常事件數": len(report.anomalies),
-                    "資料品質警告數": len(report.data_quality_issues),
+                    "總交易數": len(spi_report.transactions),
+                    "異常事件數": len(spi_report.anomalies),
+                    "資料品質警告數": len(spi_report.data_quality_issues),
                 },
             )
         except (ValueError, KeyError, TypeError) as exc:
@@ -127,14 +127,14 @@ def _analyze_single_fuzz(proto_key: str, data: str) -> tuple[str, str, dict[str,
 
     if proto_key == "uart":
         try:
-            report = UARTCrashParser.parse_log_text(data)
+            uart_report = UARTCrashParser.parse_log_text(data)
             return (
                 "success",
-                f"成功解析 UART 日誌（類型：{report.crash_type.name}，共 {report.raw_log_lines} 行）。",
+                f"成功解析 UART 日誌（類型：{uart_report.crash_type.name}，共 {uart_report.raw_log_lines} 行）。",
                 {
-                    "崩潰類型 (Crash Type)": report.crash_type.name,
-                    "摘要標題 (Summary Title)": report.summary_title,
-                    "原始日誌行數 (Lines)": report.raw_log_lines,
+                    "崩潰類型 (Crash Type)": uart_report.crash_type.name,
+                    "摘要標題 (Summary Title)": uart_report.summary_title,
+                    "原始日誌行數 (Lines)": uart_report.raw_log_lines,
                 },
             )
         except (ValueError, TypeError) as exc:

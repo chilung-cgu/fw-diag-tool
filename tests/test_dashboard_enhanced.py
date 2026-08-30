@@ -41,3 +41,26 @@ def test_dashboard_ui_quick_link_renderer():
 def test_correlation_ui_render_executes_without_error():
     # Verify correlation_ui executes and includes footer
     correlation_ui.render()
+
+
+def test_dashboard_ui_render_recent_sessions_empty():
+    dashboard_ui._render_recent_sessions()
+
+
+def test_dashboard_ui_render_recent_sessions_with_items(monkeypatch):
+    class DummySession:
+        def __init__(self, name, protocol, created_at):
+            self.name = name
+            self.protocol = protocol
+            self.created_at = created_at
+            self.session_id = "test-session-id"
+
+    class DummyManager:
+        def list_sessions(self):
+            return [
+                DummySession("Session 1", "I2C", "2026-08-30"),
+                {"name": "Session 2", "protocol": "SPI", "created_at": "2026-08-30"},
+            ]
+
+    monkeypatch.setattr(dashboard_ui, "SessionManager", DummyManager)
+    dashboard_ui._render_recent_sessions()

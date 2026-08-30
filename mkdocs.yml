@@ -29,6 +29,10 @@ nav:
       - 跨協定時間線關聯分析: chapters/ch17_correlation.md
       - 多工作階段趨勢分析: chapters/ch18_session_analytics.md
       - PDF 報告匯出: chapters/ch19_pdf_export.md
+      - 協定 A/B 對比分析: chapters/ch20_protocol_diff.md
+      - Session A/B 對比: chapters/ch21_session_compare.md
+      - 批次分析: chapters/ch22_batch_analysis.md
+      - 偏好設定: chapters/ch23_settings.md
   - 附錄:
       - 附錄 A 圖表判讀指南: chapters/appendix_chart_guide.md
-      - 附錄 B 20 個 GUI 頁面地圖: chapters/appendix_gui_reading_guide.md
+      - 附錄 B 26+ 個 GUI 頁面地圖: chapters/appendix_gui_reading_guide.md

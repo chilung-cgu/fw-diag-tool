@@ -72,3 +72,6 @@ class ServerMgmtReport:
     summary_text: str = ""
     unparsed_lines: list[str] = field(default_factory=list)
     source_errors: list[str] = field(default_factory=list)
+    protocol_mode: ProtocolMode = ProtocolMode.AUTO
+    errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
