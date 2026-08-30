@@ -61,9 +61,7 @@ def test_spi_jedec_id_and_wren_program():
 
 def test_spi_markdown_uses_zh_tw_first_transaction_headers():
     report = SPIDiagnosticEngine().analyze_csv_content(
-        "Time [s],MOSI,MISO,Enable\n"
-        "0.001,0x06,0x00,0\n"
-        "0.002,0x00,0x00,1\n"
+        "Time [s],MOSI,MISO,Enable\n0.001,0x06,0x00,0\n0.002,0x00,0x00,1\n"
     )
 
     markdown = SPIReporter.to_markdown(report)
@@ -296,9 +294,7 @@ def test_spi_parser_rejects_ambiguous_headers_extra_columns_and_channel_mismatch
 
 def test_spi_parser_requires_explicit_wire_aliases_and_rejects_si_collision():
     with pytest.raises(ValueError, match="MOSI"):
-        SPIParser.parse_csv_content(
-            "Time,Signal,MISO,CS\n0.0,0x9F,0xEF,0\n0.1,0x00,0x40,1\n"
-        )
+        SPIParser.parse_csv_content("Time,Signal,MISO,CS\n0.0,0x9F,0xEF,0\n0.1,0x00,0x40,1\n")
     with pytest.raises(ValueError, match="ambiguous MOSI"):
         SPIParser.parse_csv_content(
             "Time,SI,MOSI,MISO,CS\n0.0,0x9F,0x9F,0xEF,0\n0.1,0x00,0x00,0x40,1\n"
@@ -372,9 +368,7 @@ def test_spi_command_specific_short_responses_are_data_quality(mosi, miso):
 
 
 def test_spi_status_write_overlong_payload_is_data_quality():
-    tx = SPIParser.decode_single_transaction(
-        1, 0.0, 0.001, [0x01, 0xAA, 0xBB], [0x00, 0x00, 0x00]
-    )
+    tx = SPIParser.decode_single_transaction(1, 0.0, 0.001, [0x01, 0xAA, 0xBB], [0x00, 0x00, 0x00])
     assert tx.decoded_details["response_overlong"] is True
     report = SPIDiagnosticEngine().analyze_csv_content(
         "Time,MOSI,MISO,Enable\n"
@@ -429,9 +423,7 @@ def test_spi_reset_without_reset_enable_does_not_clear_wel_state():
         "Time,MOSI,MISO,Enable\n" + "\n".join(rows) + "\n"
     )
     assert report.summary.anomaly_count == 0
-    assert report.transactions[1].decoded_details["reset_evidence"] == (
-        "reset-enable-not-observed"
-    )
+    assert report.transactions[1].decoded_details["reset_evidence"] == ("reset-enable-not-observed")
 
 
 def test_spi_device_reset_clears_observed_wel_before_program():
@@ -513,7 +505,9 @@ def test_spi_cli_reports_export_failure_without_traceback(tmp_path):
     )
     missing_parent = tmp_path / "missing" / "report.md"
 
-    result = CliRunner().invoke(app, ["spi", "analyze", str(trace_path), "--md", str(missing_parent)])
+    result = CliRunner().invoke(
+        app, ["spi", "analyze", str(trace_path), "--md", str(missing_parent)]
+    )
 
     assert result.exit_code == 2
     assert "report export is invalid" in result.output

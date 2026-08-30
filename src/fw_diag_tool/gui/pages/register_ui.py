@@ -36,9 +36,7 @@ def render() -> None:
         uploaded_yaml = st.file_uploader("上傳自訂 YAML 定義檔", type=["yaml", "yml"])
         if uploaded_yaml is not None:
             try:
-                content = decode_uploaded_text(
-                    uploaded_yaml, allowed_extensions={".yaml", ".yml"}
-                )
+                content = decode_uploaded_text(uploaded_yaml, allowed_extensions={".yaml", ".yml"})
                 catalog.load_from_yaml(content)
             except Exception as exc:
                 st.error(f"自訂 YAML 載入失敗：{_localize_gui_error(exc, domain='register')}")

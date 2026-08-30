@@ -19,7 +19,8 @@ def render() -> None:
     builtin_yamls = list(data_dir.glob("*.yaml"))
     choice_yaml = st.selectbox("選擇 YAML 範本", [y.name for y in builtin_yamls])
     mod_name = st.text_input(
-        "模組名稱（Module Name）", value=choice_yaml.replace(".yaml", "").upper() if choice_yaml else ""
+        "模組名稱（Module Name）",
+        value=choice_yaml.replace(".yaml", "").upper() if choice_yaml else "",
     )
     try:
         if not choice_yaml:

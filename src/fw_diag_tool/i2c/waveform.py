@@ -285,8 +285,10 @@ class I2CWaveformReconstructor:
                     pkt_ack = AckType.NONE
                 # Label detail
                 lbl = f"0x{data_b:02X}"
-                if idx == 0 and tx.command_code is not None and (
-                    data_b == tx.command_code or tx.command_code > 0xFF
+                if (
+                    idx == 0
+                    and tx.command_code is not None
+                    and (data_b == tx.command_code or tx.command_code > 0xFF)
                 ):
                     lbl = f"Reg:0x{data_b:02X}"
                 emit_byte(
@@ -557,7 +559,11 @@ class I2CWaveformReconstructor:
             shared_xaxes=True,
             vertical_spacing=0.06,
             row_heights=[0.35, 0.32, 0.33],
-            subplot_titles=("協定標註軌（Protocol Annotation Track）", "SDA（串列資料）", "SCL（串列時鐘）"),
+            subplot_titles=(
+                "協定標註軌（Protocol Annotation Track）",
+                "SDA（串列資料）",
+                "SCL（串列時鐘）",
+            ),
         )
 
         # 1. Protocol Annotation Track (Horizontal colored boxes)
@@ -593,9 +599,9 @@ class I2CWaveformReconstructor:
                 x=waveform.time_us,
                 y=waveform.sda,
                 mode="lines",
-                    line=dict(shape="hv", color="#00F0FF", width=2.5),
-                    name="SDA",
-                    hovertemplate="時間：%{x:.1f} µs<br>邏輯電位：%{y}<extra>SDA</extra>",
+                line=dict(shape="hv", color="#00F0FF", width=2.5),
+                name="SDA",
+                hovertemplate="時間：%{x:.1f} µs<br>邏輯電位：%{y}<extra>SDA</extra>",
             ),
             row=2,
             col=1,
@@ -607,9 +613,9 @@ class I2CWaveformReconstructor:
                 x=waveform.time_us,
                 y=waveform.scl,
                 mode="lines",
-                    line=dict(shape="hv", color="#FFFF00", width=2.5),
-                    name="SCL",
-                    hovertemplate="時間：%{x:.1f} µs<br>邏輯電位：%{y}<extra>SCL</extra>",
+                line=dict(shape="hv", color="#FFFF00", width=2.5),
+                name="SCL",
+                hovertemplate="時間：%{x:.1f} µs<br>邏輯電位：%{y}<extra>SCL</extra>",
             ),
             row=3,
             col=1,
@@ -618,7 +624,9 @@ class I2CWaveformReconstructor:
         # Add one compact legend entry per annotation kind.  The filled
         # protocol boxes themselves remain hidden from the legend so a long
         # capture does not create one legend item per byte.
-        annotation_types = dict.fromkeys(annotation.annotation_type for annotation in waveform.annotations)
+        annotation_types = dict.fromkeys(
+            annotation.annotation_type for annotation in waveform.annotations
+        )
         for annotation_type in annotation_types:
             color = next(
                 annotation.color
@@ -650,10 +658,18 @@ class I2CWaveformReconstructor:
         )
 
         fig.update_yaxes(
-            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["低電位 LOW (0)", "高電位 HIGH (1)"], row=2, col=1
+            range=[-0.1, 1.1],
+            tickvals=[0, 1],
+            ticktext=["低電位 LOW (0)", "高電位 HIGH (1)"],
+            row=2,
+            col=1,
         )
         fig.update_yaxes(
-            range=[-0.1, 1.1], tickvals=[0, 1], ticktext=["低電位 LOW (0)", "高電位 HIGH (1)"], row=3, col=1
+            range=[-0.1, 1.1],
+            tickvals=[0, 1],
+            ticktext=["低電位 LOW (0)", "高電位 HIGH (1)"],
+            row=3,
+            col=1,
         )
         fig.update_yaxes(showticklabels=False, showgrid=False, range=[0.0, 1.0], row=1, col=1)
         fig.update_xaxes(title_text="時間（µs）", row=3, col=1)

@@ -128,7 +128,9 @@ def analyze_i2c_trace(
         None, "--board-profile", "-b", help="Path to board profile YAML/JSON file."
     ),
     fail_on: str | None = typer.Option(
-        None, "--fail-on", help="Exit with code 1 if issues meet threshold (warning|error|critical)."
+        None,
+        "--fail-on",
+        help="Exit with code 1 if issues meet threshold (warning|error|critical).",
     ),
     max_records: int = typer.Option(
         DEFAULT_ANALYSIS_LIMITS.max_records,
@@ -168,9 +170,7 @@ def analyze_i2c_trace(
         I2CReporter.render_terminal(report, console=console)
         if markdown_out:
             input_format = (
-                "raw_digital"
-                if raw_digital
-                else ("text_trace" if text_trace else "decoded_csv")
+                "raw_digital" if raw_digital else ("text_trace" if text_trace else "decoded_csv")
             )
             profile_metadata = "none"
             if profile is not None:
@@ -203,12 +203,16 @@ def analyze_i2c_trace(
             }
             allowed = thresholds.get(fail_on.lower())
             if not allowed:
-                console.print(f"[bold red]Error: invalid --fail-on level {fail_on!r}; choose: warning, error, critical[/]")
+                console.print(
+                    f"[bold red]Error: invalid --fail-on level {fail_on!r}; choose: warning, error, critical[/]"
+                )
                 raise typer.Exit(code=2)
             if any(issue.severity.value in allowed for issue in report.issues):
                 raise typer.Exit(code=1)
     except (OSError, UnicodeError, TypeError, ValueError, SchemaError) as exc:
-        label = "raw digital capture" if raw_digital else ("text trace" if text_trace else "I2C trace")
+        label = (
+            "raw digital capture" if raw_digital else ("text trace" if text_trace else "I2C trace")
+        )
         console.print(f"[bold red]Error: {label} or report generation failed: {exc}[/]")
         raise typer.Exit(code=2) from exc
 
@@ -313,9 +317,7 @@ def analyze_pcie(
                     f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]"
                 )
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
-        console.print(
-            f"[bold red]錯誤：PCIe 輸入無效（Error: PCIe input is invalid）: {exc}[/]"
-        )
+        console.print(f"[bold red]錯誤：PCIe 輸入無效（Error: PCIe input is invalid）: {exc}[/]")
         raise typer.Exit(code=2) from exc
 
 
@@ -333,9 +335,7 @@ def analyze_spi_trace(
 ) -> None:
     """Analyze SPI / QSPI NOR Flash trace, decode JEDEC opcodes, and detect write/erase hazards."""
     if not file_path.exists():
-        console.print(
-            f"[bold red]錯誤：找不到檔案（Error: File {file_path} not found!）[/]"
-        )
+        console.print(f"[bold red]錯誤：找不到檔案（Error: File {file_path} not found!）[/]")
         raise typer.Exit(code=1)
     try:
         report = SPIDiagnosticEngine(limits=_analysis_limits(max_records)).analyze_csv_file(
@@ -415,15 +415,22 @@ def analyze_mctp(
                 f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]"
             )
         if json_out:
-            json_out.write_text(json.dumps({
-                "mctp_packets": [p.__dict__ for p in report.mctp_packets],
-                "ipmb_frames": [f.__dict__ for f in report.ipmb_frames],
-                "unparsed_lines": report.unparsed_lines,
-                "source_errors": report.source_errors,
-            }, indent=2, ensure_ascii=False, default=str) + "\n", encoding="utf-8")
-            console.print(
-                f"[green]✔ JSON 報告已匯出（JSON report exported to）: {json_out}[/]"
+            json_out.write_text(
+                json.dumps(
+                    {
+                        "mctp_packets": [p.__dict__ for p in report.mctp_packets],
+                        "ipmb_frames": [f.__dict__ for f in report.ipmb_frames],
+                        "unparsed_lines": report.unparsed_lines,
+                        "source_errors": report.source_errors,
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                    default=str,
+                )
+                + "\n",
+                encoding="utf-8",
             )
+            console.print(f"[green]✔ JSON 報告已匯出（JSON report exported to）: {json_out}[/]")
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
         console.print(
             f"[bold red]錯誤：MCTP/IPMB 輸入或報告匯出無效（Error: MCTP/IPMB input or report export is invalid）: {exc}[/]"
@@ -579,7 +586,9 @@ def generate_dts(
         )
     else:
         console.print(
-            Panel(dts_text, title="產生的 Device Tree Source（Generated Device Tree Source (.dts)）")
+            Panel(
+                dts_text, title="產生的 Device Tree Source（Generated Device Tree Source (.dts)）"
+            )
         )
 
 

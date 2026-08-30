@@ -11,9 +11,7 @@ def test_i2c_cli_rejects_record_override_above_hard_ceiling(tmp_path: Path):
     trace = tmp_path / "trace.csv"
     trace.write_text("Time,Packet ID,Address,Data\n", encoding="utf-8")
 
-    result = CliRunner().invoke(
-        app, ["i2c", "analyze", str(trace), "--max-records", "250001"]
-    )
+    result = CliRunner().invoke(app, ["i2c", "analyze", str(trace), "--max-records", "250001"])
 
     assert result.exit_code == 2
     assert "between 1 and 250000" in " ".join(result.output.split())
@@ -37,8 +35,7 @@ def test_i2c_cli_reports_record_limit_without_traceback(tmp_path: Path):
 def test_i2c_cli_normalizes_oversized_csv_field(tmp_path: Path):
     trace = tmp_path / "oversized-field.csv"
     trace.write_text(
-        "Time,Packet ID,Address,Data,Read/Write,ACK/NAK\n"
-        f"0.0,1,0x50,{'A' * 200_000},Write,ACK\n",
+        f"Time,Packet ID,Address,Data,Read/Write,ACK/NAK\n0.0,1,0x50,{'A' * 200_000},Write,ACK\n",
         encoding="utf-8",
     )
 

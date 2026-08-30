@@ -140,15 +140,13 @@ def test_multibyte_summary_row_does_not_invent_per_byte_timestamps():
 
 def test_multibyte_aggregate_ack_withholds_eeprom_semantics():
     report = I2CDiagnosticEngine(eeprom_profile="24C02").analyze_csv_content(
-        "Time,Address,Read/Write,Data,ACK/NACK\n"
-        '0.001,0x50,Write,"0x00 0x01",ACK\n'
+        'Time,Address,Read/Write,Data,ACK/NACK\n0.001,0x50,Write,"0x00 0x01",ACK\n'
     )
     tx = report.transactions[0]
     assert tx.decoded_values["evidence"] == "aggregate-ack"
     assert "withheld" in (tx.semantic_summary or "")
     assert any(
-        issue.code == "I2C_ACK_AGGREGATE_UNATTRIBUTABLE"
-        for issue in report.data_quality_issues
+        issue.code == "I2C_ACK_AGGREGATE_UNATTRIBUTABLE" for issue in report.data_quality_issues
     )
 
 
@@ -308,9 +306,7 @@ def test_nacked_address_or_payload_is_not_decoded_as_accepted_semantics():
     assert report.transactions[1].decoded_values["evidence"] == "data-nack-present"
     assert "Address Probe" not in (report.transactions[0].semantic_summary or "")
     assert "EEPROM" not in (report.transactions[1].semantic_summary or "")
-    assert {
-        issue.code for issue in report.data_quality_issues
-    } >= {
+    assert {issue.code for issue in report.data_quality_issues} >= {
         "I2C_ADDRESS_NACK_SEMANTIC_UNAVAILABLE",
         "I2C_DATA_NACK_SEMANTIC_UNAVAILABLE",
     }
@@ -332,8 +328,7 @@ def test_text_trace_resets_context_after_repeated_start_and_stop():
     report = I2CDiagnosticEngine(eeprom_profile="24C02").analyze(events)
     assert any(issue.code == "I2C_SOURCE_PARSE_ERROR" for issue in report.data_quality_issues)
     assert all(
-        tx.direction_available is False
-        and "withheld" in (tx.semantic_summary or "")
+        tx.direction_available is False and "withheld" in (tx.semantic_summary or "")
         for tx in report.transactions[1:]
     )
 
@@ -384,9 +379,7 @@ def test_direct_i2c_event_shape_mismatch_is_rejected():
         )
 
     with pytest.raises(ValueError, match="STOP cannot carry"):
-        I2CDiagnosticEngine().analyze(
-            [RawI2CEvent(0.0, RawEventType.STOP, address_7bit=0x50)]
-        )
+        I2CDiagnosticEngine().analyze([RawI2CEvent(0.0, RawEventType.STOP, address_7bit=0x50)])
 
 
 def test_ambiguous_address_is_presented_as_candidates_not_exact_identity():

@@ -61,11 +61,15 @@ def create_diagnostic_bundle(
         for i, report in enumerate(reports):
             name = f"reports/report_{i}.md"
             zf.writestr(name, report)
-            manifest.files.append({"name": name, "sha256": hashlib.sha256(report.encode()).hexdigest()})
+            manifest.files.append(
+                {"name": name, "sha256": hashlib.sha256(report.encode()).hexdigest()}
+            )
         for i, config in enumerate(configs or []):
             name = f"configs/config_{i}.json"
             zf.writestr(name, config)
-            manifest.files.append({"name": name, "sha256": hashlib.sha256(config.encode()).hexdigest()})
+            manifest.files.append(
+                {"name": name, "sha256": hashlib.sha256(config.encode()).hexdigest()}
+            )
         for name, content in raw_captures or []:
             arcname = f"raw/{name}"
             zf.writestr(arcname, content)

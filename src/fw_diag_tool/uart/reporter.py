@@ -231,7 +231,9 @@ class UARTReporter:
             c.print(hf_tbl)
 
             if hf.fault_flags:
-                flags_text = "\n".join(f"- ⚠ {_localize_fault_flag(flag)}" for flag in hf.fault_flags)
+                flags_text = "\n".join(
+                    f"- ⚠ {_localize_fault_flag(flag)}" for flag in hf.fault_flags
+                )
                 c.print(
                     Panel(
                         f"[bold yellow]Fault 旗標（Fault Flags）:[/]\n{flags_text}",

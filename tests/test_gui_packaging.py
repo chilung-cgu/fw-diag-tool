@@ -380,9 +380,7 @@ def test_gui_accepts_version_alias_session_without_streamlit_exception():
 
 def test_gui_invalid_session_json_is_localized():
     at = AppTest.from_function(i2c_diagnosis_render, default_timeout=15).run()
-    at.file_uploader[0].upload(
-        "invalid.fwsession.json", b"not-json", "application/json"
-    ).run()
+    at.file_uploader[0].upload("invalid.fwsession.json", b"not-json", "application/json").run()
 
     assert not at.exception
     assert any("Session JSON 格式無效" in error.value for error in at.error)
@@ -501,9 +499,7 @@ def test_gui_invalid_session_settings_clear_previous_state():
 
     assert not at.exception
     assert any("smbus_timeout_ms" in item.value for item in at.error)
-    assert not any(
-        "must be a finite value between 1 and 100" in item.value for item in at.error
-    )
+    assert not any("must be a finite value between 1 and 100" in item.value for item in at.error)
     assert at.radio[0].value == "decoded_csv"
     assert at.number_input[0].value == 25.0
     assert at.text_area[0].value == ""
@@ -558,19 +554,19 @@ def test_gui_pcie_loads_lspci_sample_and_shows_vendor_id():
     ).click().run()
 
     assert not at.exception
-    assert any("已載入內建 lspci PCIe 設定空間範例（Config Space）" in item.value for item in at.info)
+    assert any(
+        "已載入內建 lspci PCIe 設定空間範例（Config Space）" in item.value for item in at.info
+    )
     next(button for button in at.button if button.label == "執行 PCIe 分析").click().run()
 
     assert not at.exception
     assert any(
-        metric.label == "廠商／裝置 ID（Vendor / Device ID）"
-        and metric.value == "0x10EE / 0x7024"
+        metric.label == "廠商／裝置 ID（Vendor / Device ID）" and metric.value == "0x10EE / 0x7024"
         for metric in at.metric
     )
     assert any(metric.label == "能力數量（Capabilities）" for metric in at.metric)
     assert any(
-        metric.label == "標頭類型（Header Type）"
-        and "端點裝置（TYPE_0_ENDPOINT）" in metric.value
+        metric.label == "標頭類型（Header Type）" and "端點裝置（TYPE_0_ENDPOINT）" in metric.value
         for metric in at.metric
     )
     assert any(
@@ -587,8 +583,7 @@ def test_gui_c_header_invalid_module_name_is_reported():
     assert not at.exception
     assert any("C 標頭檔輸入錯誤" in error.value for error in at.error)
     assert not any(
-        "must produce a C identifier beginning with a letter" in error.value
-        for error in at.error
+        "must produce a C identifier beginning with a letter" in error.value for error in at.error
     )
 
 
@@ -644,7 +639,9 @@ def test_gui_packet_builder_validates_before_rendering_or_codegen():
     at.text_input(key="i2c_builder_address").set_value("0x78").run()
 
     assert not at.exception
-    assert any("輸入格式錯誤" in error.value and "位址必須介於" in error.value for error in at.error)
+    assert any(
+        "輸入格式錯誤" in error.value and "位址必須介於" in error.value for error in at.error
+    )
     assert not any("address_7bit must be between" in error.value for error in at.error)
     assert not any("i2ctransfer" in block.value for block in at.code)
 
@@ -696,12 +693,10 @@ def test_gui_spi_flash_page_sample_runs_without_exception():
 
 def test_gui_spi_invalid_csv_localizes_parser_error():
     at = AppTest.from_function(spi_render, default_timeout=15).run()
-    at.file_uploader[0].upload("invalid.csv", b"garbage\n", "text/csv").run()
+    at.file_uploader[1].upload("invalid.csv", b"garbage\n", "text/csv").run()
 
     assert not at.exception
-    assert any(
-        "SPI CSV 必須提供明確的 timestamp 欄位" in error.value for error in at.error
-    )
+    assert any("SPI CSV 必須提供明確的 timestamp 欄位" in error.value for error in at.error)
     assert not any("must provide an explicit timestamp column" in error.value for error in at.error)
 
 
@@ -711,7 +706,9 @@ def test_gui_register_decoder_localizes_decode_error():
 
     assert not at.exception
     assert any("暫存器值必須介於 0 和 0xFFFFFFFF" in error.value for error in at.error)
-    assert not any("register value must be between 0 and 0xFFFFFFFF" in error.value for error in at.error)
+    assert not any(
+        "register value must be between 0 and 0xFFFFFFFF" in error.value for error in at.error
+    )
 
 
 def test_gui_uart_crash_page_sample_runs_without_exception():
@@ -782,7 +779,9 @@ def test_gui_mctp_page_is_zh_tw_first_and_states_evidence_boundary():
     assert not at.exception
     assert any("封包框架（frame）" in warning.value for warning in at.warning)
     assert any("十六進位位元組（hex bytes）" in warning.value for warning in at.warning)
-    assert not any("no recognizable MCTP packet or IPMB frame" in warning.value for warning in at.warning)
+    assert not any(
+        "no recognizable MCTP packet or IPMB frame" in warning.value for warning in at.warning
+    )
 
 
 def test_gui_fault_arena_mctp_cases_render_protocol_reports():

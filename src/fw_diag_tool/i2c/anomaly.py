@@ -400,7 +400,9 @@ class I2CAnomalyDetector:
         ):
             return False
 
-        probes = probe_times if probe_times is not None else cls._build_eeprom_probe_index(transactions)
+        probes = (
+            probe_times if probe_times is not None else cls._build_eeprom_probe_index(transactions)
+        )
         candidates = probes.get(nack.address_7bit, [])
         if not candidates:
             return False

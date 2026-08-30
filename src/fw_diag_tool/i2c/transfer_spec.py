@@ -202,7 +202,9 @@ class I2CTransferSpec:
         payload_limit: int | None = None,
         waveform_point_limit: int | None = None,
     ) -> None:
-        resolved_address = _resolve_alias("address_7bit", address_7bit, ("address", address), ("addr_7bit", addr_7bit))
+        resolved_address = _resolve_alias(
+            "address_7bit", address_7bit, ("address", address), ("addr_7bit", addr_7bit)
+        )
         resolved_bus = _resolve_alias("bus", bus, ("bus_num", bus_num))
         resolved_register = _resolve_alias(
             "register",
@@ -220,13 +222,21 @@ class I2CTransferSpec:
             "max_payload_bytes", max_payload_bytes, ("payload_limit", payload_limit)
         )
         resolved_waveform_limit = _resolve_alias(
-            "max_waveform_points", max_waveform_points, ("waveform_point_limit", waveform_point_limit)
+            "max_waveform_points",
+            max_waveform_points,
+            ("waveform_point_limit", waveform_point_limit),
         )
 
-        object.__setattr__(self, "address_7bit", _coerce_int("address_7bit", resolved_address, MIN_I2C_ADDRESS, MAX_I2C_ADDRESS))
+        object.__setattr__(
+            self,
+            "address_7bit",
+            _coerce_int("address_7bit", resolved_address, MIN_I2C_ADDRESS, MAX_I2C_ADDRESS),
+        )
         object.__setattr__(self, "bus", _coerce_int("bus", resolved_bus, 0, MAX_BUS_NUMBER))
         object.__setattr__(self, "operation", I2CTransferOperation.coerce(operation))
-        object.__setattr__(self, "register_width", _coerce_int("register_width", register_width, 8, 16))
+        object.__setattr__(
+            self, "register_width", _coerce_int("register_width", register_width, 8, 16)
+        )
         if register_width not in (8, 16):
             raise ValueError("register_width must be 8 or 16 bits")
         object.__setattr__(self, "endianness", Endianness.coerce(endianness))
@@ -240,11 +250,25 @@ class I2CTransferSpec:
             if expected_tuple is not None and expected_tuple != expected_alias_tuple:
                 raise ValueError("expected_read_data conflicts with expected_read_bytes")
             expected_data = expected_alias_tuple if expected_tuple is None else expected_tuple
-        object.__setattr__(self, "expected_read_data", _coerce_bytes("expected_read_data", expected_data))
-        object.__setattr__(self, "clock_khz", _coerce_real("clock_khz", resolved_clock, 1.0, 1000.0))
-        object.__setattr__(self, "timeout_ms", _coerce_real("timeout_ms", resolved_timeout, 0.001, 60_000.0))
-        object.__setattr__(self, "max_payload_bytes", _coerce_int("max_payload_bytes", resolved_payload_limit, 1, 1_000_000))
-        object.__setattr__(self, "max_waveform_points", _coerce_int("max_waveform_points", resolved_waveform_limit, 1, 10_000_000))
+        object.__setattr__(
+            self, "expected_read_data", _coerce_bytes("expected_read_data", expected_data)
+        )
+        object.__setattr__(
+            self, "clock_khz", _coerce_real("clock_khz", resolved_clock, 1.0, 1000.0)
+        )
+        object.__setattr__(
+            self, "timeout_ms", _coerce_real("timeout_ms", resolved_timeout, 0.001, 60_000.0)
+        )
+        object.__setattr__(
+            self,
+            "max_payload_bytes",
+            _coerce_int("max_payload_bytes", resolved_payload_limit, 1, 1_000_000),
+        )
+        object.__setattr__(
+            self,
+            "max_waveform_points",
+            _coerce_int("max_waveform_points", resolved_waveform_limit, 1, 10_000_000),
+        )
         self.validate()
 
     @property
@@ -297,7 +321,9 @@ class I2CTransferSpec:
     def segments(self) -> tuple[I2CTransferSegment, ...]:
         operation = self.operation
         if operation == I2CTransferOperation.REGISTER_WRITE:
-            return (I2CTransferSegment(TransferDirection.WRITE, self.register_bytes + self.data_bytes),)
+            return (
+                I2CTransferSegment(TransferDirection.WRITE, self.register_bytes + self.data_bytes),
+            )
         if operation == I2CTransferOperation.COMBINED_REGISTER_READ:
             return (
                 I2CTransferSegment(TransferDirection.WRITE, self.register_bytes),
@@ -413,7 +439,8 @@ class I2CTransferSpec:
             "max_payload_bytes": self.max_payload_bytes,
             "max_waveform_points": self.max_waveform_points,
             "canonical_bytes": [
-                byte.value if isinstance(byte, UnknownByte) else byte for byte in self.canonical_bytes
+                byte.value if isinstance(byte, UnknownByte) else byte
+                for byte in self.canonical_bytes
             ],
         }
 

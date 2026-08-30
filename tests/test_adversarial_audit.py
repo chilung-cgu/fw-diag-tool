@@ -160,13 +160,18 @@ def test_bitfield_rejects_huge_bit_positions():
 def test_i2c_bus_hang_raw_event_is_reported_as_critical_anomaly():
     events = [
         RawI2CEvent(timestamp=0.001, event_type=RawEventType.START),
-        RawI2CEvent(timestamp=0.0011, event_type=RawEventType.ADDRESS, address_7bit=0x50, ack=AckType.ACK),
+        RawI2CEvent(
+            timestamp=0.0011, event_type=RawEventType.ADDRESS, address_7bit=0x50, ack=AckType.ACK
+        ),
         RawI2CEvent(timestamp=0.0012, event_type=RawEventType.BUS_HANG),
     ]
     report = I2CDiagnosticEngine().analyze(events)
     assert report.total_transactions == 1
     assert report.transactions[0].is_aborted is True
-    assert any(issue.code == "I2C_MISSING_STOP" and issue.severity.value == "CRITICAL" for issue in report.issues)
+    assert any(
+        issue.code == "I2C_MISSING_STOP" and issue.severity.value == "CRITICAL"
+        for issue in report.issues
+    )
 
 
 def test_spi_busy_state_flags_anomaly_on_subsequent_write():
@@ -329,8 +334,7 @@ def test_i2c_raw_record_boundaries_are_rejected_not_reinterpreted():
 
 def test_i2c_parser_preserves_bom_and_rejects_8bit_direction_conflict():
     events = I2CParser.parse_csv_string(
-        "\ufeffTime,Address,Read/Write,Data,ACK/NACK\n"
-        "0.001,0xA1,WRITE,,ACK\n"
+        "\ufeffTime,Address,Read/Write,Data,ACK/NACK\n0.001,0xA1,WRITE,,ACK\n"
     )
     assert events[0].timestamp_available is True
     assert events[0].address_7bit is None

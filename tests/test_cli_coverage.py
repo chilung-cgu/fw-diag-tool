@@ -120,10 +120,7 @@ def test_cli_uart_analyze_and_reporter(tmp_path: Path):
 def test_cli_mctp_analyze_and_reporter(tmp_path: Path):
     runner = CliRunner()
     dump_text = (
-        "# MCTP Packet & IPMB\n"
-        "01 08 00 C0 01 00 02 01 00\n"
-        "81 1C 63 20 20 01 00 BF\n"
-        "not-a-packet\n"
+        "# MCTP Packet & IPMB\n01 08 00 C0 01 00 02 01 00\n81 1C 63 20 20 01 00 BF\nnot-a-packet\n"
     )
     dump_file = tmp_path / "mctp.hex"
     dump_file.write_text(dump_text, encoding="utf-8")
@@ -211,7 +208,9 @@ registers:
     assert res_bad_hex.exit_code == 1
 
     # 3. reg decode missing file
-    res_no_file = runner.invoke(app, ["reg", "decode", str(tmp_path / "none.yaml"), "STATUS", "0x01"])
+    res_no_file = runner.invoke(
+        app, ["reg", "decode", str(tmp_path / "none.yaml"), "STATUS", "0x01"]
+    )
     assert res_no_file.exit_code == 1
 
     # 4. gen c-header with file output
@@ -227,7 +226,9 @@ registers:
 
     # 6. gen dts with file output
     out_dts = tmp_path / "bus.dts"
-    res_dts = runner.invoke(app, ["gen", "dts", "--bus", "2", "--mux", "0x72", "--out", str(out_dts)])
+    res_dts = runner.invoke(
+        app, ["gen", "dts", "--bus", "2", "--mux", "0x72", "--out", str(out_dts)]
+    )
     assert res_dts.exit_code == 0
     assert out_dts.exists()
 

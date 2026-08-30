@@ -94,7 +94,9 @@ class ServerMgmtParser:
                 ctx = contexts[key]
                 ctx["packets_count"] += 1
                 if pkt.pkt_seq != ctx["expected_seq"]:
-                    ctx["error"] = f"sequence mismatch: expected {ctx['expected_seq']}, got {pkt.pkt_seq}"
+                    ctx["error"] = (
+                        f"sequence mismatch: expected {ctx['expected_seq']}, got {pkt.pkt_seq}"
+                    )
                 ctx["payload"].extend(pkt.payload)
                 ctx["expected_seq"] = (pkt.pkt_seq + 1) % 4
 
@@ -355,9 +357,7 @@ class ServerMgmtParser:
             malformed_token = cls._malformed_byte_token(line)
             if malformed_token:
                 unparsed_lines.append(line)
-                source_errors.append(
-                    f"line {line_number}: incomplete byte token {malformed_token}"
-                )
+                source_errors.append(f"line {line_number}: incomplete byte token {malformed_token}")
                 continue
             raw = cls.parse_hex_tokens(line)
             if len(raw) < 4:
@@ -414,8 +414,17 @@ class ServerMgmtParser:
             # MCTP.
             if len(raw) >= 7 and not mctp_versioned:
                 first_byte_is_ipmb_address = bool(raw[0] & 1) or raw[0] in {
-                    0x20, 0x24, 0x28, 0x2C, 0x2E, 0x30,
-                    0x40, 0x81, 0x82, 0x83, 0x91,
+                    0x20,
+                    0x24,
+                    0x28,
+                    0x2C,
+                    0x2E,
+                    0x30,
+                    0x40,
+                    0x81,
+                    0x82,
+                    0x83,
+                    0x91,
                 }
                 if mctp_structurally_valid and not first_byte_is_ipmb_address:
                     mctp = cls.decode_mctp_packet(raw)
@@ -434,7 +443,6 @@ class ServerMgmtParser:
                 if mctp:
                     mctp_list.append(mctp)
                     continue
-
 
             # Neither protocol can be confirmed by structural evidence.
             hex_str = " ".join(f"{b:02X}" for b in raw)

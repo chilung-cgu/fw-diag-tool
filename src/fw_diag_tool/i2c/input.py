@@ -50,7 +50,9 @@ def normalize_i2c_input_format(value: I2CInputFormat | str) -> I2CInputFormat:
         return _FORMAT_ALIASES[normalized]
     except KeyError as exc:
         allowed = ", ".join(format.value for format in I2CInputFormat)
-        raise ValueError(f"unsupported I2C input format {value!r}; choose one of: {allowed}") from exc
+        raise ValueError(
+            f"unsupported I2C input format {value!r}; choose one of: {allowed}"
+        ) from exc
 
 
 def dispatch_i2c_input(

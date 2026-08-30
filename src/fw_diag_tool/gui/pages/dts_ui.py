@@ -58,9 +58,7 @@ def render() -> None:
     if st.button("產生 Device Tree（.dts）"):
         try:
             devices = (
-                yaml.safe_load(
-                    validate_pasted_text(dts_devices_text, label="Device Tree YAML")
-                )
+                yaml.safe_load(validate_pasted_text(dts_devices_text, label="Device Tree YAML"))
                 or []
             )
             dts_code = DeviceTreeGenerator.generate_dts_from_topology(

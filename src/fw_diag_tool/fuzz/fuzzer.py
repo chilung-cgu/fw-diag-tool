@@ -75,8 +75,20 @@ class FuzzingGenerator:
         t = 0.0001
         for _ in range(num_rows):
             t += rng.uniform(0.00001, 0.001)
-            mosi = rng.choice([f"0x{rng.randint(0, 255):02X}", str(rng.randint(0, 255)), "0x9F", "0x06", "0x02", "invalid", ""])
-            miso = rng.choice([f"0x{rng.randint(0, 255):02X}", "0x00", "0xFF", "0xEF", "invalid", ""])
+            mosi = rng.choice(
+                [
+                    f"0x{rng.randint(0, 255):02X}",
+                    str(rng.randint(0, 255)),
+                    "0x9F",
+                    "0x06",
+                    "0x02",
+                    "invalid",
+                    "",
+                ]
+            )
+            miso = rng.choice(
+                [f"0x{rng.randint(0, 255):02X}", "0x00", "0xFF", "0xEF", "invalid", ""]
+            )
             cs = rng.choice(["0", "1", "low", "high", "asserted", "deasserted", "invalid", ""])
             lines.append(f"{t:.6f},{mosi},{miso},{cs}")
         return "\n".join(lines)
@@ -84,7 +96,9 @@ class FuzzingGenerator:
     @staticmethod
     def fuzz_pcie_lspci(seed: int | None = None) -> str:
         rng = random.Random(seed)
-        lines = [f"{rng.randint(0, 255):02x}:{rng.randint(0, 31):02x}.{rng.randint(0, 7)} Memory controller: Device"]
+        lines = [
+            f"{rng.randint(0, 255):02x}:{rng.randint(0, 31):02x}.{rng.randint(0, 7)} Memory controller: Device"
+        ]
         for off in range(0, 256, 16):
             bytes_hex = " ".join(f"{rng.randint(0, 255):02x}" for _ in range(16))
             lines.append(f"{off:02x}: {bytes_hex}")

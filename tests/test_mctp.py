@@ -1,4 +1,3 @@
-
 from fw_diag_tool.mctp.models import ProtocolMode, ServerMgmtReport
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
@@ -97,11 +96,7 @@ def test_hex_token_parser_ignores_labels_and_partial_words():
 
 def test_mctp_multi_packet_reassembly_success():
     # 3-packet message: SOM(seq 0) -> Middle(seq 1) -> EOM(seq 2)
-    dump = (
-        "01 08 00 80 01 00 02 01 00\n"
-        "01 08 00 10 11 22 33 44\n"
-        "01 08 00 60 55 66 77 88\n"
-    )
+    dump = "01 08 00 80 01 00 02 01 00\n01 08 00 10 11 22 33 44\n01 08 00 60 55 66 77 88\n"
     report = ServerMgmtParser.parse_text_dump(dump)
     assert len(report.mctp_packets) == 3
     assert len(report.mctp_messages) == 1
@@ -117,10 +112,7 @@ def test_mctp_multi_packet_reassembly_success():
 
 def test_mctp_multi_packet_sequence_mismatch_detected():
     # Sequence jump: SOM(seq 0) -> EOM(seq 2 instead of 1)
-    dump = (
-        "01 08 00 80 01 00 02 01 00\n"
-        "01 08 00 60 55 66 77 88\n"
-    )
+    dump = "01 08 00 80 01 00 02 01 00\n01 08 00 60 55 66 77 88\n"
     report = ServerMgmtParser.parse_text_dump(dump)
     assert len(report.mctp_messages) == 1
     msg = report.mctp_messages[0]
@@ -173,9 +165,7 @@ def test_mctp_with_ipmb_address_not_misclassified_as_ipmb_in_auto_mode():
     # checksum passes. It must NOT be classified as IPMB.
     hex_dump = "20 08 C8 01 80 02 01 00"
     # In both modes it decodes as MCTP, never IPMB.
-    report = ServerMgmtParser.parse_text_dump(
-        hex_dump, protocol_mode=ProtocolMode.MCTP
-    )
+    report = ServerMgmtParser.parse_text_dump(hex_dump, protocol_mode=ProtocolMode.MCTP)
     assert report.ipmb_frames == []
     assert len(report.mctp_packets) == 1
     pkt = report.mctp_packets[0]

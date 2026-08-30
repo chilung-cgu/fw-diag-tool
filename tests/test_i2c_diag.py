@@ -355,7 +355,9 @@ i2c_buses:
         encoding="utf-8",
     )
     csv_path = Path(__file__).parent / "data" / "saleae_normal_pmbus_eeprom.csv"
-    result = CliRunner().invoke(app, ["i2c", "analyze", str(csv_path), "--board-profile", str(profile_path)])
+    result = CliRunner().invoke(
+        app, ["i2c", "analyze", str(csv_path), "--board-profile", str(profile_path)]
+    )
     assert result.exit_code == 0
     assert "eeprom-main" in result.output
 

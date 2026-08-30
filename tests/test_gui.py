@@ -11,6 +11,31 @@ def test_gui_app_syntax():
     assert "st.navigation" in code
     assert "i2c_diagnosis" in code
     assert "pcie_ui" in code
+    assert "inject_custom_theme" in code
+
+
+def test_gui_theme_and_config():
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib  # type: ignore[no-redef]
+
+    from fw_diag_tool.gui.theme import inject_custom_theme, render_metric_card
+
+    config_path = Path(".streamlit/config.toml")
+    assert config_path.exists()
+
+    config = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    assert config["theme"]["primaryColor"] == "#0ea5e9"
+    assert config["theme"]["backgroundColor"] == "#0f172a"
+    assert config["theme"]["secondaryBackgroundColor"] == "#1e293b"
+    assert config["theme"]["textColor"] == "#e2e8f0"
+    assert config["server"]["headless"] is True
+    assert config["browser"]["gatherUsageStats"] is False
+
+    # Test callable without uncaught runtime exception
+    inject_custom_theme()
+    render_metric_card(label="測試", value="100", delta="+1", help_text="說明")
 
 
 def test_builtin_register_yamls():

@@ -60,13 +60,13 @@ def register_extra_commands(app: typer.Typer, i2c_app: typer.Typer, console: Con
                         title=f"分歧位置（Divergence at Tx #{dp.tx_index}）",
                     )
                 )
-                console.print(f"[bold]排查提示（Hint）:[/] {localize_diff_hint(dp.root_cause_hint)}")
+                console.print(
+                    f"[bold]排查提示（Hint）:[/] {localize_diff_hint(dp.root_cause_hint)}"
+                )
 
     @app.command("fuzz")
     def run_fuzzing(
-        seeds: int = typer.Option(
-            50, "--seeds", "-s", help="測試案例數量（Number of test cases）"
-        ),
+        seeds: int = typer.Option(50, "--seeds", "-s", help="測試案例數量（Number of test cases）"),
     ) -> None:
         """使用隨機 malformed input 執行 parser 壓力測試（Run parser stress tests with randomly generated malformed inputs）。"""
         from fw_diag_tool.uart.parser import UARTCrashParser
@@ -89,8 +89,7 @@ def register_extra_commands(app: typer.Typer, i2c_app: typer.Typer, console: Con
             except Exception as e:
                 failed += 1
                 console.print(
-                    f"[red]I2C parser 崩潰：seed={seed}：{e} "
-                    f"（I2C crash seed={seed}: {e}）[/]"
+                    f"[red]I2C parser 崩潰：seed={seed}：{e} （I2C crash seed={seed}: {e}）[/]"
                 )
             log_text = FuzzingGenerator.fuzz_uart_log(seed=seed)
             try:
@@ -99,8 +98,7 @@ def register_extra_commands(app: typer.Typer, i2c_app: typer.Typer, console: Con
             except Exception as e:
                 failed += 1
                 console.print(
-                    f"[red]UART parser 崩潰：seed={seed}：{e} "
-                    f"（UART crash seed={seed}: {e}）[/]"
+                    f"[red]UART parser 崩潰：seed={seed}：{e} （UART crash seed={seed}: {e}）[/]"
                 )
         if failed == 0:
             console.print(

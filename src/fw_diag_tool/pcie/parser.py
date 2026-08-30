@@ -376,7 +376,11 @@ class PCIeAnalyzer:
         # Traverse extended capabilities list (starting at offset 0x100)
         ext_ptr = 0x100
         ext_visited = set()
-        while 0x100 <= ext_ptr <= 0xFFC and ext_ptr + 4 <= source_length and ext_ptr not in ext_visited:
+        while (
+            0x100 <= ext_ptr <= 0xFFC
+            and ext_ptr + 4 <= source_length
+            and ext_ptr not in ext_visited
+        ):
             ext_visited.add(ext_ptr)
             header_dw = struct.unpack_from("<I", raw_data, ext_ptr)[0]
             if header_dw == 0 or header_dw == 0xFFFFFFFF:

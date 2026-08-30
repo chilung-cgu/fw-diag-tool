@@ -57,14 +57,19 @@ def serialize_i2c_session(
     profile = _coerce_board_profile(board_profile, board_profile_yaml)
     resolved_mode = normalize_i2c_input_format(input_mode) if input_mode is not None else None
     resolved_format = normalize_i2c_input_format(input_format) if input_format is not None else None
-    if resolved_mode is not None and resolved_format is not None and resolved_mode is not resolved_format:
+    if (
+        resolved_mode is not None
+        and resolved_format is not None
+        and resolved_mode is not resolved_format
+    ):
         raise ValueError("input_mode and input_format identify different I2C formats")
     config: dict[str, Any] = {
         "input_name": input_name,
         "input_mode": (
             input_mode.value
             if isinstance(input_mode, I2CInputFormat)
-            else input_mode or (input_format.value if isinstance(input_format, I2CInputFormat) else input_format)
+            else input_mode
+            or (input_format.value if isinstance(input_format, I2CInputFormat) else input_format)
             or I2CInputFormat.DECODED_CSV.value
         ),
         "smbus_timeout_ms": smbus_timeout_ms,
@@ -135,9 +140,13 @@ def restore_i2c_board_profile(document: SessionDocument) -> BoardProfile | None:
     if expected_name is None:
         raise ValueError("session board profile name is required when profile content is embedded")
     if expected_version is None:
-        raise ValueError("session board profile version is required when profile content is embedded")
+        raise ValueError(
+            "session board profile version is required when profile content is embedded"
+        )
     if not any(expected_digests):
-        raise ValueError("session board profile sha256 is required when profile content is embedded")
+        raise ValueError(
+            "session board profile sha256 is required when profile content is embedded"
+        )
     if document.board_profile_name is not None and document.board_profile_name != name:
         raise ValueError("session top-level board profile name does not match embedded content")
     if expected_name is not None and expected_name != name:
@@ -185,8 +194,7 @@ def replay_i2c_session(
     if (
         saved_mode is not None
         and saved_format is not None
-        and normalize_i2c_input_format(saved_mode)
-        is not normalize_i2c_input_format(saved_format)
+        and normalize_i2c_input_format(saved_mode) is not normalize_i2c_input_format(saved_format)
     ):
         raise ValueError("session input_mode and input_format identify different I2C formats")
     if mode is None:

@@ -11,13 +11,11 @@ def test_cli_waveform_diff_is_chinese_first_and_keeps_canonical_tokens(tmp_path:
     golden = tmp_path / "golden.csv"
     failing = tmp_path / "failing.csv"
     golden.write_text(
-        "Time, Packet ID, Address, Data, Read/Write, ACK/NAK\n"
-        "0.001,0,0x50,,Write,ACK\n",
+        "Time, Packet ID, Address, Data, Read/Write, ACK/NAK\n0.001,0,0x50,,Write,ACK\n",
         encoding="utf-8",
     )
     failing.write_text(
-        "Time, Packet ID, Address, Data, Read/Write, ACK/NAK\n"
-        "0.001,0,0x50,,Write,NAK\n",
+        "Time, Packet ID, Address, Data, Read/Write, ACK/NAK\n0.001,0,0x50,,Write,NAK\n",
         encoding="utf-8",
     )
 

@@ -263,9 +263,7 @@ def raw_decode_to_waveform(
 
     for transaction in selected_transactions:
         samples = (transaction.address_sample, *transaction.data_samples)
-        transaction_periods = [
-            period for sample in samples for period in _sample_periods(sample)
-        ]
+        transaction_periods = [period for sample in samples for period in _sample_periods(sample)]
         nominal_period_s = median(transaction_periods) if transaction_periods else None
         for sample in samples:
             start = sample.bit_timestamps_s[0] * 1_000_000.0
@@ -289,15 +287,11 @@ def raw_decode_to_waveform(
             )
             periods = _sample_periods(sample)
             if nominal_period_s is not None and periods:
-                stretch_index, observed_period_s = max(
-                    enumerate(periods), key=lambda item: item[1]
-                )
+                stretch_index, observed_period_s = max(enumerate(periods), key=lambda item: item[1])
                 stretch_us = max(0.0, observed_period_s - nominal_period_s) * 1_000_000.0
                 if stretch_us >= 1e-3:
                     sample_times = (*sample.bit_timestamps_s, sample.ack_timestamp_s)
-                    stretch_start = (
-                        sample_times[stretch_index] + nominal_period_s
-                    ) * 1_000_000.0
+                    stretch_start = (sample_times[stretch_index] + nominal_period_s) * 1_000_000.0
                     stretch_end = sample_times[stretch_index + 1] * 1_000_000.0
                     annotations.append(
                         ProtocolAnnotation(

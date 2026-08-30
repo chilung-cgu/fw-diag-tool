@@ -137,7 +137,9 @@ def _localize_netfn(value: str) -> str:
         return value
     localized = f"未知網路功能（NetFn {match.group('code')}）"
     if match.group("direction"):
-        direction = "請求（Request）" if match.group("direction") == "Request" else "回應（Response）"
+        direction = (
+            "請求（Request）" if match.group("direction") == "Request" else "回應（Response）"
+        )
         localized += f" {direction}"
     return localized
 
@@ -163,8 +165,7 @@ def _localize_summary(value: str) -> str:
     match = _SHORT_SUMMARY_RE.fullmatch(value.strip())
     if match:
         localized = (
-            f"已解碼 {match.group('mctp')} 個 MCTP 封包與 "
-            f"{match.group('ipmb')} 個 IPMB 框架"
+            f"已解碼 {match.group('mctp')} 個 MCTP 封包與 {match.group('ipmb')} 個 IPMB 框架"
         )
         return f"{localized}（{value}）"
     if not value.strip():

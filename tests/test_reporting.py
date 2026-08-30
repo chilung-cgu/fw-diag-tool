@@ -8,7 +8,13 @@ from fw_diag_tool.reporting.sarif import build_sarif_report
 
 def test_build_sarif_report_structure():
     findings: list[dict[str, str | int]] = [
-        {"code": "I2C_ADDR_NACK", "message": "Address NACK detected", "severity": "ERROR", "file": "trace.csv", "line": 3},
+        {
+            "code": "I2C_ADDR_NACK",
+            "message": "Address NACK detected",
+            "severity": "ERROR",
+            "file": "trace.csv",
+            "line": 3,
+        },
         {"code": "SPI_WEL_STATE_UNKNOWN", "message": "WEL state unknown", "severity": "WARNING"},
     ]
     text = build_sarif_report("fw-diag-tool", "1.1.0", findings)

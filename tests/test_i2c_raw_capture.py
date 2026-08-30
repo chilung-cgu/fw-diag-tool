@@ -575,7 +575,9 @@ def test_raw_adapter_waveform_uses_captured_levels_and_protocol_overlay() -> Non
         "NACK",
         "STOP",
     }
-    stop = next(annotation for annotation in waveform.annotations if annotation.annotation_type == "STOP")
+    stop = next(
+        annotation for annotation in waveform.annotations if annotation.annotation_type == "STOP"
+    )
     assert stop.end_time > stop.start_time
     assert "display-only" in stop.details
 

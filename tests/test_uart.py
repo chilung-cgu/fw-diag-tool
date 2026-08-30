@@ -96,7 +96,9 @@ def test_non_null_kernel_root_cause_keeps_debug_tokens_in_zh_tw_report():
 
 
 def test_hardfault_fallback_is_localized_without_dropping_canonical_name():
-    report = UARTCrashParser.parse_log_text("HardFault Exception!\nHFSR: 0x00000000\nCFSR: 0x00000000\n")
+    report = UARTCrashParser.parse_log_text(
+        "HardFault Exception!\nHFSR: 0x00000000\nCFSR: 0x00000000\n"
+    )
 
     markdown = UARTReporter.to_markdown(report)
 
@@ -186,6 +188,7 @@ def test_symbol_table_symbolicate_kernel_panic():
 
 def test_symbol_table_symbolicate_none_matches():
     from fw_diag_tool.uart.models import ARMHardFaultReport, UARTReport
+
     st = SymbolTable([(0x1000, "main")])
     # Hardfault with None pc/lr and address with no match
     hf = ARMHardFaultReport(pc_faulting=None, lr_exc_return=0x0500)

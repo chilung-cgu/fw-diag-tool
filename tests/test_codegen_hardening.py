@@ -52,8 +52,7 @@ def test_driver_16bit_register_write_preserves_every_data_byte():
 
     assert "{ 0x12, 0x34, 0xAB, 0xCD }" in snippets["Linux Userspace (i2c-dev)"]
     assert (
-        "i2ctransfer 1 w4@0x50 0x12 0x34 0xAB 0xCD"
-        in snippets["OpenBMC / Linux CLI (i2c-tools)"]
+        "i2ctransfer 1 w4@0x50 0x12 0x34 0xAB 0xCD" in snippets["OpenBMC / Linux CLI (i2c-tools)"]
     )
     assert "I2C_MEMADD_SIZE_16BIT" in snippets["STM32 HAL C Driver"]
     assert "{ 0xAB, 0xCD }" in snippets["STM32 HAL C Driver"]

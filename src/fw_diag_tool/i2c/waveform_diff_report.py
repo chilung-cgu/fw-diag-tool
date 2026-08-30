@@ -162,10 +162,7 @@ def localize_diff_description(value: str) -> str:
         )
     match = _PHASE_RE.fullmatch(value)
     if match:
-        return (
-            f"交易對齊在插入或遺失交易後偏移 {match.group('offset')}。"
-            f"（{value}）"
-        )
+        return f"交易對齊在插入或遺失交易後偏移 {match.group('offset')}。（{value}）"
     return value
 
 
@@ -180,9 +177,7 @@ def _tx_summary(tx: I2CTransaction | None) -> str:
     if tx is None:
         return "（無對應交易）"
     direction = tx.direction.value if isinstance(tx.direction, I2CDirection) else str(tx.direction)
-    address = (
-        f"0x{tx.address_7bit:02X}" if getattr(tx, "address_available", True) else "未知位址"
-    )
+    address = f"0x{tx.address_7bit:02X}" if getattr(tx, "address_available", True) else "未知位址"
     data = getattr(tx, "hex_dump", "-") or "-"
     return f"交易 #{tx.id}；位址 {address}；方向 {_direction_text(direction)}；資料 {data}"
 

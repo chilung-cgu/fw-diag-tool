@@ -320,9 +320,6 @@ def render() -> None:
                 mime="application/zip",
             )
     except ResourceLimitError as exc:
-        st.error(
-            "輸入超過安全資源上限："
-            f"{_localize_gui_error(exc, domain='i2c_builder')}"
-        )
+        st.error(f"輸入超過安全資源上限：{_localize_gui_error(exc, domain='i2c_builder')}")
     except (TypeError, ValueError) as exc:
         st.error(f"輸入格式錯誤：{_localize_gui_error(exc, domain='i2c_builder')}")

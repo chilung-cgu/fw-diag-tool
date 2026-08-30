@@ -126,8 +126,7 @@ def test_sensor_and_pmbus_semantic_summaries_are_chinese_first() -> None:
     )
     assert (
         localize_semantic_summary(
-            "STATUS_BYTE=0x22 -> VOUT_OV (Output Over-Voltage Fault), "
-            "CML (Comm/Memory/Logic Error)"
+            "STATUS_BYTE=0x22 -> VOUT_OV (Output Over-Voltage Fault), CML (Comm/Memory/Logic Error)"
         )
         == "STATUS_BYTE（狀態位元組）=0x22 -> VOUT_OV（輸出過電壓故障）, "
         "CML（通訊／記憶體／邏輯錯誤）"

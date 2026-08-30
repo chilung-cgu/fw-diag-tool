@@ -285,21 +285,57 @@ def localize_explanatory_text(text: str | None) -> str:
         ("TEMPERATURE (Thermal Fault or Warning)", "TEMPERATURE（熱故障或警告）"),
         ("CML (Comm/Memory/Logic Error)", "CML（通訊／記憶體／邏輯錯誤）"),
         ("OTHER_FAULT (Unspecified secondary fault)", "OTHER_FAULT（未指定的次要故障）"),
-        ("VOUT_FAULT_WARN (Output Voltage Fault or Warning)", "VOUT_FAULT_WARN（輸出電壓故障或警告）"),
-        ("IOUT_POUT_FAULT_WARN (Output Current or Power Fault/Warning)", "IOUT_POUT_FAULT_WARN（輸出電流或功率故障／警告）"),
-        ("INPUT_FAULT_WARN (Input Voltage/Current/Power Fault/Warning)", "INPUT_FAULT_WARN（輸入電壓／電流／功率故障或警告）"),
-        ("MFR_SPECIFIC (Manufacturer Specific Fault/Warning)", "MFR_SPECIFIC（製造商專屬故障／警告）"),
-        ("POWER_GOOD# (Power Good Signal is NEGATED / Inactive)", "POWER_GOOD#（Power Good 訊號未有效／非啟用）"),
+        (
+            "VOUT_FAULT_WARN (Output Voltage Fault or Warning)",
+            "VOUT_FAULT_WARN（輸出電壓故障或警告）",
+        ),
+        (
+            "IOUT_POUT_FAULT_WARN (Output Current or Power Fault/Warning)",
+            "IOUT_POUT_FAULT_WARN（輸出電流或功率故障／警告）",
+        ),
+        (
+            "INPUT_FAULT_WARN (Input Voltage/Current/Power Fault/Warning)",
+            "INPUT_FAULT_WARN（輸入電壓／電流／功率故障或警告）",
+        ),
+        (
+            "MFR_SPECIFIC (Manufacturer Specific Fault/Warning)",
+            "MFR_SPECIFIC（製造商專屬故障／警告）",
+        ),
+        (
+            "POWER_GOOD# (Power Good Signal is NEGATED / Inactive)",
+            "POWER_GOOD#（Power Good 訊號未有效／非啟用）",
+        ),
         ("FAN_FAULT_WARN (Fan or Airflow Fault/Warning)", "FAN_FAULT_WARN（風扇或氣流故障／警告）"),
-        ("STATUS_OTHER_SET (Bit in STATUS_OTHER is set)", "STATUS_OTHER_SET（STATUS_OTHER 中有位元被設為 1）"),
+        (
+            "STATUS_OTHER_SET (Bit in STATUS_OTHER is set)",
+            "STATUS_OTHER_SET（STATUS_OTHER 中有位元被設為 1）",
+        ),
         ("UNKNOWN_FAULT (Unknown fault occurred)", "UNKNOWN_FAULT（發生未知故障）"),
-        ("INVALID_COMMAND (Master sent invalid or unsupported command code)", "INVALID_COMMAND（主機送出無效或不支援的指令碼）"),
-        ("INVALID_DATA (Master sent invalid or out-of-range data payload)", "INVALID_DATA（主機送出無效或超出範圍的資料 Payload）"),
-        ("PEC_FAILED (Packet Error Check checksum mismatch)", "PEC_FAILED（Packet Error Check 校驗碼不一致）"),
-        ("MEMORY_FAULT (Internal NVM / Flash / RAM fault detected)", "MEMORY_FAULT（偵測到內部 NVM／Flash／RAM 故障）"),
-        ("PROCESSOR_FAULT (Internal core / MCU processor fault)", "PROCESSOR_FAULT（內部核心／MCU 處理器故障）"),
+        (
+            "INVALID_COMMAND (Master sent invalid or unsupported command code)",
+            "INVALID_COMMAND（主機送出無效或不支援的指令碼）",
+        ),
+        (
+            "INVALID_DATA (Master sent invalid or out-of-range data payload)",
+            "INVALID_DATA（主機送出無效或超出範圍的資料 Payload）",
+        ),
+        (
+            "PEC_FAILED (Packet Error Check checksum mismatch)",
+            "PEC_FAILED（Packet Error Check 校驗碼不一致）",
+        ),
+        (
+            "MEMORY_FAULT (Internal NVM / Flash / RAM fault detected)",
+            "MEMORY_FAULT（偵測到內部 NVM／Flash／RAM 故障）",
+        ),
+        (
+            "PROCESSOR_FAULT (Internal core / MCU processor fault)",
+            "PROCESSOR_FAULT（內部核心／MCU 處理器故障）",
+        ),
         ("COMM_FAULT (Other communication fault)", "COMM_FAULT（其他通訊故障）"),
-        ("OTHER_MEM_LOGIC (Other memory or logic fault)", "OTHER_MEM_LOGIC（其他記憶體或邏輯故障）"),
+        (
+            "OTHER_MEM_LOGIC (Other memory or logic fault)",
+            "OTHER_MEM_LOGIC（其他記憶體或邏輯故障）",
+        ),
     )
     for source, target in status_flag_replacements:
         value = value.replace(source, target)
@@ -381,7 +417,7 @@ def localize_explanatory_text(text: str | None) -> str:
         r"\b(OPERATION) = ([^,]+), (Margin High|Margin Low|Nominal) \((0x[0-9A-Fa-f]+)\)",
         lambda match: (
             f"{match.group(1)}（操作） = {match.group(2).strip()}，"
-            f"{ {'Margin High': 'Margin High（高裕量', 'Margin Low': 'Margin Low（低裕量', 'Nominal': 'Nominal（標稱'}[match.group(3)]}"
+            f"{ {'Margin High': 'Margin High（高裕量', 'Margin Low': 'Margin Low（低裕量', 'Nominal': 'Nominal（標稱'}[match.group(3)] }"
             f"，{match.group(4)}）"
         ),
         value,
@@ -413,12 +449,17 @@ def localize_explanatory_text(text: str | None) -> str:
     )
     value = re.sub(
         r"EEPROM (Byte Write|Page Write \(\d+ bytes\)|Dummy Write / Address Set) at Offset",
-        lambda match: "EEPROM "
-        + {
-            "Byte Write": "單位元組寫入",
-            "Dummy Write / Address Set": "虛擬寫入／設定位址",
-        }.get(match.group(1), re.sub(r"Page Write \((\d+) bytes\)", r"分頁寫入（\1 個位元組）", match.group(1)))
-        + "，位移",
+        lambda match: (
+            "EEPROM "
+            + {
+                "Byte Write": "單位元組寫入",
+                "Dummy Write / Address Set": "虛擬寫入／設定位址",
+            }.get(
+                match.group(1),
+                re.sub(r"Page Write \((\d+) bytes\)", r"分頁寫入（\1 個位元組）", match.group(1)),
+            )
+            + "，位移"
+        ),
         value,
     )
     value = re.sub(
@@ -462,7 +503,9 @@ def localize_explanatory_text(text: str | None) -> str:
     }
     value = re.sub(
         r"\bWRITE_PROTECT = (0x[0-9A-Fa-f]+) \((Entire memory protected|Protect all except PAGE/OPERATION/ON_OFF|Protect all except PAGE/OPERATION|Unprotected)\)",
-        lambda match: f"WRITE_PROTECT（寫入保護） = {match.group(1)}（{write_protect_labels[match.group(2)]}）",
+        lambda match: (
+            f"WRITE_PROTECT（寫入保護） = {match.group(1)}（{write_protect_labels[match.group(2)]}）"
+        ),
         value,
     )
     value = re.sub(
@@ -472,8 +515,10 @@ def localize_explanatory_text(text: str | None) -> str:
     )
     value = re.sub(
         r"I2C MUX (0x[0-9A-Fa-f]+) Channel Switch -> (\[[^]]+\])(?: \(aggregate ACK; per-byte attribution unavailable\))?",
-        lambda match: f"I2C 多工器 {match.group(1)} 通道切換 -> {match.group(2)}"
-        + ("（彙總 ACK；未提供逐位元組歸屬）" if "aggregate ACK" in match.group(0) else ""),
+        lambda match: (
+            f"I2C 多工器 {match.group(1)} 通道切換 -> {match.group(2)}"
+            + ("（彙總 ACK；未提供逐位元組歸屬）" if "aggregate ACK" in match.group(0) else "")
+        ),
         value,
     )
     value = re.sub(
@@ -516,7 +561,10 @@ def localize_explanatory_text(text: str | None) -> str:
         (r"\bended abruptly without a valid STOP condition\b", "在沒有有效 STOP 條件下突然結束"),
         (r"\bObserved SCL clock frequency fluctuates between\b", "觀察到 SCL 時鐘頻率在"),
         (r"\bAverage:\s*", "平均："),
-        (r"\bcommand selected; response bytes are not present in this write phase\b", "已選取指令；此寫入階段沒有回應位元組"),
+        (
+            r"\bcommand selected; response bytes are not present in this write phase\b",
+            "已選取指令；此寫入階段沒有回應位元組",
+        ),
     )
     for pattern, target in bounded_replacements:
         value = re.sub(pattern, target, value)
@@ -527,19 +575,43 @@ def localize_issue_title(code: str, title: str | None) -> str:
     """Return a Chinese-first diagnostic title while retaining issue code context."""
     value = str(title or code)
     patterns = {
-        "I2C_EEPROM_ACK_POLL": (r"EEPROM Write Polling NACK on (0x[0-9A-Fa-f]+)", r"EEPROM 寫入輪詢 NACK（位址 \1）"),
+        "I2C_EEPROM_ACK_POLL": (
+            r"EEPROM Write Polling NACK on (0x[0-9A-Fa-f]+)",
+            r"EEPROM 寫入輪詢 NACK（位址 \1）",
+        ),
         "I2C_ADDR_NACK": (r"Address NACK on (0x[0-9A-Fa-f]+) \(([^)]+)\)", r"位址 NACK（\1，\2）"),
-        "I2C_PREMATURE_READ_NACK": (r"Premature Master Read NACK on Byte (.+)", r"主機讀取過早送出 NACK（第 \1）"),
+        "I2C_PREMATURE_READ_NACK": (
+            r"Premature Master Read NACK on Byte (.+)",
+            r"主機讀取過早送出 NACK（第 \1）",
+        ),
         "I2C_DATA_NACK": (
             r"Slave Data NACK on Byte (\d+) \((0x[0-9A-Fa-f]+)\) at (0x[0-9A-Fa-f]+)",
             r"從裝置資料 NACK（第 \1 個位元組，\2，位址 \3）",
         ),
-        "I2C_MISSING_STOP": (r"Missing STOP Condition / Bus Hang on Transaction #(.+)", r"缺少 STOP 條件／匯流排可能掛起（交易 #\1）"),
-        "I2C_EEPROM_PAGE_ROLLOVER": (r"EEPROM Page Boundary Wrap-Around Hazard on (0x[0-9A-Fa-f]+)", r"EEPROM 分頁邊界回繞風險（\1）"),
-        "I2C_SMBUS_TIMEOUT": (r"SMBus Clock Stretching Timeout \((.+)\)", r"SMBus 時鐘延展逾時（\1）"),
-        "I2C_LONG_CLOCK_STRETCH": (r"Noticeable Clock Stretching \((.+)\) on (0x[0-9A-Fa-f]+)", r"時鐘延展時間偏長（\1，位址 \2）"),
-        "I2C_HIGH_CLOCK_JITTER": (r"High Clock Frequency Jitter \((.+)\)", r"SCL 時鐘頻率抖動偏高（\1）"),
-        "I2C_MUX_MULTI_CHANNEL": (r"Multiple MUX Channels Enabled Simultaneously \((0x[0-9A-Fa-f]+)\) @ Tx #(.+)", r"同時啟用多個多工器通道（\1，交易 #\2）"),
+        "I2C_MISSING_STOP": (
+            r"Missing STOP Condition / Bus Hang on Transaction #(.+)",
+            r"缺少 STOP 條件／匯流排可能掛起（交易 #\1）",
+        ),
+        "I2C_EEPROM_PAGE_ROLLOVER": (
+            r"EEPROM Page Boundary Wrap-Around Hazard on (0x[0-9A-Fa-f]+)",
+            r"EEPROM 分頁邊界回繞風險（\1）",
+        ),
+        "I2C_SMBUS_TIMEOUT": (
+            r"SMBus Clock Stretching Timeout \((.+)\)",
+            r"SMBus 時鐘延展逾時（\1）",
+        ),
+        "I2C_LONG_CLOCK_STRETCH": (
+            r"Noticeable Clock Stretching \((.+)\) on (0x[0-9A-Fa-f]+)",
+            r"時鐘延展時間偏長（\1，位址 \2）",
+        ),
+        "I2C_HIGH_CLOCK_JITTER": (
+            r"High Clock Frequency Jitter \((.+)\)",
+            r"SCL 時鐘頻率抖動偏高（\1）",
+        ),
+        "I2C_MUX_MULTI_CHANNEL": (
+            r"Multiple MUX Channels Enabled Simultaneously \((0x[0-9A-Fa-f]+)\) @ Tx #(.+)",
+            r"同時啟用多個多工器通道（\1，交易 #\2）",
+        ),
     }
     pattern = patterns.get(code)
     if pattern:
@@ -614,22 +686,67 @@ def localize_issue_root_cause(root_cause: str | None) -> str:
     if value in exact:
         return exact[value]
     replacements = (
-        ("1. Slave is unpowered or in Deep Sleep / Reset state.", "1. 從裝置未上電，或處於 Deep Sleep／Reset 狀態。"),
-        ("2. 7-bit vs 8-bit addressing bug in firmware (e.g. passing 0x50 as 8-bit address instead of shifting left, or vice versa).", "2. 韌體混用 7-bit 與 8-bit 位址（例如把 0x50 當成 8-bit 位址傳入，未左移，或反向處理）。"),
-        ("3. Hardware address strapping resistors (ADDR/A0/A1/A2 pins) do not match software address.", "3. 硬體位址設定電阻（ADDR／A0／A1／A2 腳位）與軟體位址不一致。"),
-        ("4. Upstream I2C Switch/Mux (e.g. PCA9548A) channel is closed or disabled.", "4. 上游 I2C Switch／Mux（例如 PCA9548A）通道關閉或停用。"),
-        ("5. Open-drain bus lines missing pull-up resistors or damaged pull-up circuit.", "5. Open-drain 匯流排線路缺少上拉電阻，或上拉電路損壞。"),
-        ("1. Invalid or unsupported register address / command code.", "1. 暫存器位址／指令碼無效或不受支援。"),
+        (
+            "1. Slave is unpowered or in Deep Sleep / Reset state.",
+            "1. 從裝置未上電，或處於 Deep Sleep／Reset 狀態。",
+        ),
+        (
+            "2. 7-bit vs 8-bit addressing bug in firmware (e.g. passing 0x50 as 8-bit address instead of shifting left, or vice versa).",
+            "2. 韌體混用 7-bit 與 8-bit 位址（例如把 0x50 當成 8-bit 位址傳入，未左移，或反向處理）。",
+        ),
+        (
+            "3. Hardware address strapping resistors (ADDR/A0/A1/A2 pins) do not match software address.",
+            "3. 硬體位址設定電阻（ADDR／A0／A1／A2 腳位）與軟體位址不一致。",
+        ),
+        (
+            "4. Upstream I2C Switch/Mux (e.g. PCA9548A) channel is closed or disabled.",
+            "4. 上游 I2C Switch／Mux（例如 PCA9548A）通道關閉或停用。",
+        ),
+        (
+            "5. Open-drain bus lines missing pull-up resistors or damaged pull-up circuit.",
+            "5. Open-drain 匯流排線路缺少上拉電阻，或上拉電路損壞。",
+        ),
+        (
+            "1. Invalid or unsupported register address / command code.",
+            "1. 暫存器位址／指令碼無效或不受支援。",
+        ),
         ("2. Attempt to write to a Read-Only register.", "2. 嘗試寫入唯讀暫存器。"),
-        ("3. Slave internal buffer/FIFO full or chip busy processing previous task.", "3. 從裝置內部 buffer／FIFO 已滿，或晶片忙於處理前一項工作。"),
-        ("4. Write protection active (e.g. EEPROM WP pin pulled high, PMBus WRITE_PROTECT active).", "4. 寫入保護啟用（例如 EEPROM WP 腳位拉高，或 PMBus WRITE_PROTECT 啟用）。"),
-        ("5. Packet Error Check (PEC) checksum byte was incorrect.", "5. Packet Error Check（PEC）校驗位元組不正確。"),
-        ("1. Master MCU crashed, hit a watchdog reset, or I2C peripheral encountered an error interrupt midway.", "1. 主機 MCU 當機、觸發 watchdog reset，或 I2C 週邊在傳輸中途遇到錯誤中斷。"),
-        ("2. Bus Stuck Low: Slave was outputting a '0' bit on SDA when Master aborted, leaving Slave holding SDA low.", "2. Bus Stuck Low：主機中止時從裝置正在 SDA 輸出 0，導致從裝置持續拉低 SDA。"),
-        ("3. Physical line noise or clock glitch corrupted the transaction state machine.", "3. 實體線路雜訊或時鐘 glitch 破壞交易狀態機。"),
-        ("1. Software bit-banging I2C driver interrupted by high-priority RTOS interrupts / ISRs.", "1. 軟體模擬 I2C 驅動程式（Software bit-banging driver）被高優先權 RTOS 中斷／ISR 打斷。"),
-        ("2. Excessive bus capacitance (>400pF) causing slow rise times (t_r) and trigger threshold delay.", "2. 匯流排電容過大（>400 pF），造成上升時間（t_r）變慢與觸發門檻延遲。"),
-        ("3. Pull-up resistors too large (e.g. 10kΩ on Fast-mode 400kHz).", "3. 上拉電阻過大（例如 Fast-mode 400 kHz 使用 10 kΩ）。"),
+        (
+            "3. Slave internal buffer/FIFO full or chip busy processing previous task.",
+            "3. 從裝置內部 buffer／FIFO 已滿，或晶片忙於處理前一項工作。",
+        ),
+        (
+            "4. Write protection active (e.g. EEPROM WP pin pulled high, PMBus WRITE_PROTECT active).",
+            "4. 寫入保護啟用（例如 EEPROM WP 腳位拉高，或 PMBus WRITE_PROTECT 啟用）。",
+        ),
+        (
+            "5. Packet Error Check (PEC) checksum byte was incorrect.",
+            "5. Packet Error Check（PEC）校驗位元組不正確。",
+        ),
+        (
+            "1. Master MCU crashed, hit a watchdog reset, or I2C peripheral encountered an error interrupt midway.",
+            "1. 主機 MCU 當機、觸發 watchdog reset，或 I2C 週邊在傳輸中途遇到錯誤中斷。",
+        ),
+        (
+            "2. Bus Stuck Low: Slave was outputting a '0' bit on SDA when Master aborted, leaving Slave holding SDA low.",
+            "2. Bus Stuck Low：主機中止時從裝置正在 SDA 輸出 0，導致從裝置持續拉低 SDA。",
+        ),
+        (
+            "3. Physical line noise or clock glitch corrupted the transaction state machine.",
+            "3. 實體線路雜訊或時鐘 glitch 破壞交易狀態機。",
+        ),
+        (
+            "1. Software bit-banging I2C driver interrupted by high-priority RTOS interrupts / ISRs.",
+            "1. 軟體模擬 I2C 驅動程式（Software bit-banging driver）被高優先權 RTOS 中斷／ISR 打斷。",
+        ),
+        (
+            "2. Excessive bus capacitance (>400pF) causing slow rise times (t_r) and trigger threshold delay.",
+            "2. 匯流排電容過大（>400 pF），造成上升時間（t_r）變慢與觸發門檻延遲。",
+        ),
+        (
+            "3. Pull-up resistors too large (e.g. 10kΩ on Fast-mode 400kHz).",
+            "3. 上拉電阻過大（例如 Fast-mode 400 kHz 使用 10 kΩ）。",
+        ),
         (
             "Enabling multiple downstream MUX channels simultaneously can cause address collisions "
             + "and excessive bus capacitance (> 400pF).",
@@ -717,19 +834,40 @@ def localize_waveform_detail(detail: str | None) -> str:
     """Translate waveform hover details; SCL/SDA and ACK tokens remain intact."""
     value = str(detail or "")
     replacements = (
-        ("I2C Repeated START (SDA falling edge while SCL is High)", "I2C Repeated START（SCL 為 High 時 SDA 下降緣）"),
-        ("I2C Start Condition (SDA falling edge while SCL is High)", "I2C START 條件（SCL 為 High 時 SDA 下降緣）"),
-        ("I2C Stop Condition (SDA rising edge while SCL is High)", "I2C STOP 條件（SCL 為 High 時 SDA 上升緣）"),
+        (
+            "I2C Repeated START (SDA falling edge while SCL is High)",
+            "I2C Repeated START（SCL 為 High 時 SDA 下降緣）",
+        ),
+        (
+            "I2C Start Condition (SDA falling edge while SCL is High)",
+            "I2C START 條件（SCL 為 High 時 SDA 下降緣）",
+        ),
+        (
+            "I2C Stop Condition (SDA rising edge while SCL is High)",
+            "I2C STOP 條件（SCL 為 High 時 SDA 上升緣）",
+        ),
         ("Address byte:", "位址位元組："),
         ("Byte:", "資料位元組："),
         ("binary:", "二進位："),
         ("Acknowledge bit: 0 (ACK)", "應答位元：0（ACK）"),
         ("Not-Acknowledge bit: 1 (NACK)", "非應答位元：1（NACK）"),
-        ("ACK/NACK was not present in the source trace; SDA level is reconstructed as high.", "來源追蹤記錄未提供 ACK/NACK；SDA 電位以 High 重建。"),
+        (
+            "ACK/NACK was not present in the source trace; SDA level is reconstructed as high.",
+            "來源追蹤記錄未提供 ACK/NACK；SDA 電位以 High 重建。",
+        ),
         ("Slave SCL Clock Stretching:", "從裝置 SCL 時鐘延展："),
-        ("Unknown read byte placeholder; value is not measured", "未知的讀取位元組佔位符；尚未量測實際值"),
-        ("Expected/assumed read byte; not measured from a device or capture", "預期／假設的讀取位元組；不是裝置或 capture 的量測值"),
-        ("Controller NACK terminates the final read byte", "Controller NACK 結束最後一個讀取位元組"),
+        (
+            "Unknown read byte placeholder; value is not measured",
+            "未知的讀取位元組佔位符；尚未量測實際值",
+        ),
+        (
+            "Expected/assumed read byte; not measured from a device or capture",
+            "預期／假設的讀取位元組；不是裝置或 capture 的量測值",
+        ),
+        (
+            "Controller NACK terminates the final read byte",
+            "Controller NACK 結束最後一個讀取位元組",
+        ),
         ("Slave ACK", "從裝置 ACK"),
     )
     for source, target in replacements:

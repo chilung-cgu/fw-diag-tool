@@ -147,7 +147,9 @@ def test_localize_diff_description_all_patterns() -> None:
     assert data_desc in loc_data
 
     # _DROPPED_RE
-    drop_desc = "Dropped Transaction: golden transaction #3 to 0x48 was not observed in the failing trace."
+    drop_desc = (
+        "Dropped Transaction: golden transaction #3 to 0x48 was not observed in the failing trace."
+    )
     loc_drop = localize_diff_description(drop_desc)
     assert "Golden 的交易 #3（位址 0x48）沒有在 Failing trace 中觀察到" in loc_drop
     assert drop_desc in loc_drop
@@ -171,7 +173,9 @@ def test_localize_diff_description_all_patterns() -> None:
     assert extra_desc in loc_extra
 
     # _PHASE_RE
-    phase_desc = "Phase Shift: transaction alignment moved by +1 after an insertion or dropped transaction."
+    phase_desc = (
+        "Phase Shift: transaction alignment moved by +1 after an insertion or dropped transaction."
+    )
     loc_phase = localize_diff_description(phase_desc)
     assert "交易對齊在插入或遺失交易後偏移 +1" in loc_phase
     assert phase_desc in loc_phase

@@ -32,9 +32,7 @@ BoardProfileError = SchemaError
 BoardProfileSchemaError = SchemaError
 
 
-_COMPATIBLE_RE = re.compile(
-    r"^[A-Za-z0-9][A-Za-z0-9,._+\-]*,[A-Za-z0-9][A-Za-z0-9,._+\-]*$"
-)
+_COMPATIBLE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9,._+\-]*,[A-Za-z0-9][A-Za-z0-9,._+\-]*$")
 _REGISTER_ACCESSES = frozenset({"RO", "RW", "WO", "W1C"})
 _SPEED_MODE_ALIASES = {
     "standard-mode": "standard",
@@ -363,11 +361,15 @@ class I2CBusProfile(_SchemaModel):
         seen: set[int] = set()
         for device in self.devices:
             if device.address_7bit in seen:
-                raise ValueError(f"duplicate I2C address 0x{device.address_7bit:02X} on bus {self.bus_num}")
+                raise ValueError(
+                    f"duplicate I2C address 0x{device.address_7bit:02X} on bus {self.bus_num}"
+                )
             seen.add(device.address_7bit)
         for mux in self.muxes:
             if mux.address_7bit in seen:
-                raise ValueError(f"duplicate I2C address 0x{mux.address_7bit:02X} on bus {self.bus_num}")
+                raise ValueError(
+                    f"duplicate I2C address 0x{mux.address_7bit:02X} on bus {self.bus_num}"
+                )
             seen.add(mux.address_7bit)
         return self
 
@@ -410,7 +412,9 @@ class BoardProfile(_SchemaModel):
 
         if not isinstance(text, str):
             raise SchemaError("board profile content must be text")
-        selected_format = _normalize_format(format) if format is not None else _detect_text_format(text)
+        selected_format = (
+            _normalize_format(format) if format is not None else _detect_text_format(text)
+        )
         try:
             data = (
                 json.loads(text, object_pairs_hook=_reject_duplicate_json_pairs)
@@ -420,7 +424,9 @@ class BoardProfile(_SchemaModel):
         except _DuplicateKeyError as exc:
             raise SchemaError(f"JSON duplicate key: {exc}") from exc
         except json.JSONDecodeError as exc:
-            raise SchemaError(f"JSON syntax error at line {exc.lineno}, column {exc.colno}: {exc.msg}") from exc
+            raise SchemaError(
+                f"JSON syntax error at line {exc.lineno}, column {exc.colno}: {exc.msg}"
+            ) from exc
         except yaml.YAMLError as exc:
             raise SchemaError(f"YAML syntax error: {exc}") from exc
         return cls.from_mapping(data)
@@ -502,7 +508,9 @@ def _schema_error_from_validation(exc: ValidationError) -> SchemaError:
     return SchemaError(message, errors=errors)
 
 
-def load_board_profile(source: Mapping[str, Any] | str | Path, *, format: str | None = None) -> BoardProfile:
+def load_board_profile(
+    source: Mapping[str, Any] | str | Path, *, format: str | None = None
+) -> BoardProfile:
     """Load a Board Profile mapping, text document, or YAML/JSON file."""
 
     if isinstance(source, Mapping):

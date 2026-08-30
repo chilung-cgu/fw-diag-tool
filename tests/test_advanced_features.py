@@ -60,8 +60,8 @@ def test_raw_spi_transition_parsing_mode0():
     rows.append("0.000000,0,1,1,1\n")
     rows.append("0.000001,0,0,1,1\n")
     for idx, b in enumerate(bits):
-        rows.append(f"0.0000{idx*2+2:02d},0,0," + str(b) + ",1\n")
-        rows.append(f"0.0000{idx*2+3:02d},1,0," + str(b) + ",1\n")
+        rows.append(f"0.0000{idx * 2 + 2:02d},0,0," + str(b) + ",1\n")
+        rows.append(f"0.0000{idx * 2 + 3:02d},1,0," + str(b) + ",1\n")
     rows.append("0.000020,0,0,0,1\n")
     rows.append("0.000021,0,1,0,1\n")
     csv_text = "".join(rows)

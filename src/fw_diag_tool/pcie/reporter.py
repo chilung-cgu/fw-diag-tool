@@ -28,9 +28,7 @@ _DEVICE_DUMP_RE = re.compile(
 _COMMAND_REGISTER_BIT_RE = re.compile(
     r"^Command Register Bit (?P<bit>\d+) \((?P<field>[A-Za-z0-9_.]+)\) is 0\.?$"
 )
-_TLP_FALLBACK_RE = re.compile(
-    r"^TLP Fmt:(?P<fmt>0x[0-9A-Fa-f]+) Type:(?P<type>0x[0-9A-Fa-f]+)$"
-)
+_TLP_FALLBACK_RE = re.compile(r"^TLP Fmt:(?P<fmt>0x[0-9A-Fa-f]+) Type:(?P<type>0x[0-9A-Fa-f]+)$")
 _SEVERITY_PAIR_RE = re.compile(r"^(?P<outer>[^()]+) \((?P<inner>[^()]+)\)$")
 
 _ERROR_NAME_ZH = {
@@ -382,11 +380,13 @@ def _localize_decoded_value(key: str, value: object) -> str:
 
 
 def _localize_decoded_info(info: dict[str, object]) -> str:
-    return "；".join(
-        f"{_localize_field_name(str(key))}: "
-        f"{_localize_decoded_value(str(key), value)}"
-        for key, value in info.items()
-    ) or "無資料（N/A）"
+    return (
+        "；".join(
+            f"{_localize_field_name(str(key))}: {_localize_decoded_value(str(key), value)}"
+            for key, value in info.items()
+        )
+        or "無資料（N/A）"
+    )
 
 
 def _localize_severity(value: str) -> str:
@@ -470,7 +470,9 @@ class PCIeReporter:
             f"- **廠商 ID／裝置 ID（Vendor ID／Device ID）**: "
             f"`0x{cfg.vendor_id:04X}` / `0x{cfg.device_id:04X}`"
         )
-        class_name = _localize_class_name(cfg.class_name) if cfg.class_name else "未知類別（Unavailable）"
+        class_name = (
+            _localize_class_name(cfg.class_name) if cfg.class_name else "未知類別（Unavailable）"
+        )
         lines.append(
             f"- **類別碼（Class Code）**: `0x{cfg.base_class:02X}{cfg.sub_class:02X}{cfg.prog_if:02X}` "
             f"({class_name})"
@@ -525,9 +527,7 @@ class PCIeReporter:
             )
             lines.append("|---|---|---|---|---|---|")
             for bar in cfg.bars:
-                type_str = (
-                    "I/O 空間（I/O Space）" if bar.is_io else "記憶體空間（Memory Space）"
-                )
+                type_str = "I/O 空間（I/O Space）" if bar.is_io else "記憶體空間（Memory Space）"
                 lines.append(
                     f"| BAR{bar.index} | {type_str} | {bar.is_64bit} | {bar.is_prefetchable} | `0x{bar.base_address:016X}` | `0x{bar.raw_value:08X}` |"
                 )

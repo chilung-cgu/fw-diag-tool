@@ -77,12 +77,8 @@ def _transaction(
 
 def test_explicit_input_formats_dispatch_and_legacy_label_remains_compatible() -> None:
     csv_content = "Time,Address,Read/Write,Data,ACK/NACK\n0.001,0x50,Write,,ACK\n"
-    legacy_report, legacy_raw = analyze_i2c(
-        csv_content, "Saleae Analyzer table / text trace", 25.0
-    )
-    explicit_report, explicit_raw = analyze_i2c(
-        csv_content, I2CInputFormat.DECODED_CSV, 25.0
-    )
+    legacy_report, legacy_raw = analyze_i2c(csv_content, "Saleae Analyzer table / text trace", 25.0)
+    explicit_report, explicit_raw = analyze_i2c(csv_content, I2CInputFormat.DECODED_CSV, 25.0)
     text_report, text_raw = analyze_i2c("[0.001] S 0xA0 W A P", I2CInputFormat.TEXT_TRACE, 25.0)
 
     assert legacy_report.total_transactions == explicit_report.total_transactions == 1
@@ -98,9 +94,13 @@ def test_transaction_statuses_are_shared_and_structure_wins_over_unknown_ack() -
         get_transaction_status(
             _transaction(data_ack=AckType.NACK, direction=I2CDirection.READ)
         ): TransactionStatus.READ_END_NAK,
-        get_transaction_status(_transaction(address_ack=AckType.NONE)): TransactionStatus.ACK_UNKNOWN,
+        get_transaction_status(
+            _transaction(address_ack=AckType.NONE)
+        ): TransactionStatus.ACK_UNKNOWN,
         get_transaction_status(_transaction(has_stop=False)): TransactionStatus.NO_STOP,
-        get_transaction_status(_transaction(source_error=True)): TransactionStatus.EVIDENCE_INCOMPLETE,
+        get_transaction_status(
+            _transaction(source_error=True)
+        ): TransactionStatus.EVIDENCE_INCOMPLETE,
         get_transaction_status(_transaction(is_aborted=True)): TransactionStatus.ABORTED,
     }
 
@@ -159,10 +159,7 @@ def test_framing_only_source_is_not_reported_as_clean() -> None:
     assert report.total_events == 2
     assert report.total_transactions == 0
     assert not report.issues
-    assert any(
-        issue.code == "I2C_SOURCE_NO_TRANSACTIONS"
-        for issue in report.data_quality_issues
-    )
+    assert any(issue.code == "I2C_SOURCE_NO_TRANSACTIONS" for issue in report.data_quality_issues)
 
 
 def test_board_profile_duplicate_address_is_withheld_without_bus_context() -> None:
@@ -216,8 +213,7 @@ def test_board_profile_duplicate_address_is_withheld_without_bus_context() -> No
     assert tx.decoded_values["evidence"] == "ambiguous-board-profile"
     assert tx.device_candidates == ["EEPROM on bus 0", "EEPROM on bus 1"]
     assert any(
-        issue.code == "I2C_BOARD_PROFILE_ADDRESS_AMBIGUOUS"
-        for issue in report.data_quality_issues
+        issue.code == "I2C_BOARD_PROFILE_ADDRESS_AMBIGUOUS" for issue in report.data_quality_issues
     )
 
 
@@ -289,7 +285,9 @@ def test_frequency_filter_is_shared_and_utilization_needs_active_duration() -> N
         [
             I2CBytePacket(0.0002, 0x01, False, I2CDirection.WRITE, AckType.ACK, bit_rate_khz=400.0),
             I2CBytePacket(0.0003, 0x02, False, I2CDirection.WRITE, AckType.ACK, bit_rate_khz=1.0),
-            I2CBytePacket(0.0004, 0x03, False, I2CDirection.WRITE, AckType.ACK, bit_rate_khz=6000.0),
+            I2CBytePacket(
+                0.0004, 0x03, False, I2CDirection.WRITE, AckType.ACK, bit_rate_khz=6000.0
+            ),
         ]
     )
     stats = analyze_timing_statistics([tx], 1.0)
@@ -476,21 +474,17 @@ def test_text_and_mapping_parsers_reject_conflicting_wire_address_direction() ->
     mapping_events = I2CParser.parse_raw_records(
         [{"event_type": "ADDRESS", "address": "0xA1", "direction": "WRITE", "ack": "ACK"}]
     )
-    assert "conflicts with explicit direction" in str(
-        mapping_events[0].extra.get("source_error")
-    )
+    assert "conflicts with explicit direction" in str(mapping_events[0].extra.get("source_error"))
 
 
 def test_reserved_decoded_address_is_retained_but_explicitly_warned() -> None:
     report, _ = analyze_i2c(
-        "Time,Packet ID,Address,Read/Write,Data,ACK/NACK\n"
-        "0.001,0,0x00,Write,,ACK\n",
+        "Time,Packet ID,Address,Read/Write,Data,ACK/NACK\n0.001,0,0x00,Write,,ACK\n",
         I2CInputFormat.DECODED_CSV,
         25.0,
     )
 
     assert report.transactions[0].address_7bit == 0x00
     assert any(
-        issue.code == "I2C_RESERVED_ADDRESS_CANDIDATE"
-        for issue in report.data_quality_issues
+        issue.code == "I2C_RESERVED_ADDRESS_CANDIDATE" for issue in report.data_quality_issues
     )

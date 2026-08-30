@@ -148,10 +148,7 @@ class WaveformDiffEngine:
     @staticmethod
     def _same_endpoint(golden: I2CTransaction, failing: I2CTransaction) -> bool:
         """Return whether two rows target the same address and direction."""
-        return (
-            golden.address_7bit == failing.address_7bit
-            and golden.direction == failing.direction
-        )
+        return golden.address_7bit == failing.address_7bit and golden.direction == failing.direction
 
     @staticmethod
     def _next_position(
@@ -202,9 +199,7 @@ class WaveformDiffEngine:
         first_same_key = cls._next_position(failing_positions, key, failing_start)
         if first_same_key is None:
             return None
-        limit = cls._next_distinct_anchor_limit(
-            failing_positions, failing_start, next_distinct_key
-        )
+        limit = cls._next_distinct_anchor_limit(failing_positions, failing_start, next_distinct_key)
         if (
             limit is not None
             and first_same_key >= limit
@@ -231,6 +226,7 @@ class WaveformDiffEngine:
         equal tokens.  A cap avoids allocating an unbounded match graph for a
         very long trace consisting almost entirely of one repeated command.
         """
+
         def token(tx: I2CTransaction, index: int, side: str) -> object:
             key = cls._protocol_key(tx)
             return (
@@ -367,17 +363,15 @@ class WaveformDiffEngine:
             failing_ack_positions.setdefault(ack_key, []).append(failing_index)
 
         golden_keys = [cls._protocol_key(tx) for tx in g_txs]
-        previous_keys: list[tuple[int, I2CDirection, tuple[int, ...]] | None] = [None] * len(
-            g_txs
-        )
+        previous_keys: list[tuple[int, I2CDirection, tuple[int, ...]] | None] = [None] * len(g_txs)
         previous_key: tuple[int, I2CDirection, tuple[int, ...]] | None = None
         for index, key in enumerate(golden_keys):
             previous_keys[index] = previous_key
             if key is not None:
                 previous_key = key
-        next_distinct_keys: list[
-            tuple[int, I2CDirection, tuple[int, ...]] | None
-        ] = [None] * len(g_txs)
+        next_distinct_keys: list[tuple[int, I2CDirection, tuple[int, ...]] | None] = [None] * len(
+            g_txs
+        )
         nearest_key: tuple[int, I2CDirection, tuple[int, ...]] | None = None
         second_nearest_key: tuple[int, I2CDirection, tuple[int, ...]] | None = None
         for index in range(len(g_txs) - 1, -1, -1):
@@ -411,9 +405,7 @@ class WaveformDiffEngine:
                 if next_failing_index is not None
                 else (phase_start_golden if phase_start_golden is not None else next_golden_index)
             )
-            golden_tx = (
-                g_txs[marker_golden_index] if marker_golden_index < len(g_txs) else None
-            )
+            golden_tx = g_txs[marker_golden_index] if marker_golden_index < len(g_txs) else None
             failing_tx = (
                 f_txs[next_failing_index]
                 if next_failing_index is not None and next_failing_index < len(f_txs)
@@ -616,9 +608,10 @@ class WaveformDiffEngine:
             future_anchor_probe = max(future_anchor_probe, current_golden_index + 1)
             while future_anchor_probe < len(g_txs):
                 key = golden_keys[future_anchor_probe]
-                if key is not None and cls._next_position(
-                    failing_positions, key, failing_index
-                ) is not None:
+                if (
+                    key is not None
+                    and cls._next_position(failing_positions, key, failing_index) is not None
+                ):
                     return True
                 future_anchor_probe += 1
             return False
@@ -657,9 +650,7 @@ class WaveformDiffEngine:
                     later_same_key = (
                         later_same_index is not None and later_same_index > exact_pair[1]
                     )
-                    remaining_differs = (len(g_txs) - golden_index) != (
-                        len(f_txs) - failing_index
-                    )
+                    remaining_differs = (len(g_txs) - golden_index) != (len(f_txs) - failing_index)
                     strong_future_anchor = (
                         current_key is not None
                         and later_same_index is None

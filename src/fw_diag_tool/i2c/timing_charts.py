@@ -75,9 +75,7 @@ class I2CTimingCharts:
         data: list[dict[str, Any]] = []
         for index, tx in enumerate(report.transactions):
             next_tx = (
-                report.transactions[index + 1]
-                if index + 1 < len(report.transactions)
-                else None
+                report.transactions[index + 1] if index + 1 < len(report.transactions) else None
             )
             status = get_transaction_status(tx, next_transaction=next_tx).value
             device_label = (
@@ -96,7 +94,9 @@ class I2CTimingCharts:
                     "Start Time (s)": tx.start_time if tx.timestamp_available else None,
                     "Duration (ms)": tx.duration_us / 1000.0 if tx.timestamp_available else None,
                     "Direction": localize_direction(
-                        tx.direction if tx.direction_available and isinstance(tx.direction, I2CDirection) else None
+                        tx.direction
+                        if tx.direction_available and isinstance(tx.direction, I2CDirection)
+                        else None
                     ),
                     "Status": localize_status(status),
                     "Bytes": len(tx.data_bytes),
@@ -182,8 +182,7 @@ class I2CTimingCharts:
             # counters must still reflect the independent ACK evidence rather
             # than treating that transaction as a successful ACK.
             nack_count = sum(
-                t.address_ack == AckType.NACK or t.has_unexpected_data_nack
-                for t in dev_txs
+                t.address_ack == AckType.NACK or t.has_unexpected_data_nack for t in dev_txs
             )
             unknown_ack_count = sum(
                 status == TransactionStatus.EVIDENCE_INCOMPLETE

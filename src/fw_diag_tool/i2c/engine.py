@@ -590,7 +590,9 @@ class I2CDiagnosticEngine:
                 tx.protocol = "I2C"
                 tx.identity_confidence = "unavailable"
                 tx.semantic_summary = "Address unavailable; semantic decoding withheld"
-                tx.decoded_values = {"evidence": "source-error" if tx.source_error else "address-unavailable"}
+                tx.decoded_values = {
+                    "evidence": "source-error" if tx.source_error else "address-unavailable"
+                }
                 continue
             if not tx.direction_available:
                 tx.device_name = f"Possible Device (0x{tx.address_7bit:02X})"
@@ -598,7 +600,9 @@ class I2CDiagnosticEngine:
                 tx.protocol = "I2C"
                 tx.identity_confidence = "address-only"
                 tx.semantic_summary = "Read/write direction unavailable; semantic decoding withheld"
-                tx.decoded_values = {"evidence": "source-error" if tx.source_error else "direction-unavailable"}
+                tx.decoded_values = {
+                    "evidence": "source-error" if tx.source_error else "direction-unavailable"
+                }
                 continue
             # Establish explicit, non-null identity fallbacks before the
             # conservative source/aggregate-ACK exits below.  A decoded row
@@ -619,9 +623,7 @@ class I2CDiagnosticEngine:
                 semantic_source_error += 1
                 continue
             if tx.aggregate_ack != AckType.NONE:
-                tx.semantic_summary = (
-                    "ACK attribution unavailable; semantic decoding withheld"
-                )
+                tx.semantic_summary = "ACK attribution unavailable; semantic decoding withheld"
                 tx.decoded_values = {
                     "evidence": "aggregate-ack",
                     "aggregate_ack": tx.aggregate_ack.value,
@@ -778,11 +780,7 @@ class I2CDiagnosticEngine:
                         # change the decoder context.  Truncated, overlong, or
                         # phase-invalid bytes are source evidence, not a new
                         # exponent to apply to later telemetry.
-                        if (
-                            cmd_code == 0x20
-                            and payload
-                            and decoded.get("is_complete") is True
-                        ):
+                        if cmd_code == 0x20 and payload and decoded.get("is_complete") is True:
                             from fw_diag_tool.i2c.pmbus import parse_vout_mode_exponent
 
                             ctx["vout_exp"] = parse_vout_mode_exponent(payload[0])
@@ -1227,9 +1225,7 @@ class I2CDiagnosticEngine:
 
         data_quality_issues: list[DataQualityIssue] = list(semantic_quality_issues)
         reserved_address_count = sum(
-            tx.address_available
-            and not 0x08 <= tx.address_7bit <= 0x77
-            for tx in transactions
+            tx.address_available and not 0x08 <= tx.address_7bit <= 0x77 for tx in transactions
         )
         if reserved_address_count:
             data_quality_issues.append(

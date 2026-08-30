@@ -53,12 +53,8 @@ def test_localize_gui_error_domains():
     assert "暫存器值必須是整數" in _localize_gui_error(
         "register value must be an integer", domain="register"
     )
-    assert "缺少 addr" in _localize_gui_error(
-        "devices[0] is missing addr", domain="dts"
-    )
-    assert "Session JSON 格式無效" in _localize_gui_error(
-        "invalid session JSON", domain="session"
-    )
+    assert "缺少 addr" in _localize_gui_error("devices[0] is missing addr", domain="dts")
+    assert "Session JSON 格式無效" in _localize_gui_error("invalid session JSON", domain="session")
 
 
 def test_localize_mctp_error():

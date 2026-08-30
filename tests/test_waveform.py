@@ -63,8 +63,7 @@ def test_decoded_waveform_rejects_expansion_before_allocating_over_limit():
 
 def test_aggregate_ack_waveform_keeps_known_payload_as_unknown_ack():
     report = I2CDiagnosticEngine().analyze_csv_content(
-        "Time,Packet ID,Address,Read/Write,Data,ACK/NACK\n"
-        "0.001,0,0x50,Write,0x04,ACK\n"
+        "Time,Packet ID,Address,Read/Write,Data,ACK/NACK\n0.001,0,0x50,Write,0x04,ACK\n"
     )
     tx = report.transactions[0]
 
@@ -90,7 +89,9 @@ def test_decoded_clock_stretch_is_rendered_on_source_data_byte():
     assert tx.byte_packets[1].clock_stretch_us == pytest.approx(28_500.0)
 
     annotations = I2CWaveformReconstructor().reconstruct_transaction_waveform(tx).annotations
-    address = next(annotation for annotation in annotations if annotation.annotation_type == "ADDRESS")
+    address = next(
+        annotation for annotation in annotations if annotation.annotation_type == "ADDRESS"
+    )
     address_ack = next(
         annotation for annotation in annotations if annotation.annotation_type == "ACK"
     )
@@ -99,7 +100,9 @@ def test_decoded_clock_stretch_is_rendered_on_source_data_byte():
         for annotation in annotations
         if annotation.annotation_type == "DATA" and annotation.label == "0x00"
     )
-    stretch = next(annotation for annotation in annotations if annotation.annotation_type == "STRETCH")
+    stretch = next(
+        annotation for annotation in annotations if annotation.annotation_type == "STRETCH"
+    )
     data_index = annotations.index(data)
     data_ack = next(
         annotation
@@ -123,9 +126,15 @@ def test_decoded_clock_stretch_on_address_byte_remains_on_address_ack():
     tx = report.transactions[0]
 
     annotations = I2CWaveformReconstructor().reconstruct_transaction_waveform(tx).annotations
-    address = next(annotation for annotation in annotations if annotation.annotation_type == "ADDRESS")
-    stretch = next(annotation for annotation in annotations if annotation.annotation_type == "STRETCH")
-    address_ack = next(annotation for annotation in annotations if annotation.annotation_type == "ACK")
+    address = next(
+        annotation for annotation in annotations if annotation.annotation_type == "ADDRESS"
+    )
+    stretch = next(
+        annotation for annotation in annotations if annotation.annotation_type == "STRETCH"
+    )
+    address_ack = next(
+        annotation for annotation in annotations if annotation.annotation_type == "ACK"
+    )
     data = next(annotation for annotation in annotations if annotation.annotation_type == "DATA")
 
     assert stretch.start_time == pytest.approx(address.end_time)
@@ -151,8 +160,7 @@ def test_aggregate_clock_stretch_remains_transaction_level_without_byte_marker()
     ]
     assert all(packet.clock_stretch_us == 0.0 for packet in tx.byte_packets)
     assert any(
-        issue.code == "I2C_TIMING_AGGREGATE_UNATTRIBUTABLE"
-        for issue in report.data_quality_issues
+        issue.code == "I2C_TIMING_AGGREGATE_UNATTRIBUTABLE" for issue in report.data_quality_issues
     )
 
     annotations = I2CWaveformReconstructor().reconstruct_transaction_waveform(tx).annotations

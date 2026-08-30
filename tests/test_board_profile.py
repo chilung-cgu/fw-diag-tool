@@ -119,7 +119,7 @@ def test_same_address_is_allowed_on_different_mux_channels():
 @pytest.mark.parametrize(
     ("document", "format", "message"),
     [
-        ("{\"board_name\": \"broken\",}", "json", "JSON syntax error"),
+        ('{"board_name": "broken",}', "json", "JSON syntax error"),
         (
             '{"board_name":"a","board_name":"b","version":"1.0","i2c_buses":[]}',
             "json",
@@ -145,11 +145,17 @@ def test_rejects_malformed_documents_with_schema_error(document, format, message
     [
         (lambda data: data["i2c_buses"][0]["devices"][0].update(address_7bit=0x78), "address_7bit"),
         (lambda data: data["i2c_buses"][0]["devices"][0].update(address_7bit=0x07), "address_7bit"),
-        (lambda data: data["i2c_buses"][0]["devices"][0].update(register_width=24), "register_width"),
+        (
+            lambda data: data["i2c_buses"][0]["devices"][0].update(register_width=24),
+            "register_width",
+        ),
         (lambda data: data["i2c_buses"][0]["muxes"][0]["channels"][0].update(channel=8), "channel"),
-        (lambda data: data["i2c_buses"][0]["muxes"][0]["channels"][0]["devices"].append(
-            data["i2c_buses"][0]["muxes"][0]["channels"][0]["devices"][0].copy()
-        ), "duplicate I2C address"),
+        (
+            lambda data: data["i2c_buses"][0]["muxes"][0]["channels"][0]["devices"].append(
+                data["i2c_buses"][0]["muxes"][0]["channels"][0]["devices"][0].copy()
+            ),
+            "duplicate I2C address",
+        ),
     ],
 )
 def test_rejects_invalid_nested_fields_without_uncaught_validation_error(mutator, message):
@@ -180,9 +186,7 @@ def test_rejects_mux_address_collision_with_direct_device():
 
 def test_rejects_duplicate_channels_and_bus_numbers():
     duplicate_channel = profile_mapping()
-    duplicate_channel["i2c_buses"][0]["muxes"][0]["channels"].append(
-        {"channel": 0, "devices": []}
-    )
+    duplicate_channel["i2c_buses"][0]["muxes"][0]["channels"].append({"channel": 0, "devices": []})
     with pytest.raises(SchemaError, match="duplicate MUX channel 0"):
         BoardProfile.from_mapping(duplicate_channel)
 
@@ -199,9 +203,7 @@ def test_rejects_unknown_fields_and_register_offsets_beyond_width():
         BoardProfile.from_mapping(unknown)
 
     too_wide = profile_mapping()
-    too_wide["i2c_buses"][0]["devices"][0]["registers"] = [
-        {"name": "bad-offset", "offset": 0x100}
-    ]
+    too_wide["i2c_buses"][0]["devices"][0]["registers"] = [{"name": "bad-offset", "offset": 0x100}]
     with pytest.raises(SchemaError, match="exceeds 8-bit"):
         BoardProfile.from_mapping(too_wide)
 

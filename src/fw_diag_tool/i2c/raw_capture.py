@@ -347,7 +347,7 @@ def decode_i2c_capture(
 
 
 def _next_different_transitions(
-    transitions: tuple[RawDigitalTransition, ...]
+    transitions: tuple[RawDigitalTransition, ...],
 ) -> list[RawDigitalTransition | None]:
     """Return the next edge after each transition without repeated suffix scans."""
     result: list[RawDigitalTransition | None] = [None] * len(transitions)

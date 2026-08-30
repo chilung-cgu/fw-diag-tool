@@ -24,9 +24,7 @@ def test_register_write_golden_segments_and_all_platforms() -> None:
     assert spec.canonical_bytes == (0x10, 0xAA, 0xBB)
     snippets = I2CDriverCodeGenerator.generate_from_spec(spec)
     assert "0x10, 0xAA, 0xBB" in snippets["Linux Userspace (i2c-dev)"]
-    assert "i2ctransfer 2 w3@0x50 0x10 0xAA 0xBB" in snippets[
-        "OpenBMC / Linux CLI (i2c-tools)"
-    ]
+    assert "i2ctransfer 2 w3@0x50 0x10 0xAA 0xBB" in snippets["OpenBMC / Linux CLI (i2c-tools)"]
     assert "-y" not in snippets["OpenBMC / Linux CLI (i2c-tools)"]
     assert "程式碼模板" in snippets["STM32 HAL C Driver"]
     assert "Wire.write(0xAA);" in snippets["Arduino / Wire.h"]
@@ -66,7 +64,9 @@ def test_combined_register_read_has_repeated_start_unknown_rx_and_final_nack(
     ("endianness", "expected"),
     [(Endianness.BIG, (0x12, 0x34)), (Endianness.LITTLE, (0x34, 0x12))],
 )
-def test_16_bit_register_endianness_is_canonical(endianness: Endianness, expected: tuple[int, int]) -> None:
+def test_16_bit_register_endianness_is_canonical(
+    endianness: Endianness, expected: tuple[int, int]
+) -> None:
     spec = I2CTransferSpec(
         address_7bit=0x50,
         operation="register_write",
@@ -95,7 +95,12 @@ def test_direct_modes_have_no_register_phase() -> None:
         {"address_7bit": 0x07, "operation": "direct_read", "read_length": 1},
         {"address_7bit": 0x78, "operation": "direct_read", "read_length": 1},
         {"address_7bit": 0x50, "operation": "direct_read", "read_length": 0},
-        {"address_7bit": 0x50, "operation": "register_write", "register": 0x100, "data_bytes": [0x00]},
+        {
+            "address_7bit": 0x50,
+            "operation": "register_write",
+            "register": 0x100,
+            "data_bytes": [0x00],
+        },
         {"address_7bit": 0x50, "operation": "direct_write", "data_bytes": []},
     ],
 )
@@ -190,9 +195,7 @@ def test_combined_read_operation_argument_is_sufficient_without_is_read() -> Non
         read_length=4,
     )
 
-    assert "i2ctransfer 1 w1@0x50 0x10 r4" in snippets[
-        "OpenBMC / Linux CLI (i2c-tools)"
-    ]
+    assert "i2ctransfer 1 w1@0x50 0x10 r4" in snippets["OpenBMC / Linux CLI (i2c-tools)"]
     assert "HAL_I2C_Mem_Read" in snippets["STM32 HAL C Driver"]
 
 
@@ -202,7 +205,7 @@ def test_linux_direct_read_checks_slave_selection_and_arduino_short_read() -> No
     )
     linux = snippets["Linux Userspace (i2c-dev)"]
     arduino = snippets["Arduino / Wire.h"]
-    assert 'if (ioctl(file, I2C_SLAVE, 0x48) < 0)' in linux
+    assert "if (ioctl(file, I2C_SLAVE, 0x48) < 0)" in linux
     assert "讀取長度不足" in arduino
 
 

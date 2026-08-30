@@ -50,7 +50,9 @@ class I2CReporter:
             if any(i.severity in (Severity.CRITICAL, Severity.ERROR) for i in report.issues)
             else ("yellow" if report.issues or report.data_quality_issues else "green")
         )
-        title_text = Text("I2C / SMBus / PMBus 協定診斷報告（Protocol Diagnostic Report）", style="bold cyan")
+        title_text = Text(
+            "I2C / SMBus / PMBus 協定診斷報告（Protocol Diagnostic Report）", style="bold cyan"
+        )
         subtitle_text = Text(
             format_summary_text_zh(
                 report.total_events,
@@ -79,7 +81,9 @@ class I2CReporter:
         timing_tbl.add_column("標準／評估（Standard / Evaluation）", style="dim")
 
         t = report.timing_stats
-        timing_tbl.add_row("標稱速度模式", localize_speed_mode(t.speed_mode), "規格分類（Spec Class）")
+        timing_tbl.add_row(
+            "標稱速度模式", localize_speed_mode(t.speed_mode), "規格分類（Spec Class）"
+        )
         if t.frequency_sample_count:
             timing_tbl.add_row(
                 "平均 SCL 時鐘頻率",
@@ -285,15 +289,17 @@ class I2CReporter:
                     Panel(body, title=header.plain, title_align="left", border_style=sev_color)
                 )
         if report.data_quality_issues:
-            quality_lines = [
-                "[bold yellow]來源證據與限制（不是協定異常）：[/]"
-            ]
+            quality_lines = ["[bold yellow]來源證據與限制（不是協定異常）：[/]"]
             quality_lines.extend(
                 f"• {issue.code}（{issue.count} 筆）："
                 f"{localize_quality_message(issue.code, issue.message)}"
                 for issue in report.data_quality_issues
             )
-            console.print(Panel("\n".join(quality_lines), title="資料證據與品質限制（Data Quality Limitations）"))
+            console.print(
+                Panel(
+                    "\n".join(quality_lines), title="資料證據與品質限制（Data Quality Limitations）"
+                )
+            )
 
         if not report.issues and report.data_quality_issues:
             console.print(
@@ -446,7 +452,9 @@ class I2CReporter:
 
             addr_text = f"0x{tx.address_7bit:02X}" if tx.address_available else "不可用"
             direction_text = localize_direction(
-                tx.direction if tx.direction_available and isinstance(tx.direction, I2CDirection) else None
+                tx.direction
+                if tx.direction_available and isinstance(tx.direction, I2CDirection)
+                else None
             )
 
             lines.append(
@@ -480,7 +488,9 @@ class I2CReporter:
                     f"{diagnostic_issue.code}: {localize_issue_title(diagnostic_issue.code, diagnostic_issue.title)}"
                 )
                 lines.append("")
-                lines.append(f"- **異常分類（Category）**: `{localize_issue_category(diagnostic_issue.category)}`")
+                lines.append(
+                    f"- **異常分類（Category）**: `{localize_issue_category(diagnostic_issue.category)}`"
+                )
                 if diagnostic_issue.address_7bit is not None:
                     lines.append(
                         f"- **從裝置位址（Device Address）**：`0x{diagnostic_issue.address_7bit:02X}`"
@@ -491,7 +501,9 @@ class I2CReporter:
                 )
                 lines.append("")
                 lines.append("**可能原因假設（Hypotheses；不是已證明的根因）**:")
-                for rc_line in localize_issue_root_cause(diagnostic_issue.root_cause_analysis).split("\n"):
+                for rc_line in localize_issue_root_cause(
+                    diagnostic_issue.root_cause_analysis
+                ).split("\n"):
                     if rc_line.strip():
                         lines.append(f"- {rc_line.strip()}")
                 lines.append("")

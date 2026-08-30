@@ -66,11 +66,13 @@ def test_shared_constants_are_sensible():
 
 def test_localize_register_meaning_known():
     from fw_diag_tool.gui.shared import _localize_register_meaning
+
     assert "正常" in _localize_register_meaning("OK")
 
 
 def test_localize_register_meaning_passthrough():
     from fw_diag_tool.gui.shared import _localize_register_meaning
+
     assert _localize_register_meaning("SomeUnknownValue") == "SomeUnknownValue"
 ```
 
@@ -219,10 +221,10 @@ Create each file with a `render()` function. Pay attention to session state keys
 
 Add these 4 modules to the parametrized list:
 ```python
-"fw_diag_tool.gui.pages.i2c_diagnosis",
-"fw_diag_tool.gui.pages.i2c_builder_ui",
-"fw_diag_tool.gui.pages.waveform_diff_ui",
-"fw_diag_tool.gui.pages.pcie_ui",
+("fw_diag_tool.gui.pages.i2c_diagnosis",)
+("fw_diag_tool.gui.pages.i2c_builder_ui",)
+("fw_diag_tool.gui.pages.waveform_diff_ui",)
+("fw_diag_tool.gui.pages.pcie_ui",)
 ```
 
 - [ ] **Step 3: Run tests**
@@ -270,10 +272,18 @@ Replace the entire `st.sidebar.radio` + `if/elif` chain with:
 import streamlit as st
 from fw_diag_tool import __version__
 from fw_diag_tool.gui.pages import (
-    i2c_diagnosis, i2c_builder_ui, waveform_diff_ui,
-    uart_ui, mctp_ui, pcie_ui, spi_ui,
-    dts_ui, register_ui, codegen_ui,
-    fault_arena_ui, sop_ui,
+    i2c_diagnosis,
+    i2c_builder_ui,
+    waveform_diff_ui,
+    uart_ui,
+    mctp_ui,
+    pcie_ui,
+    spi_ui,
+    dts_ui,
+    register_ui,
+    codegen_ui,
+    fault_arena_ui,
+    sop_ui,
 )
 
 st.set_page_config(page_title="韌體訊號與協定診斷套件", page_icon="⚡", layout="wide")
@@ -404,12 +414,15 @@ uploaded_yaml = st.file_uploader(
 - [ ] **Step 5: Add assertions to test_gui_page_modules.py**
 
 ```python
-@pytest.mark.parametrize("module_name", [
-    "fw_diag_tool.gui.pages.uart_ui",
-    "fw_diag_tool.gui.pages.mctp_ui",
-    "fw_diag_tool.gui.pages.pcie_ui",
-    "fw_diag_tool.gui.pages.dts_ui",
-])
+@pytest.mark.parametrize(
+    "module_name",
+    [
+        "fw_diag_tool.gui.pages.uart_ui",
+        "fw_diag_tool.gui.pages.mctp_ui",
+        "fw_diag_tool.gui.pages.pcie_ui",
+        "fw_diag_tool.gui.pages.dts_ui",
+    ],
+)
 def test_page_imports_upload_support(module_name: str):
     mod = importlib.import_module(module_name)
     source = inspect.getsource(mod)
@@ -539,6 +552,7 @@ Add to `tests/test_gui_page_modules.py`:
 def test_register_ui_supports_custom_yaml():
     import inspect
     from fw_diag_tool.gui.pages import register_ui
+
     source = inspect.getsource(register_ui)
     assert "上傳自訂" in source
     assert "file_uploader" in source
@@ -582,9 +596,14 @@ from fw_diag_tool.i2c.waveform_diff_report import (
 
 def test_localize_diff_type_all_known_keys():
     known = [
-        "NACK_MISMATCH", "ADDRESS_MISMATCH", "DIRECTION_MISMATCH",
-        "DATA_MISMATCH", "RETRY_SEQUENCE", "DROPPED_TRANSACTION",
-        "UNEXPECTED_EXTRA_TX", "PHASE_SHIFT",
+        "NACK_MISMATCH",
+        "ADDRESS_MISMATCH",
+        "DIRECTION_MISMATCH",
+        "DATA_MISMATCH",
+        "RETRY_SEQUENCE",
+        "DROPPED_TRANSACTION",
+        "UNEXPECTED_EXTRA_TX",
+        "PHASE_SHIFT",
     ]
     for key in known:
         result = localize_diff_type(key)
@@ -612,7 +631,9 @@ def test_localize_data_mismatch_description():
 
 
 def test_localize_dropped_transaction_description():
-    desc = "Dropped Transaction: golden transaction #3 to 0x48 was not observed in the failing trace."
+    desc = (
+        "Dropped Transaction: golden transaction #3 to 0x48 was not observed in the failing trace."
+    )
     result = localize_diff_description(desc)
     assert "0x48" in result
 
@@ -705,6 +726,7 @@ def test_symbol_table_empty():
 
 def test_symbol_table_symbolicate_hardfault():
     from fw_diag_tool.uart.parser import UARTCrashParser
+
     st = SymbolTable([(0x08001200, "main"), (0x08000400, "reset_handler")])
     report = UARTCrashParser.parse_log_text(
         "HardFault Exception Occurred!\nHFSR: 0x40000000 (FORCED)\n"
@@ -718,6 +740,7 @@ def test_symbol_table_symbolicate_hardfault():
 
 def test_symbol_table_symbolicate_kernel_panic():
     from fw_diag_tool.uart.parser import UARTCrashParser
+
     st = SymbolTable([(0x10, "nvme_pci_complete_rq")])
     report = UARTCrashParser.parse_log_text(
         "BUG: unable to handle page fault for address: 0000000000000010\n"
@@ -733,6 +756,7 @@ def test_symbol_table_symbolicate_kernel_panic():
 ```python
 def test_lm75_config_register_write_and_read():
     from fw_diag_tool.emulator.lm75 import VirtualLM75
+
     lm = VirtualLM75()
     lm.write([0x01, 0x60])  # write CONFIG = 0x60
     assert lm.config_reg == 0x60
@@ -743,6 +767,7 @@ def test_lm75_config_register_write_and_read():
 
 def test_lm75_thyst_register_read():
     from fw_diag_tool.emulator.lm75 import VirtualLM75
+
     lm = VirtualLM75()
     lm.write([0x02])  # set pointer to THYST
     data = lm.read(2)
@@ -752,6 +777,7 @@ def test_lm75_thyst_register_read():
 
 def test_lm75_tos_register_read():
     from fw_diag_tool.emulator.lm75 import VirtualLM75
+
     lm = VirtualLM75()
     lm.write([0x03])  # set pointer to TOS
     data = lm.read(2)
@@ -764,6 +790,7 @@ def test_lm75_tos_register_read():
 ```python
 def test_spi_flash_sector_erase():
     from fw_diag_tool.emulator.spi_flash import VirtualSPIFlashW25Q128
+
     flash = VirtualSPIFlashW25Q128(total_size=65536)
     flash.write_enable()
     flash.page_program(0x0000, [0xAA] * 16)
@@ -778,6 +805,7 @@ def test_spi_flash_sector_erase():
 
 def test_spi_flash_sector_erase_without_wren():
     from fw_diag_tool.emulator.spi_flash import VirtualSPIFlashW25Q128
+
     flash = VirtualSPIFlashW25Q128(total_size=65536)
     result = flash.sector_erase(0x0000)
     assert result is False
@@ -785,6 +813,7 @@ def test_spi_flash_sector_erase_without_wren():
 
 def test_spi_flash_write_disable():
     from fw_diag_tool.emulator.spi_flash import VirtualSPIFlashW25Q128
+
     flash = VirtualSPIFlashW25Q128(total_size=65536)
     flash.write_enable()
     assert flash.wel_latched is True

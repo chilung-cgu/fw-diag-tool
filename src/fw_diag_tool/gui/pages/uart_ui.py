@@ -36,9 +36,7 @@ def render() -> None:
         )
         if uploaded_uart is not None:
             try:
-                u_raw = decode_uploaded_text(
-                    uploaded_uart, allowed_extensions={".txt", ".log"}
-                )
+                u_raw = decode_uploaded_text(uploaded_uart, allowed_extensions={".txt", ".log"})
             except ValueError as exc:
                 st.error(f"UART 檔案讀取錯誤：{exc}")
         else:

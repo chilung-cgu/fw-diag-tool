@@ -188,9 +188,7 @@ class I2CParser:
         for idx, col in enumerate(header):
             c = col.strip().lower().replace(" ", "_").replace("[s]", "").replace('"', "").strip("_")
             if c in col_map:
-                raise InputFormatError(
-                    f"duplicate CSV column name after normalization: {col!r}"
-                )
+                raise InputFormatError(f"duplicate CSV column name after normalization: {col!r}")
             col_map[c] = idx
 
         def first_column(*names: str) -> int | None:
@@ -544,8 +542,11 @@ class I2CParser:
                             # aggregate ACK/NACK.  Preserve it as unknown for
                             # every byte rather than inventing ACKs for the
                             # middle bytes (or guessing which byte was NACKed).
-                            ack=AckType.NONE if aggregate_ack else (
-                                ack_val if b_idx == len(raw_data_tokens) - 1
+                            ack=AckType.NONE
+                            if aggregate_ack
+                            else (
+                                ack_val
+                                if b_idx == len(raw_data_tokens) - 1
                                 else (AckType.ACK if ack_val != AckType.NONE else AckType.NONE)
                             ),
                             duration_s=None,
