@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from fw_diag_tool.gui.charts.stats_charts import phase_waterfall
 from fw_diag_tool.gui.notifications import show_error_toast, show_success_toast
 from fw_diag_tool.gui.shared import (
     _localize_gui_error,
@@ -14,12 +15,14 @@ from fw_diag_tool.gui.uploads import (
     decode_uploaded_text,
     validate_pasted_text,
 )
+from fw_diag_tool.i18n import t
 from fw_diag_tool.reporting.csv_export import export_uart_csv
 from fw_diag_tool.resources import load_uart_sample
 from fw_diag_tool.uart.diff import UARTDiffEngine
 from fw_diag_tool.uart.models import CrashType
 from fw_diag_tool.uart.parser import UARTCrashParser
 from fw_diag_tool.uart.reporter import UARTReporter
+from fw_diag_tool.uart.symptom_db import classify_symptoms
 from fw_diag_tool.uart.timing import analyze_uart_timing
 
 
@@ -202,8 +205,40 @@ def render() -> None:
                     st.metric("Kernel", f"{k_s:.3f} s" if k_s is not None else "N/A")
                 with p_col3:
                     st.metric("Userspace", f"{u_s:.3f} s" if u_s is not None else "N/A")
+                st.plotly_chart(
+                    phase_waterfall(
+                        timing_analysis.boot_phase_durations,
+                        "開機階段耗時（Boot Phase Durations）",
+                    ),
+                    use_container_width=True,
+                )
 
-            uart_md = UARTReporter.to_markdown(u_report, timing=timing_analysis)
+            symptom_matches = classify_symptoms(valid_text.splitlines())
+            with st.expander("🏥 UART 症狀分類", expanded=False):
+                if not symptom_matches:
+                    st.info(t("uart_symptom_none", domain="gui"))
+                for match in symptom_matches:
+                    symptom = match.symptom
+                    title = (
+                        f"{symptom.category} · {symptom.severity} · "
+                        f"L{match.line_number}: {match.matched_line}"
+                    )
+                    if symptom.severity == "critical":
+                        st.error(title)
+                    elif symptom.severity == "warning":
+                        st.warning(title)
+                    else:
+                        st.info(title)
+                    st.markdown(
+                        f"**{t('uart_symptom_description', domain='gui')}**："
+                        f"{symptom.description_zh} ({symptom.description_en})\n\n"
+                        f"**{t('uart_symptom_action', domain='gui')}**："
+                        f"{symptom.suggested_action_zh} ({symptom.suggested_action_en})"
+                    )
+
+            uart_md = UARTReporter.to_markdown(
+                u_report, timing=timing_analysis, lines=valid_text.splitlines()
+            )
             st.markdown(uart_md)
             st.download_button(
                 "下載 UART Markdown 診斷報告",

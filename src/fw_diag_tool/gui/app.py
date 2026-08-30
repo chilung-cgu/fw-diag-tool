@@ -31,6 +31,7 @@ from fw_diag_tool.gui.pages import (
     session_compare_ui,
     settings_ui,
     sop_ui,
+    spi_chip_db_ui,
     spi_ui,
     tutorial_ui,
     uart_ui,
@@ -203,6 +204,12 @@ pages = {
             title=t("title_chip_db", domain="gui"),
             icon="🔍",
             url_path="chip-db",
+        ),
+        st.Page(
+            spi_chip_db_ui.page,
+            title=t("title_spi_chip_db", domain="gui"),
+            icon="💾",
+            url_path="spi-chip-db",
         ),
         st.Page(
             emulator_ui.render,

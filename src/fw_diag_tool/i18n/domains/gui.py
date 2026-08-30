@@ -71,6 +71,22 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-TW": "UART 崩潰轉儲與 HardFault 分析",
         "en-US": "UART Crash Dump & HardFault Analysis",
     },
+    "uart_symptom_expander": {
+        "zh-TW": "🏥 UART 症狀分類",
+        "en-US": "🏥 UART Symptom Classification",
+    },
+    "uart_symptom_none": {
+        "zh-TW": "未偵測到症狀（No known symptoms detected）。",
+        "en-US": "No known symptoms detected.",
+    },
+    "uart_symptom_description": {
+        "zh-TW": "症狀描述（Description）",
+        "en-US": "Description",
+    },
+    "uart_symptom_action": {
+        "zh-TW": "建議行動（Suggested Action）",
+        "en-US": "Suggested Action",
+    },
     "title_mctp": {
         "zh-TW": "MCTP／IPMB 伺服器管理協定解析",
         "en-US": "MCTP / IPMB Server Management Protocol Parser",
@@ -79,9 +95,77 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-TW": "PCIe 設定空間與 AER 診斷",
         "en-US": "PCIe Config Space & AER Diagnosis",
     },
+    "pcie_topology_title": {
+        "zh-TW": "🌳 PCIe 拓撲樹",
+        "en-US": "🌳 PCIe Topology Tree",
+    },
+    "pcie_topology_empty": {
+        "zh-TW": "（無法從輸入資料建立拓撲）",
+        "en-US": "(Topology unavailable for the supplied data)",
+    },
+    "pcie_topology_mermaid": {
+        "zh-TW": "Mermaid 拓撲圖",
+        "en-US": "Mermaid topology graph",
+    },
     "title_spi": {
         "zh-TW": "SPI Flash 協定診斷",
         "en-US": "SPI Flash Protocol Diagnosis",
+    },
+    "title_spi_chip_db": {
+        "zh-TW": "SPI Flash 晶片資料庫",
+        "en-US": "SPI Flash Chip Database",
+    },
+    "spi_chip_db_caption": {
+        "zh-TW": "依製造商、料號或 JEDEC ID 查詢常見 SPI NOR Flash 規格。",
+        "en-US": "Browse common SPI NOR flash specifications by manufacturer, part number, or JEDEC ID.",
+    },
+    "spi_chip_db_manufacturer": {
+        "zh-TW": "製造商篩選",
+        "en-US": "Manufacturer filter",
+    },
+    "spi_chip_db_all_manufacturers": {
+        "zh-TW": "全部製造商",
+        "en-US": "All manufacturers",
+    },
+    "spi_chip_db_search": {
+        "zh-TW": "料號搜尋",
+        "en-US": "Part number search",
+    },
+    "spi_chip_db_table_heading": {
+        "zh-TW": "SPI Flash 晶片清單",
+        "en-US": "SPI flash chip catalog",
+    },
+    "spi_chip_db_jedec_heading": {
+        "zh-TW": "JEDEC ID 手動查詢",
+        "en-US": "Manual JEDEC ID lookup",
+    },
+    "spi_chip_db_mfr_byte": {
+        "zh-TW": "製造商位元組（Hex）",
+        "en-US": "Manufacturer byte (hex)",
+    },
+    "spi_chip_db_mem_type_byte": {
+        "zh-TW": "記憶體類型位元組（Hex）",
+        "en-US": "Memory type byte (hex)",
+    },
+    "spi_chip_db_capacity_byte": {
+        "zh-TW": "容量位元組（Hex）",
+        "en-US": "Capacity byte (hex)",
+    },
+    "spi_chip_db_lookup_button": {
+        "zh-TW": "查詢 JEDEC ID",
+        "en-US": "Look up JEDEC ID",
+    },
+    "spi_chip_db_invalid_hex": {
+        "zh-TW": "JEDEC ID 必須是 0x00 至 0xFF 的十六進位位元組。",
+        "en-US": "Each JEDEC ID field must be a hexadecimal byte from 0x00 to 0xFF.",
+    },
+    "spi_chip_db_not_found": {
+        "zh-TW": "找不到相符的 SPI Flash 晶片。",
+        "en-US": "No matching SPI flash chip was found.",
+    },
+    "spi_chip_db_match_heading": {
+        "zh-TW": "查詢結果",
+        "en-US": "Lookup result",
     },
     "title_board_profile": {
         "zh-TW": "Board Profile 視覺化編輯器",
@@ -256,6 +340,22 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
     "spinner_pcie": {"zh-TW": "正在解析 PCIe 輸入資料…", "en-US": "Parsing PCIe input data..."},
     "spinner_uart": {"zh-TW": "正在解析 UART 記錄…", "en-US": "Parsing UART logs..."},
     "spinner_mctp": {"zh-TW": "正在解析 MCTP/IPMB 輸入…", "en-US": "Parsing MCTP/IPMB input..."},
+    "mctp_topology_title": {
+        "zh-TW": "MCTP EID 端點拓撲（EID Topology Map）",
+        "en-US": "MCTP EID Topology Map",
+    },
+    "mctp_topology_endpoints": {
+        "zh-TW": "MCTP EID 端點",
+        "en-US": "MCTP EID Endpoints",
+    },
+    "mctp_topology_links": {
+        "zh-TW": "EID 通訊鏈結",
+        "en-US": "EID Communication Links",
+    },
+    "mctp_topology_empty": {
+        "zh-TW": "尚未發現 MCTP EID 端點或 IPMB 位址",
+        "en-US": "No MCTP EID endpoints or IPMB addresses were found",
+    },
     # UI Labels & Prompts
     "guide_expander_label": {
         "zh-TW": "📖 點擊展開本功能詳細實戰教學手冊",

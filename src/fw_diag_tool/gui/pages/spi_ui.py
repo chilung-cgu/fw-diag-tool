@@ -3,6 +3,7 @@ from __future__ import annotations
 import plotly.graph_objects as go
 import streamlit as st
 
+from fw_diag_tool.gui.charts.stats_charts import distribution_pie
 from fw_diag_tool.gui.notifications import show_error_toast, show_success_toast
 from fw_diag_tool.gui.sarif_export import render_sarif_download
 from fw_diag_tool.gui.session_io import serialize_spi_session
@@ -248,6 +249,13 @@ def render() -> None:
                 )
                 if stats.command_distribution:
                     st.markdown("**指令頻率分佈（Command Distribution）**")
+                    st.plotly_chart(
+                        distribution_pie(
+                            stats.command_distribution,
+                            "指令頻率分佈（Command Distribution）",
+                        ),
+                        use_container_width=True,
+                    )
                     dist_data = [
                         {"指令名稱": k, "次數": v}
                         for k, v in sorted(stats.command_distribution.items(), key=lambda x: -x[1])

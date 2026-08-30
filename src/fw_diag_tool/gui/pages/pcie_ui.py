@@ -4,6 +4,7 @@ from typing import Any
 
 import streamlit as st
 
+from fw_diag_tool.gui.charts.stats_charts import distribution_bar, distribution_pie
 from fw_diag_tool.gui.notifications import show_error_toast, show_success_toast
 from fw_diag_tool.gui.sarif_export import render_sarif_download
 from fw_diag_tool.gui.shared import (
@@ -17,6 +18,7 @@ from fw_diag_tool.pcie.diagnostics import diagnose_pcie_device
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
 from fw_diag_tool.pcie.statistics import compute_pcie_statistics
+from fw_diag_tool.pcie.topology import build_topology, topology_to_mermaid, topology_to_text_tree
 from fw_diag_tool.reporting.csv_export import export_pcie_csv
 from fw_diag_tool.resources import load_pcie_dmesg_sample, load_pcie_lspci_sample
 
@@ -263,6 +265,12 @@ def render() -> None:
                     key=f"pcie_config_download_{cfg_index}",
                 )
             if devices:
+                roots = build_topology(devices)
+                with st.expander("🌳 PCIe 拓撲樹（PCIe Topology Tree）", expanded=True):
+                    tree_text = topology_to_text_tree(roots)
+                    st.code(tree_text or "（無法從輸入資料建立拓撲）", language="text")
+                    if roots:
+                        st.code(topology_to_mermaid(roots), language="mermaid")
                 st.download_button(
                     "📥 下載 CSV",
                     data=export_pcie_csv(devices),
@@ -283,10 +291,25 @@ def render() -> None:
                     c4.metric("連線降級數量", stats.link_degradation_count)
                     if stats.topology_summary:
                         st.markdown("**裝置類別分佈（Topology Summary）**")
+                        st.plotly_chart(
+                            distribution_bar(
+                                stats.topology_summary,
+                                "裝置類別分佈（Topology Summary）",
+                                horizontal=True,
+                            ),
+                            use_container_width=True,
+                        )
                         for cls_name, count in sorted(stats.topology_summary.items()):
                             st.write(f"- {PCIeReporter.localize_class_name(cls_name)}: {count}")
                     if stats.link_speed_distribution:
                         st.markdown("**速率世代分佈（Link Speed Distribution）**")
+                        st.plotly_chart(
+                            distribution_pie(
+                                stats.link_speed_distribution,
+                                "速率世代分佈（Link Speed Distribution）",
+                            ),
+                            use_container_width=True,
+                        )
                         for spd, count in sorted(stats.link_speed_distribution.items()):
                             st.write(f"- {spd}: {count}")
                 render_sarif_download(all_findings, protocol="PCIe", filename_prefix="pcie_config")

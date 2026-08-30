@@ -16,7 +16,7 @@ class TestPageIndex:
     """Validate the PAGE_INDEX data structure."""
 
     def test_page_index_entries(self) -> None:
-        assert len(PAGE_INDEX) == 25
+        assert len(PAGE_INDEX) == 26
 
     def test_all_entries_have_required_keys(self) -> None:
         required = {"title", "url", "category", "keywords"}

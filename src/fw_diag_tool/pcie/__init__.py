@@ -16,6 +16,7 @@ from .models import (
 from .parser import PCIeAnalyzer
 from .reporter import PCIeReporter
 from .statistics import PCIeStatistics, compute_pcie_statistics
+from .topology import PCIeNode, build_topology, topology_to_mermaid, topology_to_text_tree
 
 __all__ = [
     "ROOT_CAUSE_GUIDES",
@@ -31,10 +32,14 @@ __all__ = [
     "PCIeConfigSpace",
     "PCIeDiffEngine",
     "PCIeDiffResult",
+    "PCIeNode",
     "PCIeReporter",
     "PCIeStatistics",
     "StandardCapability",
     "TLPHeaderDecoded",
+    "build_topology",
     "compute_pcie_statistics",
     "get_root_cause_guide",
+    "topology_to_mermaid",
+    "topology_to_text_tree",
 ]

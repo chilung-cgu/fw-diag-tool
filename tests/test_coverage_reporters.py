@@ -599,3 +599,54 @@ def test_uart_timing_none_fields_fallback() -> None:
     md = UARTReporter.to_markdown(report, timing=timing_none)
     assert "N/A" in md
 
+
+def test_spi_localize_unknown_severity_and_quality_fallbacks() -> None:
+    assert "未知嚴重度" in _localize_spi_severity("NOTICE")
+    assert _localize_spi_severity("自訂嚴重度") == "自訂嚴重度"
+    assert "未知資料品質問題" in _localize_quality_message("CUSTOM", "raw message")
+    assert "原始訊息" in _localize_quality_message("SPI_SOURCE_EMPTY", "different message")
+
+
+def test_spi_localize_detail_identified_chip_and_unknown_values() -> None:
+    assert "未知／通用" in _localize_detail("identified_chip", "Unknown / Generic SPI Flash")
+    assert _localize_detail("custom_key", "custom value").startswith("欄位（custom_key）")
+    assert _localize_detail("flag", None).endswith("未知值（None）")
+
+
+def test_spi_markdown_empty_report_uses_unavailable_statistics() -> None:
+    report = SPIReport(summary=SPIReportSummary(), transactions=[])
+    markdown = SPIReporter.to_markdown(report)
+    assert "未知／通用 SPI Flash" in markdown
+    assert "無時間戳資料（Unavailable）" in markdown
+    assert "無（None）" in markdown
+
+
+def test_uart_generic_report_without_timing_has_next_step_only() -> None:
+    report = UARTReport(
+        crash_type=CrashType.GENERIC_LOG,
+        summary_title="normal",
+        raw_log_lines=2,
+    )
+    terminal = StringIO()
+    UARTReporter.render_terminal(report, console=Console(file=terminal, force_terminal=False))
+    markdown = UARTReporter.to_markdown(report)
+    assert "未辨識 Crash Signature" in terminal.getvalue()
+    assert "建議下一步" in markdown
+    assert "UART 時序分析" not in markdown
+
+
+def test_uart_kernel_panic_report_handles_optional_fields_absent() -> None:
+    report = UARTReport(
+        crash_type=CrashType.KERNEL_PANIC,
+        summary_title="panic",
+        raw_log_lines=1,
+        kernel_panic=KernelPanicReport(
+            architecture="arm64",
+            panic_reason="custom panic",
+        ),
+    )
+    terminal = StringIO()
+    UARTReporter.render_terminal(report, console=Console(file=terminal, force_terminal=False))
+    markdown = UARTReporter.to_markdown(report)
+    assert "Kernel Panic 摘要" in terminal.getvalue()
+    assert "custom panic" in markdown

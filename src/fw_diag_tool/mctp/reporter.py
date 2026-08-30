@@ -8,6 +8,7 @@ from rich.table import Table
 
 from .models import ServerMgmtReport
 from .statistics import compute_mctp_statistics
+from .topology import build_eid_topology, topology_to_mermaid, topology_to_text
 
 _SUMMARY_RE = re.compile(
     r"^Decoded (\d+) MCTP packet\(s\) and (\d+) IPMB frame\(s\)\."
@@ -373,6 +374,10 @@ class ServerMgmtReporter:
                 )
             c.print(ipmb_tbl)
 
+        topology = build_eid_topology(report)
+        if topology.total_endpoints:
+            c.print(Panel(topology_to_text(topology), title="MCTP EID 端點拓撲（EID Topology）"))
+
     @staticmethod
     def to_markdown(report: ServerMgmtReport) -> str:
         lines = [
@@ -441,6 +446,17 @@ class ServerMgmtReporter:
                     f"| #{idx} | `0x{f.rq_addr:02X}` | `0x{f.rs_addr:02X}` | {_localize_netfn(f.netfn_name)} | {_localize_command(f.cmd_name)} | `{data_str}` | {status_str} |"
                 )
             lines.append("")
+
+        topology = build_eid_topology(report)
+        lines.append("## MCTP EID 端點拓撲（EID Topology）")
+        lines.append("```text")
+        lines.extend(topology_to_text(topology).splitlines())
+        lines.append("```")
+        lines.append("")
+        lines.append("```mermaid")
+        lines.append(topology_to_mermaid(topology))
+        lines.append("```")
+        lines.append("")
 
         stats = compute_mctp_statistics(report)
         lines.append("## MCTP/IPMB 統計摘要")

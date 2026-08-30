@@ -4,6 +4,7 @@ import dataclasses
 
 import streamlit as st
 
+from fw_diag_tool.gui.charts.stats_charts import distribution_pie
 from fw_diag_tool.gui.notifications import show_error_toast, show_success_toast
 from fw_diag_tool.gui.shared import (
     _localize_mctp_error,
@@ -19,6 +20,7 @@ from fw_diag_tool.gui.uploads import (
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
 from fw_diag_tool.mctp.statistics import compute_mctp_statistics
+from fw_diag_tool.mctp.topology import build_eid_topology, topology_to_mermaid, topology_to_text
 from fw_diag_tool.reporting.csv_export import export_mctp_csv
 from fw_diag_tool.resources import load_mctp_sample
 
@@ -144,6 +146,13 @@ def render() -> None:
 
                     if mctp_stats.message_type_distribution:
                         st.markdown("##### 訊息類型分佈（Message Type Distribution）")
+                        st.plotly_chart(
+                            distribution_pie(
+                                mctp_stats.message_type_distribution,
+                                "訊息類型分佈（Message Type Distribution）",
+                            ),
+                            use_container_width=True,
+                        )
                         for msg_type, count in sorted(mctp_stats.message_type_distribution.items()):
                             st.write(f"- **{msg_type}**: {count}")
 
@@ -151,6 +160,18 @@ def render() -> None:
                         st.markdown("##### 端點通訊統計（EID Matrix: Src -> Dest）")
                         for pair, count in sorted(mctp_stats.eid_matrix.items()):
                             st.write(f"- `{pair}`: {count} 個封包")
+
+                mctp_topology = build_eid_topology(m_report)
+                with st.expander("🗺️ MCTP EID 端點拓撲（EID Topology Map）", expanded=False):
+                    if mctp_topology.total_endpoints:
+                        st.text(topology_to_text(mctp_topology))
+                        st.markdown(
+                            "```mermaid\n"
+                            f"{topology_to_mermaid(mctp_topology)}\n"
+                            "```"
+                        )
+                    else:
+                        st.info("尚未發現 MCTP EID 端點或 IPMB 位址")
 
                 report_dict = dataclasses.asdict(m_report)
                 anomaly_count = (

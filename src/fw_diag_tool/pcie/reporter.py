@@ -4,6 +4,7 @@ import re
 
 from .models import DmesgAEREvent, HeaderType, PCIeConfigSpace
 from .statistics import PCIeStatistics, compute_pcie_statistics
+from .topology import build_topology, topology_to_mermaid, topology_to_text_tree
 
 _ROOT_CAUSE_GUIDE_ZH = {
     "Completion Timeout (CTO): Requester did not receive completion in time.": "完成逾時（Completion Timeout；CTO）：請求端（Requester）未在期限內收到 completion。",
@@ -684,6 +685,17 @@ class PCIeReporter:
             lines.append(
                 "*找不到 AER Extended Capability（Configuration Space 未偵測到 AER Extended Capability）。*\n"
             )
+        lines.append("## 7. PCIe 拓撲（PCIe Topology）")
+        topology_roots = build_topology([cfg])
+        topology_text = topology_to_text_tree(topology_roots)
+        lines.append("```text")
+        lines.append(topology_text or "（無法從 BDF 建立拓撲；Topology unavailable）")
+        lines.append("```")
+        if topology_roots:
+            lines.extend(["", "### Mermaid 拓撲圖（Mermaid Topology Graph）", "```mermaid"])
+            lines.append(topology_to_mermaid(topology_roots))
+            lines.append("```")
+        lines.append("")
         stats = compute_pcie_statistics([cfg])
         lines.append(PCIeReporter.format_statistics(stats))
         lines.append("")

@@ -137,6 +137,12 @@ PAGE_INDEX: list[dict[str, str]] = [
         "keywords": "chip database i2c address lookup eeprom sensor pmbus",
     },
     {
+        "title": "SPI Flash Chip Database",
+        "url": "spi-chip-db",
+        "category": "Labs",
+        "keywords": "spi flash chip database jedec manufacturer w25q mx25l n25q gd25q",
+    },
+    {
         "title": "Virtual Device Emulator",
         "url": "emulator",
         "category": "Labs",

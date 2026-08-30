@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .models import UARTReport
+from .symptom_db import MatchedSymptom, classify_symptoms
 
 if TYPE_CHECKING:
     from .timing import UARTTimingAnalysis
@@ -349,8 +350,11 @@ class UARTReporter:
 
     @staticmethod
     def to_markdown(
-        report: UARTReport, timing: UARTTimingAnalysis | None = None
+        report: UARTReport,
+        timing: UARTTimingAnalysis | None = None,
+        lines: list[str] | None = None,
     ) -> str:
+        source_lines = lines
         lines = [
             (
                 "# UART 崩潰轉儲分析（UART Crash Dump Analysis）: "
@@ -452,4 +456,60 @@ class UARTReporter:
                     f"- **崩潰至重置間隔（Crash-to-Reset Interval）**: `{effective_timing.crash_to_reset_interval_s:.3f} 秒`"
                 )
 
+        symptom_lines = source_lines if source_lines is not None else _report_symptom_lines(report)
+        _append_symptom_classification(lines, classify_symptoms(symptom_lines))
+
         return "\n".join(lines)
+
+
+def _report_symptom_lines(report: UARTReport) -> list[str]:
+    """Build a small evidence set when the original UART lines are unavailable."""
+    evidence: list[str] = [report.summary_title]
+    if report.kernel_panic:
+        evidence.extend(
+            [
+                report.kernel_panic.panic_reason,
+                report.kernel_panic.root_cause_analysis,
+                *report.kernel_panic.actionable_checklist,
+            ]
+        )
+    if report.arm_hardfault:
+        evidence.extend(
+            [
+                report.arm_hardfault.root_cause_analysis,
+                *report.arm_hardfault.fault_flags,
+                *report.arm_hardfault.actionable_checklist,
+            ]
+        )
+    return [line for line in evidence if line]
+
+
+def _escape_markdown(value: str) -> str:
+    return value.replace("|", "\\|").replace("\n", " ")
+
+
+def _append_symptom_classification(lines: list[str], matches: list[MatchedSymptom]) -> None:
+    lines.append("")
+    lines.append("## UART 症狀分類（UART Symptom Classification）")
+    if not matches:
+        lines.append("未偵測到症狀（No known symptoms detected）。")
+        return
+    lines.extend(
+        [
+            "| 類別（Category） | 嚴重度（Severity） | 描述（Description） | 日誌行（Matched Line） | 建議行動（Suggested Action） |",
+            "|---|---|---|---|---|",
+        ]
+    )
+    for match in matches:
+        symptom = match.symptom
+        description = f"{symptom.description_zh} ({symptom.description_en})"
+        action = f"{symptom.suggested_action_zh} ({symptom.suggested_action_en})"
+        matched_line = f"L{match.line_number}: {match.matched_line}"
+        lines.append(
+            "| "
+            f"`{_escape_markdown(symptom.category)}` | "
+            f"`{symptom.severity}` | "
+            f"{_escape_markdown(description)} | "
+            f"`{_escape_markdown(matched_line)}` | "
+            f"{_escape_markdown(action)} |"
+        )
