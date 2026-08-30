@@ -10,8 +10,10 @@ import streamlit as st
 
 from fw_diag_tool import __version__
 from fw_diag_tool.gui.pages import (
+    board_profile_ui,
     chip_db_ui,
     codegen_ui,
+    correlation_ui,
     dashboard_ui,
     dts_ui,
     emulator_ui,
@@ -24,6 +26,7 @@ from fw_diag_tool.gui.pages import (
     register_ui,
     sop_ui,
     spi_ui,
+    tutorial_ui,
     uart_ui,
     waveform_diff_ui,
 )
@@ -52,6 +55,14 @@ pages = {
             waveform_diff_ui.render, title="雙波形對比檢視", icon="⚖️", url_path="waveform-diff"
         ),
     ],
+    "進階分析": [
+        st.Page(
+            correlation_ui.render,
+            title="跨協定時間線關聯分析",
+            icon="🔗",
+            url_path="correlation",
+        ),
+    ],
     "總覽": [
         st.Page(
             dashboard_ui.render,
@@ -67,11 +78,23 @@ pages = {
         st.Page(spi_ui.render, title="SPI Flash 協定診斷", icon="⚡", url_path="spi"),
     ],
     "產生器與硬體工具": [
+        st.Page(
+            board_profile_ui.render,
+            title="Board Profile 視覺化編輯器",
+            icon="📋",
+            url_path="board-profile",
+        ),
         st.Page(dts_ui.render, title="Device Tree 產生器", icon="🌲", url_path="dts"),
         st.Page(register_ui.render, title="暫存器 Bitfield 解碼器", icon="🎛", url_path="register"),
         st.Page(codegen_ui.render, title="C Register 巨集產生器", icon="🛠", url_path="codegen"),
     ],
     "實驗室與學習": [
+        st.Page(
+            tutorial_ui.render,
+            title="互動式教學導覽",
+            icon="🎓",
+            url_path="tutorial",
+        ),
         st.Page(
             fault_arena_ui.render,
             title="Firmware 實戰除錯實驗室",

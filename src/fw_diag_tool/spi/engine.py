@@ -185,3 +185,7 @@ class SPIDiagnosticEngine:
             )
         content = p.read_text(encoding="utf-8")
         return self.analyze_csv_content(content)
+
+
+# Alias for backwards / cross-module compatibility
+SPIEngine = SPIDiagnosticEngine

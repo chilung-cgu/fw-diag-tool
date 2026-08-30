@@ -22,6 +22,7 @@ from fw_diag_tool.gui.shared import (
     _reset_i2c_session_state,
     analyze_i2c_input,
     render_guide_expander,
+    render_html_download,
 )
 from fw_diag_tool.gui.uploads import MAX_UPLOAD_BYTES, decode_uploaded_text
 from fw_diag_tool.i2c.input import I2CInputFormat, normalize_i2c_input_format
@@ -619,6 +620,7 @@ def render() -> None:
             with st.expander("📄 檢視原始 Markdown 原始碼", expanded=False):
                 st.code(md_out, language="markdown")
             st.download_button("下載 Markdown 報告", md_out, file_name="i2c_report.md")
+            render_html_download(md_out, protocol="I2C", filename_prefix="i2c_report")
             sarif_findings = [
                 {
                     "code": issue.code,

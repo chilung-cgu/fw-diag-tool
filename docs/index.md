@@ -6,7 +6,7 @@
 
 > 💡 **建議閱讀順序**：先讀第一章（I2C 波形分析），這是所有韌體工程師的入門起點。之後根據你目前遇到的問題類型，跳轉到對應章節即可。
 
-> 🧭 **不知道頁面或圖表在說什麼？** 先看[12 個 GUI 頁面的閱讀地圖](chapters/appendix_gui_reading_guide.md)，它用「輸入 → 先看什麼 → 不能證明什麼 → 下一步」帶你逐頁定位；再進入該頁的詳細章節。
+> 🧭 **不知道頁面或圖表在說什麼？** 先看[16 個 GUI 頁面的閱讀地圖](chapters/appendix_gui_reading_guide.md)，它用「輸入 → 先看什麼 → 不能證明什麼 → 下一步」帶你逐頁定位；再進入該頁的詳細章節。
 
 ---
 
@@ -19,7 +19,7 @@ uv sync --all-extras
 uv run fw-diag gui
 ```
 
-瀏覽器將自動開啟 `http://127.0.0.1:8501`，左側側邊欄可切換 12 大功能模組。
+瀏覽器將自動開啟 `http://127.0.0.1:8501`，左側側邊欄可切換 16 大功能模組。
 
 > 若你的環境沒有 `uv`，可依公司規範建立 virtualenv 後安裝專案；重點是使用專案鎖定的依賴，
 > 不要把套件裝進系統 Python。首次啟動遇到問題，先看根目錄 README 的環境需求與 `uv lock --check`。
@@ -42,6 +42,10 @@ uv run fw-diag gui
 | 10 | 🛠 C 語言 Register 巨集產生器 | [ch09_register_codegen.md](chapters/ch09_register_codegen.md)（同第9章） | 內建 YAML |
 | 11 | 🏆 初階 Firmware 實戰除錯實驗室（Fault Arena） | [ch10_fault_arena.md](chapters/ch10_fault_arena.md) | 內建案例 |
 | 12 | 📚 韌體除錯指南與 SOP | [ch12_sop.md](chapters/ch12_sop.md) + [GUI 閱讀地圖](chapters/appendix_gui_reading_guide.md) + GUI L1~L7 分層模型 | 無需檔案 |
+| 13 🆕 | 🔍 I2C 晶片資料庫瀏覽器 | [ch13_chip_db.md](chapters/ch13_chip_db.md) | 內建資料庫 |
+| 14 🆕 | 🧪 虛擬設備模擬器實驗室（Emulator Playground） | [ch14_emulator.md](chapters/ch14_emulator.md) | 無需檔案（互動式模擬） |
+| 15 🆕 | 🎲 協定解析器 Fuzz 測試（Fuzz Lab） | [ch15_fuzz_lab.md](chapters/ch15_fuzz_lab.md) | 內建 Fuzz 產生器 |
+| 16 🆕 | 🏠 功能總覽與快速入門（Dashboard） | [ch16_dashboard.md](chapters/ch16_dashboard.md) | 無需檔案 |
 
 > 📂 **測試資料路徑**：`examples/data/` 目錄下有所有演練用的 CSV / Log / Hex 檔案。第 3 頁也提供套件內建的 Golden/Failing pair 載入與下載按鈕；PCIe dmesg 範例則可直接貼上 `examples/data/pcie_aer_dmesg.log` 的內容。
 
@@ -64,7 +68,12 @@ docs/
 │   ├── ch09_register_codegen.md ← Bitfield 解碼 + C Header RMW 巨集
 │   ├── ch10_fault_arena.md      ← 20 大故障案例分類總覽
 │   ├── ch12_sop.md               ← L1~L7 分層除錯 SOP 與證據詞彙
+│   ├── ch13_chip_db.md          ← I2C 晶片資料庫與 0x00~0x7F 地圖
+│   ├── ch14_emulator.md         ← LM75 / W25Q128 / 24C64 虛擬模擬
+│   ├── ch15_fuzz_lab.md         ← 協定解析器 Fuzzing 穩健性測試
+│   ├── ch16_dashboard.md        ← 功能總覽與 3 步快速上手
 │   ├── appendix_chart_guide.md  ← I2C 圖表與 evidence level 判讀
-│   └── appendix_gui_reading_guide.md ← 12 個 GUI 頁面的第一輪閱讀地圖
+│   └── appendix_gui_reading_guide.md ← 16 個 GUI 頁面的第一輪閱讀地圖
 └── ...
 ```
+

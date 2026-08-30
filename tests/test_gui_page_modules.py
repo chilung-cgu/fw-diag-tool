@@ -10,6 +10,7 @@ import importlib
 import pytest
 
 PAGE_MODULES = [
+    "fw_diag_tool.gui.pages.board_profile_ui",
     "fw_diag_tool.gui.pages.i2c_diagnosis",
     "fw_diag_tool.gui.pages.i2c_builder_ui",
     "fw_diag_tool.gui.pages.waveform_diff_ui",
@@ -25,6 +26,7 @@ PAGE_MODULES = [
     "fw_diag_tool.gui.pages.emulator_ui",
     "fw_diag_tool.gui.pages.chip_db_ui",
     "fw_diag_tool.gui.pages.fuzz_lab_ui",
+    "fw_diag_tool.gui.pages.tutorial_ui",
     "fw_diag_tool.gui.pages.dashboard_ui",
 ]
 

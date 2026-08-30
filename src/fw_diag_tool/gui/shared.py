@@ -453,6 +453,39 @@ def _localize_mctp_error(value: object) -> str:
     return "MCTP/IPMB 輸入格式錯誤：無法完成解碼；請確認十六進位位元組、封包邊界與協定模式。"
 
 
+def render_html_download(
+    markdown_report: str,
+    protocol: str = "I2C",
+    filename_prefix: str = "fw_diag",
+    title: str | None = None,
+) -> None:
+    """在 GUI 頁面顯示 HTML 報告下載按鈕。"""
+    if not markdown_report:
+        return
+    from fw_diag_tool.reporting.html_report import convert_markdown_to_html
+
+    html_content = convert_markdown_to_html(
+        markdown_report,
+        title=title or f"韌體診斷報告（{protocol} Diagnostic Report）",
+    )
+    file_name = (
+        f"{filename_prefix}.html"
+        if filename_prefix.endswith(".html")
+        else (
+            f"{filename_prefix}.html"
+            if protocol.lower() in filename_prefix.lower()
+            else f"{filename_prefix}_{protocol.lower()}.html"
+        )
+    )
+    st.download_button(
+        f"下載 HTML 報告（{protocol}）",
+        data=html_content,
+        file_name=file_name,
+        mime="text/html",
+        key=f"html_download_{protocol.lower()}",
+    )
+
+
 def render_guide_expander(
     chapter_rel_path: str, label: str = "📖 點擊展開本功能詳細實戰教學手冊"
 ) -> None:
@@ -479,4 +512,5 @@ __all__ = [
     "analyze_i2c_input",
     "analyze_spi_input",
     "render_guide_expander",
+    "render_html_download",
 ]

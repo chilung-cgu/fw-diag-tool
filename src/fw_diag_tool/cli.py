@@ -648,6 +648,111 @@ def launch_gui(
         raise typer.Exit(code=result.returncode)
 
 
+@app.command("batch")
+def batch_analyze(
+    directory: Path = typer.Argument(..., help="Path to directory containing capture or log files"),
+    output_dir: Path | None = typer.Option(
+        None, "--output-dir", "-o", help="Directory to save generated reports and batch manifest"
+    ),
+    format: str = typer.Option(
+        "all", "--format", "-f", help="Report format to export (markdown, html, sarif, all)"
+    ),
+    protocol: str = typer.Option(
+        "auto", "--protocol", "-p", help="Protocol filter (i2c, spi, uart, pcie, mctp, auto)"
+    ),
+) -> None:
+    """Batch analyze all trace and dump files in a directory with automatic protocol detection."""
+    if not directory.exists() or not directory.is_dir():
+        console.print(f"[bold red]錯誤：找不到目錄（Error: Directory {directory} not found!）[/]")
+        raise typer.Exit(code=1)
+
+    from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+
+    from fw_diag_tool.reporting.batch import batch_analyze_directory
+
+    protocols_arg = None if protocol.lower() == "auto" else [protocol]
+
+    console.print(
+        Panel(
+            f"[bold cyan]批次韌體診斷分析（Batch Firmware Diagnostic Analysis）[/]\n"
+            f"目錄（Directory）: {directory}\n"
+            f"協定過濾（Protocol）: {protocol}\n"
+            f"匯出格式（Format）: {format}\n"
+            f"輸出目錄（Output）: {output_dir or 'None (Terminal only)'}",
+            expand=False,
+        )
+    )
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("正在掃描與分析檔案…", total=None)
+        try:
+            entries = batch_analyze_directory(
+                directory,
+                protocols=protocols_arg,
+                output_dir=output_dir,
+                formats=format,
+            )
+            progress.update(task, completed=100, total=100, description="分析完成")
+        except Exception as exc:
+            console.print(f"[bold red]批次分析執行失敗（Batch analysis failed）: {exc}[/]")
+            raise typer.Exit(code=2) from exc
+
+    if not entries:
+        console.print("[bold yellow]未找到符合條件的檔案進行分析（No matching files found to analyze）。[/]")
+        return
+
+    # Render summary table
+    table = Table(title="批次分析結果摘要（Batch Analysis Summary）", show_header=True)
+    table.add_column("檔案（File）", style="cyan")
+    table.add_column("協定（Protocol）", style="magenta")
+    table.add_column("狀態（Status）")
+    table.add_column("異常數（Findings）", justify="right")
+    table.add_column("產出報告（Outputs）", style="dim")
+
+    for entry in entries:
+        st = entry.get("status", "unknown")
+        if st == "success":
+            status_text = "[bold green]✔ 通過（PASS）[/]"
+        elif st == "warning":
+            status_text = "[bold yellow]⚠ 警告（WARN）[/]"
+        else:
+            status_text = "[bold red]✖ 異常／失敗（FAIL）[/]"
+
+        out_paths = entry.get("output_paths", [])
+        out_summary = f"{len(out_paths)} 個檔案" if out_paths else "-"
+
+        table.add_row(
+            entry.get("filename", entry.get("file", "-")),
+            entry.get("protocol", "unknown").upper(),
+            status_text,
+            str(entry.get("findings_count", 0)),
+            out_summary,
+        )
+
+    console.print(table)
+
+    total_files = len(entries)
+    passed_files = sum(1 for e in entries if e.get("status") == "success")
+    warn_files = sum(1 for e in entries if e.get("status") == "warning")
+    failed_files = sum(1 for e in entries if e.get("status") not in ("success", "warning"))
+
+    console.print(
+        f"[bold]總計（Total）: {total_files} | "
+        f"[green]通過: {passed_files}[/] | "
+        f"[yellow]警告: {warn_files}[/] | "
+        f"[red]失敗/異常: {failed_files}[/][/]"
+    )
+    if output_dir:
+        console.print(f"[green]✔ 所有報告與 manifest 已寫入: {output_dir}[/]")
+
+
 def main() -> None:
     app()
 

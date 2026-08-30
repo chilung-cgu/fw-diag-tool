@@ -377,3 +377,8 @@ class UARTCrashParser:
             else "ARM Cortex-M HardFault Exception Triggered.",
             actionable_checklist=checklist,
         )
+
+
+def parse_uart_log(log_text: str) -> UARTReport:
+    """Parse UART crash dump or boot log text into a structured UARTReport."""
+    return UARTCrashParser.parse_log_text(log_text)

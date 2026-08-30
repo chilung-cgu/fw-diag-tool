@@ -21,6 +21,11 @@ nav:
       - 暫存器解碼與 C 巨集: chapters/ch09_register_codegen.md
       - Fault Arena 除錯演練: chapters/ch10_fault_arena.md
       - 韌體除錯 SOP: chapters/ch12_sop.md
+      - I2C 晶片資料庫瀏覽器: chapters/ch13_chip_db.md
+      - 虛擬設備模擬器實驗室: chapters/ch14_emulator.md
+      - 協定解析器 Fuzz 測試: chapters/ch15_fuzz_lab.md
+      - 功能總覽與快速入門: chapters/ch16_dashboard.md
   - 附錄:
       - 附錄 A 圖表判讀指南: chapters/appendix_chart_guide.md
-      - 附錄 B 12 個 GUI 頁面地圖: chapters/appendix_gui_reading_guide.md
+      - 附錄 B 16 個 GUI 頁面地圖: chapters/appendix_gui_reading_guide.md
+
