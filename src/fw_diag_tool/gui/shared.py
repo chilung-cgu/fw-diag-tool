@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import dataclasses
+import json
 import re
 from typing import Any
 
@@ -582,6 +584,78 @@ def render_page_footer() -> None:
     )
 
 
+def render_session_controls(
+    protocol: str,
+    report_data: dict[str, Any] | None,
+    config_data: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """通用 session 存讀控件。
+
+    Args:
+        protocol: 協定名稱 (如 "spi", "uart")
+        report_data: 分析報告 dict
+        config_data: 設定 dict
+
+    Returns:
+        如果載入了 session，回傳 report dict；否則 None。
+    """
+    from fw_diag_tool.session.session_manager import SessionManager
+
+    loaded_report: dict[str, Any] | None = None
+    proto = protocol.lower()
+
+    with st.expander("💾 Session 管理", expanded=False):
+        session_upload = st.file_uploader(
+            "載入可重現 Session（.fwsession.json）",
+            type=["json"],
+            max_upload_size=SessionManager.MAX_SESSION_BYTES // (1024 * 1024),
+            key=f"{proto}_session_upload",
+        )
+        if session_upload is not None:
+            try:
+                session_doc = SessionManager.deserialize_session(session_upload.getvalue())
+                loaded_report = session_doc.report
+                st.info(
+                    f"已載入 Session：{session_doc.name or f'{protocol.upper()} Analysis'}｜"
+                    f"工具版本：{session_doc.tool_version}"
+                )
+                with st.expander("檢視 Session 報告摘要", expanded=False):
+                    st.json(loaded_report, expanded=False)
+            except (TypeError, ValueError) as exc:
+                st.error(f"無法載入 Session：{_localize_gui_error(exc, domain='session')}")
+
+        if report_data is not None:
+            st.divider()
+            try:
+                data_dict: dict[str, Any]
+                if hasattr(report_data, "to_dict") and callable(report_data.to_dict):
+                    data_dict = report_data.to_dict()
+                elif dataclasses.is_dataclass(report_data) and not isinstance(report_data, type):
+                    data_dict = dataclasses.asdict(report_data)
+                elif isinstance(report_data, dict):
+                    data_dict = report_data
+                else:
+                    data_dict = dict(report_data)
+
+                payload = SessionManager.build_payload(
+                    name=f"{protocol.upper()} Analysis",
+                    data=data_dict,
+                    config=config_data if config_data is not None else {},
+                )
+                session_json = json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+                st.download_button(
+                    "💾 儲存分析 Session",
+                    data=session_json,
+                    file_name=f"{proto}_analysis.fwsession.json",
+                    mime="application/json",
+                    key=f"{proto}_download_session",
+                )
+            except (TypeError, ValueError) as exc:
+                st.error(f"無法建構 Session：{exc}")
+
+    return loaded_report
+
+
 __all__ = [
     "DEFAULT_I2C_TIMEOUT_MS",
     "GUI_ANALYSIS_LIMITS",
@@ -601,4 +675,5 @@ __all__ = [
     "render_guide_expander",
     "render_html_download",
     "render_page_footer",
+    "render_session_controls",
 ]

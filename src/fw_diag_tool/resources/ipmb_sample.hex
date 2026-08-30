@@ -1,0 +1,5 @@
+# IPMB Request: BMC (0x20) -> Satellite (0x81) Get Device ID
+81 18 67 20 00 01 5F
+
+# IPMB Response: Satellite (0x81) -> BMC (0x20) Get Device ID Response (CC=0x00)
+20 1C 63 81 00 01 00 00 3F

@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import streamlit as st
 
-from fw_diag_tool.gui.shared import _localize_gui_error, render_guide_expander
+from fw_diag_tool.gui.shared import (
+    _localize_gui_error,
+    render_guide_expander,
+    render_session_controls,
+)
 from fw_diag_tool.gui.uploads import (
     MAX_TEXT_BYTES,
     decode_uploaded_text,
     validate_pasted_text,
 )
+from fw_diag_tool.resources import load_uart_sample
 from fw_diag_tool.uart.parser import UARTCrashParser
 from fw_diag_tool.uart.reporter import UARTReporter
 
@@ -28,9 +33,17 @@ def render() -> None:
     u_raw = ""
     u_example_name: str | None = None
     if u_mode == "貼上 UART 日誌（UART Log）／崩潰轉儲（Crash Dump）":
-        uploaded_uart = st.file_uploader("上傳 UART 日誌檔案", type=["txt", "log"])
+        u_col1, u_col2 = st.columns([3, 1])
+        with u_col1:
+            uploaded_uart = st.file_uploader("上傳 UART 日誌檔案", type=["txt", "log"])
+        with u_col2:
+            if st.button("📋 載入範例資料", key="uart_load_sample_btn"):
+                st.session_state["uart_pasted_text"] = load_uart_sample("kernel-panic")
+                st.rerun()
+        default_uart_text = st.session_state.get("uart_pasted_text", "")
         pasted_uart = st.text_area(
             "請貼上 UART 日誌（UART Log）或崩潰轉儲（Crash Dump）：",
+            value=default_uart_text,
             height=200,
             max_chars=MAX_TEXT_BYTES,
         )
@@ -43,29 +56,10 @@ def render() -> None:
             u_raw = pasted_uart
     elif u_mode == "載入範例：Linux 核心 Panic 日誌（Kernel Panic Log）":
         u_example_name = "uart_kernel_panic_minimal.log"
-        u_raw = (
-            "BUG: unable to handle page fault for address: 0000000000000010\n"
-            "RIP: 0010:nvme_pci_complete_rq+0x38/0x120 [nvme]\n"
-            "RAX: 0000000000000000 RBX: ffff888102345000 RCX: 0000000000000000\n"
-            "CR2: 0000000000000010\n"
-            "Call Trace:\n"
-            " <TASK>\n"
-            " [ffff888100123450] blk_mq_complete_request+0x24/0x50\n"
-            " [ffff8881001234a0] nvme_irq_handler+0x8c/0x100 [nvme]\n"
-            " </TASK>"
-        )
+        u_raw = load_uart_sample("kernel-panic")
     else:
         u_example_name = "uart_hardfault_minimal.log"
-        u_raw = (
-            "HardFault Exception Occurred!\n"
-            "HFSR: 0x40000000 (FORCED)\n"
-            "CFSR: 0x02000000 (DIVBYZERO)\n"
-            "Stacked R0: 0x00000000\n"
-            "Stacked R1: 0x0000000A\n"
-            "Stacked PC: 0x08001234\n"
-            "Stacked LR: 0x08000456\n"
-            "Stacked xPSR: 0x61000000"
-        )
+        u_raw = load_uart_sample("hardfault")
     if u_example_name is not None:
         st.download_button(
             f"下載此 UART 範例（{u_example_name}）",
@@ -96,6 +90,17 @@ def render() -> None:
                 mime="text/markdown",
                 key="uart_download_report",
             )
+            render_session_controls(
+                protocol="UART",
+                report_data=u_report.to_dict(),
+                config_data={"mode": u_mode},
+            )
+    else:
+        render_session_controls(
+            protocol="UART",
+            report_data=None,
+            config_data={"mode": u_mode},
+        )
 
 
 __all__ = ["render"]

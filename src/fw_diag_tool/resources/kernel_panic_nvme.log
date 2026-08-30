@@ -1,0 +1,21 @@
+[  124.582910] BUG: unable to handle page fault for address: 0000000000000010
+[  124.582912] #PF: supervisor read access in kernel mode
+[  124.582914] #PF: error_code(0x0000) - not-present page
+[  124.582915] PGD 0 P4D 0 
+[  124.582917] Oops: 0000 [#1] PREEMPT SMP NOPTI
+[  124.582919] CPU: 4 PID: 1234 Comm: kworker/u16:2 Tainted: G           OE      6.5.0-generic
+[  124.582921] RIP: 0010:nvme_pci_complete_rq+0x38/0x120 [nvme]
+[  124.582924] Code: 48 89 df e8 4a f3 ff ff 48 8b 45 10 48 85 c0 74 20 48 8b 50 10
+[  124.582926] RSP: 0018:ffff888102347d80 EFLAGS: 00010246
+[  124.582928] RAX: 0000000000000000 RBX: ffff888102345000 RCX: 0000000000000000
+[  124.582930] RDX: 0000000000000001 RSI: 0000000000000000 RDI: ffff888102345000
+[  124.582932] RBP: ffff888102347d98 R08: 0000000000000000 R09: 0000000000000001
+[  124.582934] CR2: 0000000000000010 CR3: 0000000104520000 CR4: 0000000000750ee0
+[  124.582936] Call Trace:
+[  124.582938]  <TASK>
+[  124.582940]  [ffff888100123450] blk_mq_complete_request+0x24/0x50
+[  124.582942]  [ffff8881001234a0] nvme_irq_handler+0x8c/0x100 [nvme]
+[  124.582944]  [ffffffff81105e20] handle_irq_event+0x50/0x80
+[  124.582946]  [ffffffff81109a10] handle_edge_irq+0x90/0x240
+[  124.582948]  </TASK>
+[  124.582950] Kernel panic - not syncing: Fatal exception in interrupt

@@ -755,6 +755,119 @@ def batch_analyze(
         console.print(f"[green]✔ 所有報告與 manifest 已寫入: {output_dir}[/]")
 
 
+@app.command()
+def info() -> None:
+    """顯示 fw-diag-tool 完整系統資訊與功能模組清單。"""
+    import platform
+    import sys
+
+    console.print(
+        Panel(
+            f"[bold cyan]fw-diag-tool[/] v{__version__}\n"
+            f"Python {sys.version}\n"
+            f"Platform: {platform.platform()}\n\n"
+            "[bold]支援協定：[/]\n"
+            "  • I2C / SMBus / PMBus — CSV decoded 與 raw digital 波形分析\n"
+            "  • SPI Flash — JEDEC opcode 序列與異常偵測\n"
+            "  • UART — Linux Kernel Panic 與 ARM HardFault 分析\n"
+            "  • PCIe — Config Space, Capabilities, AER 診斷\n"
+            "  • MCTP / IPMB — 伺服器管理協定封包解析\n"
+            "  • Device Tree — Linux .dtsi 模板產生\n\n"
+            f"[bold]功能模組數：[/] 20 個 GUI 頁面\n"
+            f"[bold]Fault Arena：[/] 30 個實戰故障情境\n"
+            f"[bold]GUI 啟動：[/] fw-diag gui",
+            title="[bold cyan]系統資訊[/]",
+            border_style="cyan",
+        )
+    )
+
+
+@app.command()
+def check() -> None:
+    """檢查 fw-diag-tool 環境與依賴是否正常。"""
+    import importlib
+    import platform
+    import sys
+
+    table = Table(title="fw-diag-tool 環境與依賴健康檢查", show_header=True)
+    table.add_column("檢查項目", style="cyan", width=22)
+    table.add_column("目標 / 元件", style="magenta", width=28)
+    table.add_column("狀態", width=14)
+    table.add_column("詳細資訊", style="dim")
+
+    all_passed = True
+
+    # 1. Python 版本 >= 3.10
+    py_ver = sys.version.split()[0]
+    if sys.version_info >= (3, 10):  # noqa: UP036
+        table.add_row("Python 版本", f">= 3.10 (目前: {py_ver})", "[bold green]✔ 通過[/]", f"平台: {platform.platform()}")
+    else:
+        table.add_row("Python 版本", f">= 3.10 (目前: {py_ver})", "[bold red]✖ 失敗[/]", "Python 版本低於 3.10")
+        all_passed = False
+
+    # 2. 必要依賴套件
+    required_packages = [
+        ("streamlit", "streamlit"),
+        ("plotly", "plotly"),
+        ("pandas", "pandas"),
+        ("rich", "rich"),
+        ("typer", "typer"),
+        ("pyyaml", "yaml"),
+        ("pydantic", "pydantic"),
+    ]
+    for pkg_display, import_name in required_packages:
+        try:
+            mod = importlib.import_module(import_name)
+            ver = getattr(mod, "__version__", "已安裝")
+            table.add_row("依賴套件", pkg_display, "[bold green]✔ 通過[/]", f"版本: {ver}")
+        except Exception as exc:
+            table.add_row("依賴套件", pkg_display, "[bold red]✖ 失敗[/]", f"載入錯誤: {exc}")
+            all_passed = False
+
+    # 3. examples/data/ 目錄
+    candidates = [
+        Path("examples/data"),
+        Path(__file__).resolve().parents[2] / "examples" / "data",
+        Path(__file__).resolve().parent / "examples" / "data",
+    ]
+    found_dir = None
+    for cand in candidates:
+        if cand.exists() and cand.is_dir():
+            found_dir = cand
+            break
+    if found_dir:
+        sample_count = len(list(found_dir.glob("*")))
+        table.add_row("範例資料目錄", "examples/data/", "[bold green]✔ 通過[/]", f"找到 {sample_count} 個範例檔案 ({found_dir})")
+    else:
+        table.add_row("範例資料目錄", "examples/data/", "[bold red]✖ 失敗[/]", "找不到 examples/data/ 目錄")
+        all_passed = False
+
+    # 4. 核心 Parser 模組載入
+    parser_modules = [
+        ("I2C / PMBus Parser", "fw_diag_tool.i2c.engine"),
+        ("PCIe AER Parser", "fw_diag_tool.pcie.parser"),
+        ("SPI Flash Parser", "fw_diag_tool.spi.engine"),
+        ("UART Crash Parser", "fw_diag_tool.uart.parser"),
+        ("MCTP / IPMB Parser", "fw_diag_tool.mctp.parser"),
+        ("Register Mapper", "fw_diag_tool.analyzers.register_mapper"),
+        ("CodeGen Engine", "fw_diag_tool.codegen.dts_gen"),
+    ]
+    for parser_name, mod_path in parser_modules:
+        try:
+            importlib.import_module(mod_path)
+            table.add_row("核心 Parser", parser_name, "[bold green]✔ 通過[/]", f"模組: {mod_path}")
+        except Exception as exc:
+            table.add_row("核心 Parser", parser_name, "[bold red]✖ 失敗[/]", f"載入失敗: {exc}")
+            all_passed = False
+
+    console.print(table)
+    if all_passed:
+        console.print(Panel("[bold green]✔ 所有環境與依賴檢查均正常運作！[/]", border_style="green"))
+    else:
+        console.print(Panel("[bold red]✖ 部分環境或依賴檢查未通過，請檢查上述錯誤。[/]", border_style="red"))
+        raise typer.Exit(code=1)
+
+
 def main() -> None:
     app()
 

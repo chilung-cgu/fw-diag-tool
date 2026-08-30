@@ -1,0 +1,15 @@
+================ HARDFAULT STACK DUMP ===============
+Exception: HardFault triggered on ARM Cortex-M4
+HFSR:  0x40000000 (FORCED - Escalation of Configurable Fault)
+CFSR:  0x02000000 (UFSR.DIVBYZERO - Division by zero trapped)
+BFAR:  0x00000000 (Invalid - BFARVALID not set)
+MMFAR: 0x00000000
+Stacked R0:  0x00000000
+Stacked R1:  0x0000000A
+Stacked R2:  0x20001000
+Stacked R3:  0x00000000
+Stacked R12: 0x00000000
+Stacked LR:  0x08000457 (Return Address / Function Caller)
+Stacked PC:  0x08001234 (Faulting Instruction Address)
+Stacked xPSR: 0x61000000 (Default Thumb state)
+======================================================

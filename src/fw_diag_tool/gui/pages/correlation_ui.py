@@ -19,6 +19,7 @@ from fw_diag_tool.gui.shared import (
     render_guide_expander,
     render_page_footer,
 )
+from fw_diag_tool.resources import load_i2c_sample, load_spi_sample, load_uart_sample
 from fw_diag_tool.uart.parser import parse_uart_log
 
 # ---------------------------------------------------------------------------
@@ -76,13 +77,18 @@ def build_timeline_events(
 
     # --- SPI events ---
     if spi_report is not None:
-        operations = getattr(spi_report, "operations", None) or []
-        for op in operations:
-            ts = getattr(op, "timestamp", None)
+        transactions = (
+            getattr(spi_report, "transactions", None)
+            or getattr(spi_report, "operations", None)
+            or []
+        )
+        for op in transactions:
+            ts = getattr(op, "start_time", None) or getattr(op, "timestamp", None)
             if ts is None:
                 continue
+            opcode_name = getattr(op, "opcode_name", None)
             opcode = getattr(op, "opcode", None)
-            label = f"SPI {opcode}" if opcode else "SPI Op"
+            label = opcode_name or (f"SPI {opcode}" if opcode is not None else "SPI Op")
             events.append(
                 {
                     "protocol": "SPI",
@@ -294,6 +300,18 @@ def render() -> None:
 
     st.subheader("📂 上傳追蹤資料")
 
+    sample_col1, _ = st.columns([2, 1])
+    with sample_col1:
+        if st.button(
+            "📋 載入三協定範例資料",
+            key="corr_load_all_examples",
+            help="一鍵載入 I2C、SPI 與 UART 範例資料以體驗跨協定時間線關聯分析",
+        ):
+            st.session_state["corr_i2c_text"] = load_i2c_sample("address-nack")
+            st.session_state["corr_spi_text"] = load_spi_sample()
+            st.session_state["corr_uart_text"] = load_uart_sample("kernel-panic")
+            st.rerun()
+
     col_i2c, col_spi, col_uart = st.columns(3)
 
     i2c_report = None
@@ -305,6 +323,9 @@ def render() -> None:
         i2c_file = st.file_uploader(
             "上傳 I2C CSV", type=["csv"], key="corr_i2c_upload", label_visibility="collapsed"
         )
+        if st.button("📋 載入 I2C 範例", key="corr_load_i2c_sample"): 
+            st.session_state["corr_i2c_text"] = load_i2c_sample("address-nack")
+            st.rerun()
         i2c_text = st.text_area("或貼上 I2C CSV 內容", key="corr_i2c_text", height=120)
         i2c_input = None
         if i2c_file is not None:
@@ -314,7 +335,7 @@ def render() -> None:
 
         if i2c_input:
             try:
-                i2c_report, _ = analyze_i2c_input(i2c_input, "decoded", 25.0)
+                i2c_report, _ = analyze_i2c_input(i2c_input, "decoded_csv", 25.0)
                 st.success(f"I2C: 解析完成 ({len(getattr(i2c_report, 'transactions', []))} 筆交易)")
             except Exception as exc:
                 st.error(f"I2C 解析失敗: {exc}")
@@ -324,6 +345,9 @@ def render() -> None:
         spi_file = st.file_uploader(
             "上傳 SPI CSV", type=["csv"], key="corr_spi_upload", label_visibility="collapsed"
         )
+        if st.button("📋 載入 SPI 範例", key="corr_load_spi_sample"): 
+            st.session_state["corr_spi_text"] = load_spi_sample()
+            st.rerun()
         spi_text = st.text_area("或貼上 SPI CSV 內容", key="corr_spi_text", height=120)
         spi_input = None
         if spi_file is not None:
@@ -334,7 +358,7 @@ def render() -> None:
         if spi_input:
             try:
                 spi_report = analyze_spi_input(spi_input)
-                st.success(f"SPI: 解析完成 ({len(getattr(spi_report, 'operations', []))} 筆操作)")
+                st.success(f"SPI: 解析完成 ({len(getattr(spi_report, 'transactions', []))} 筆操作)")
             except Exception as exc:
                 st.error(f"SPI 解析失敗: {exc}")
 
@@ -346,6 +370,9 @@ def render() -> None:
             key="corr_uart_upload",
             label_visibility="collapsed",
         )
+        if st.button("📋 載入 UART 範例", key="corr_load_uart_sample"): 
+            st.session_state["corr_uart_text"] = load_uart_sample("kernel-panic")
+            st.rerun()
         uart_text = st.text_area("或貼上 UART 日誌內容", key="corr_uart_text", height=120)
         uart_input = None
         if uart_file is not None:

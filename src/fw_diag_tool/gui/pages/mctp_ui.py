@@ -10,6 +10,7 @@ from fw_diag_tool.gui.uploads import (
 )
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
+from fw_diag_tool.resources import load_mctp_sample
 
 
 def render() -> None:
@@ -17,11 +18,23 @@ def render() -> None:
     render_guide_expander(
         "chapters/ch05_mctp_ipmb.md", "📖 點擊展開：MCTP 與 IPMB 伺服器協定解析教學"
     )
-    m_sample = "01 08 00 C0 01 00 02 01 00\n20 18 C8 81 00 01 7E"
-    uploaded_mctp = st.file_uploader(
-        "上傳 MCTP/IPMB Hex Dump 檔案",
-        type=["txt", "hex", "log"],
-    )
+    m_sample = load_mctp_sample("mctp-pldm")
+    m_col1, m_col2 = st.columns([3, 1])
+    with m_col1:
+        uploaded_mctp = st.file_uploader(
+            "上傳 MCTP/IPMB Hex Dump 檔案",
+            type=["txt", "hex", "log"],
+        )
+    with m_col2:
+        use_mctp_sample = st.button(
+            "📋 載入內建範例",
+            key="mctp_load_sample",
+            help="載入內建 MCTP PLDM 十六進位範例封包",
+        )
+    if use_mctp_sample:
+        st.session_state["mctp_sample_active"] = True
+        st.info("已載入內建 MCTP／IPMB 範例！")
+
     m_pasted = st.text_area(
         "請貼上 MCTP／IPMB 封包的十六進位位元組（Hex Dump；每行一個完整封包）：",
         height=150,
@@ -67,7 +80,8 @@ def render() -> None:
         "不是實體鏈路的 Measured 量測；不會確認 BMC／端點的即時狀態，也不能單靠一行封包證明根因。"
         "請保留原始擷取資料（capture）、時間戳與協定設定，依 DSP0236／PLDM／SPDM／IPMB 規格人工核對。"
     )
-    if st.button("執行 MCTP／IPMB 伺服器管理協定解碼") and m_raw.strip():
+    execute_decode = st.button("執行 MCTP／IPMB 伺服器管理協定解碼")
+    if (execute_decode or use_mctp_sample) and m_raw.strip():
         try:
             m_report = ServerMgmtParser.parse_text_dump(
                 validate_pasted_text(m_raw, label="MCTP/IPMB 十六進位輸入"),

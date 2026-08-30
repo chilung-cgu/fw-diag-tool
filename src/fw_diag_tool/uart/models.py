@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class CrashType(str, Enum):
@@ -69,3 +71,6 @@ class UARTReport:
     kernel_panic: KernelPanicReport | None = None
     arm_hardfault: ARMHardFaultReport | None = None
     raw_log_lines: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        return dataclasses.asdict(self)

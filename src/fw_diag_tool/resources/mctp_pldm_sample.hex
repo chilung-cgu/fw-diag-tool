@@ -1,0 +1,5 @@
+# MCTP PLDM Platform Monitoring Request (Sensor Read)
+01 08 00 C0 01 80 02 01 00
+
+# MCTP PLDM Platform Monitoring Response (Success, Reading 25.5C)
+01 00 08 C0 01 00 02 01 00 00 19 80

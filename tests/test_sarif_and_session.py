@@ -99,7 +99,8 @@ def test_gui_spi_page_session_and_sarif():
         data={"summary": {"total_transactions": 4}},
         config={"max_page_size": 256},
     )
-    at.file_uploader[0].upload(
+    session_uploader = next(u for u in at.file_uploader if u.key and "session" in u.key.lower())
+    session_uploader.upload(
         "spi.fwsession.json", session_json.encode("utf-8"), "application/json"
     ).run()
     assert not at.exception
@@ -116,7 +117,8 @@ def test_gui_spi_page_session_and_sarif():
         "0.0025,0xAA,0x00,0\n"
         "0.0026,0x00,0x00,1\n"
     )
-    at.file_uploader[1].upload("bad_spi.csv", bad_spi_csv.encode("utf-8"), "text/csv").run()
+    csv_uploader = next(u for u in at.file_uploader if not u.key or "session" not in u.key.lower())
+    csv_uploader.upload("bad_spi.csv", bad_spi_csv.encode("utf-8"), "text/csv").run()
     assert not at.exception
     assert any(btn.label == "下載 SPI Markdown 診斷報告" for btn in at.download_button)
     assert any(btn.label == "📥 下載 SARIF 報告（SPI）" for btn in at.download_button)
