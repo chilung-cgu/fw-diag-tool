@@ -151,3 +151,102 @@ def test_eeprom_rejects_unreasonably_large_allocations():
 def test_spi_flash_rejects_unreasonably_large_allocations():
     with pytest.raises(ValueError, match="total_size"):
         VirtualSPIFlashW25Q128(total_size=VirtualSPIFlashW25Q128.MAX_CAPACITY + 1)
+
+
+def test_lm75_config_register_write_and_read():
+    lm = VirtualLM75()
+    lm.write([0x01, 0x60])
+    assert lm.config_reg == 0x60
+    lm.write([0x01])
+    data = lm.read(1)
+    assert data == bytes([0x60])
+
+
+def test_lm75_thyst_register_read():
+    lm = VirtualLM75()
+    lm.write([0x02])
+    data = lm.read(2)
+    assert len(data) == 2
+    assert data == bytes([(0x4B00 >> 8) & 0xFF, 0x4B00 & 0xFF])
+
+
+def test_lm75_tos_register_read():
+    lm = VirtualLM75()
+    lm.write([0x03])
+    data = lm.read(2)
+    assert len(data) == 2
+    assert data == bytes([(0x5000 >> 8) & 0xFF, 0x5000 & 0xFF])
+
+
+def test_lm75_address_probe_and_validation():
+    lm = VirtualLM75()
+    probe_res = lm.write([])
+    assert probe_res["type"] == "Address Probe"
+
+    with pytest.raises(ValueError, match="addr_7bit"):
+        VirtualLM75(addr_7bit=0x80)
+    with pytest.raises(ValueError, match="addr_7bit"):
+        VirtualLM75(addr_7bit=True)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="data_bytes"):
+        lm.write("invalid")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="unsupported LM75 register pointer"):
+        lm.write([0x05])
+    with pytest.raises(ValueError, match="register provides"):
+        lm.read(3)
+    with pytest.raises(TypeError, match="temp_c"):
+        lm.set_temperature("invalid")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="representable"):
+        lm.set_temperature(150.0)
+
+
+def test_spi_flash_sector_erase():
+    flash = VirtualSPIFlashW25Q128(total_size=65536)
+    flash.write_enable()
+    flash.page_program(0x0000, [0xAA] * 16)
+    flash.complete_operation()
+    assert flash.read_data(0x0000, 1) == [0xAA]
+    flash.write_enable()
+    result = flash.sector_erase(0x0000)
+    assert result is True
+    flash.complete_operation()
+    assert flash.read_data(0x0000, 1) == [0xFF]
+
+
+def test_spi_flash_sector_erase_without_wren():
+    flash = VirtualSPIFlashW25Q128(total_size=65536)
+    result = flash.sector_erase(0x0000)
+    assert result is False
+
+
+def test_spi_flash_write_disable():
+    flash = VirtualSPIFlashW25Q128(total_size=65536)
+    flash.write_enable()
+    assert flash.wel_latched is True
+    flash.write_disable()
+    assert flash.wel_latched is False
+
+
+def test_spi_flash_busy_behavior_and_validation():
+    flash = VirtualSPIFlashW25Q128(total_size=4096)
+    flash.write_enable()
+    assert flash.sector_erase(0x0000) is True
+    # Now flash is busy
+    assert flash.busy is True
+    # write_enable while busy is ignored
+    flash.write_enable()
+    assert flash.wel_latched is False
+    # sector_erase while busy returns False
+    assert flash.sector_erase(0x0000) is False
+
+    with pytest.raises(ValueError, match="total_size"):
+        VirtualSPIFlashW25Q128(total_size=0)
+    with pytest.raises(ValueError, match="total_size"):
+        VirtualSPIFlashW25Q128(total_size=True)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="data must be a list"):
+        flash.page_program(0, "invalid")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match=r"data\[0\]"):
+        flash.page_program(0, [True])  # type: ignore[list-item]
+    with pytest.raises(ValueError, match="length must be in range"):
+        flash.page_program(0, [])
+    with pytest.raises(ValueError, match="length must be in range"):
+        flash.page_program(0, [0x00] * 257)

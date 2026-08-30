@@ -1,6 +1,7 @@
 from fw_diag_tool.uart.models import CrashType
 from fw_diag_tool.uart.parser import UARTCrashParser
 from fw_diag_tool.uart.reporter import UARTReporter
+from fw_diag_tool.uart.symbols import SymbolTable
 
 
 def test_kernel_panic_parsing():
@@ -112,3 +113,83 @@ def test_generic_serial_log_report_explains_unsupported_signature():
     assert "未偵測到已支援的 Kernel Panic / HardFault 標記" in markdown
     assert "**原始日誌行數（Raw Log Lines）**: `2`" in markdown
     assert "建議下一步" in markdown
+
+
+def test_symbol_table_from_system_map_text():
+    map_text = """# Symbol map comment
+ffffffff81000000 T _stext
+ffffffff81001000 T do_fault
+ffffffff81002000 T handle_pte_fault
+"""
+    st = SymbolTable.from_system_map(map_text)
+    assert len(st.symbols) == 3
+    result = st.lookup(0xFFFFFFFF81001050)
+    assert result is not None
+    name, offset = result
+    assert name == "do_fault"
+    assert offset == 0x50
+
+
+def test_symbol_table_from_system_map_path(tmp_path):
+    map_file = tmp_path / "System.map"
+    map_file.write_text("08001000 T main\n08002000: init_hw\n", encoding="utf-8")
+
+    st_from_path = SymbolTable.from_system_map(map_file)
+    assert len(st_from_path.symbols) == 2
+    assert st_from_path.lookup(0x08001010) == ("main", 0x10)
+
+    st_from_str_path = SymbolTable.from_system_map(str(map_file))
+    assert len(st_from_str_path.symbols) == 2
+
+
+def test_symbol_table_lookup_before_first_symbol():
+    st = SymbolTable([(0x1000, "start")])
+    assert st.lookup(0x0500) is None
+
+
+def test_symbol_table_empty():
+    st = SymbolTable()
+    assert st.lookup(0x1234) is None
+
+
+def test_symbol_table_symbolicate_hardfault():
+    st = SymbolTable([(0x08001200, "main"), (0x08000400, "reset_handler")])
+    report = UARTCrashParser.parse_log_text(
+        "HardFault Exception Occurred!\nHFSR: 0x40000000 (FORCED)\n"
+        "CFSR: 0x02000000 (DIVBYZERO)\nStacked PC: 0x08001234\nStacked LR: 0x08000456"
+    )
+    report = st.symbolicate(report)
+    assert report.arm_hardfault is not None
+    assert report.arm_hardfault.symbolicated_pc == "main+0x34"
+    assert report.arm_hardfault.symbolicated_lr == "reset_handler+0x56"
+
+
+def test_symbol_table_symbolicate_kernel_panic():
+    st = SymbolTable([(0x10, "nvme_pci_complete_rq")])
+    report = UARTCrashParser.parse_log_text(
+        "BUG: unable to handle page fault for address: 0000000000000010\n"
+        "RIP: 0010:nvme_pci_complete_rq+0x38/0x120 [nvme]"
+    )
+    assert report.kernel_panic is not None
+    report.kernel_panic.faulting_ip = "0x18"
+    report = st.symbolicate(report)
+    assert report.kernel_panic.symbolicated_ip == "nvme_pci_complete_rq+0x8"
+
+    # Test non-0x or invalid hex
+    report.kernel_panic.faulting_ip = "invalid_hex"
+    report = st.symbolicate(report)
+    report.kernel_panic.faulting_ip = "0xinvalid"
+    report = st.symbolicate(report)
+    report.kernel_panic.faulting_ip = "0x9999"  # Symbol not found in table
+    report = st.symbolicate(report)
+
+
+def test_symbol_table_symbolicate_none_matches():
+    from fw_diag_tool.uart.models import ARMHardFaultReport, UARTReport
+    st = SymbolTable([(0x1000, "main")])
+    # Hardfault with None pc/lr and address with no match
+    hf = ARMHardFaultReport(pc_faulting=None, lr_exc_return=0x0500)
+    report = UARTReport(crash_type=CrashType.ARM_HARDFAULT, summary_title="Test", arm_hardfault=hf)
+    report = st.symbolicate(report)
+    assert report.arm_hardfault.symbolicated_pc is None
+    assert report.arm_hardfault.symbolicated_lr is None
