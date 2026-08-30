@@ -122,7 +122,11 @@ def test_mctp_diff_message_count_delta():
         ipmb_frames=[_make_ipmb_frame(cmd=1), _make_ipmb_frame(cmd=2)],
     )
     cand = ServerMgmtReport(
-        mctp_messages=[_make_mctp_message(tag=1), _make_mctp_message(tag=2), _make_mctp_message(tag=3)],
+        mctp_messages=[
+            _make_mctp_message(tag=1),
+            _make_mctp_message(tag=2),
+            _make_mctp_message(tag=3),
+        ],
         ipmb_frames=[_make_ipmb_frame(cmd=1)],
     )
 
@@ -169,4 +173,3 @@ def test_mctp_diff_with_parsed_text():
     assert isinstance(result, MCTPDiffResult)
     assert result.message_count_delta == 1
     assert result.is_identical is False
-

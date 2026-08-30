@@ -343,12 +343,8 @@ def render() -> None:
         )
         if diff_baseline is not None and diff_candidate is not None:
             try:
-                baseline_csv = decode_uploaded_text(
-                    diff_baseline, allowed_extensions={".csv"}
-                )
-                candidate_csv = decode_uploaded_text(
-                    diff_candidate, allowed_extensions={".csv"}
-                )
+                baseline_csv = decode_uploaded_text(diff_baseline, allowed_extensions={".csv"})
+                candidate_csv = decode_uploaded_text(diff_candidate, allowed_extensions={".csv"})
                 diff_engine = I2CDiagnosticEngine(
                     smbus_timeout_ms=float(smbus_timeout),
                     board_profile=load_board_profile(board_profile_yaml)
@@ -695,7 +691,9 @@ def render() -> None:
                 st.code(md_out, language="markdown")
             st.download_button("下載 Markdown 報告", md_out, file_name="i2c_report.md")
             render_html_download(md_out, protocol="I2C", filename_prefix="i2c_report")
-            render_pdf_download(md_out, protocol="I2C", filename_prefix="i2c_report", metadata=metadata)
+            render_pdf_download(
+                md_out, protocol="I2C", filename_prefix="i2c_report", metadata=metadata
+            )
             sarif_findings = [
                 {
                     "code": issue.code,

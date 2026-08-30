@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 from collections.abc import Mapping
 from typing import Any
@@ -8,7 +9,13 @@ from fw_diag_tool.board_profile import BoardProfile, load_board_profile
 from fw_diag_tool.gui.pages.i2c_page import analyze_i2c
 from fw_diag_tool.i2c.input import I2CInputFormat, normalize_i2c_input_format
 from fw_diag_tool.limits import AnalysisLimits
+from fw_diag_tool.mctp.models import ServerMgmtReport
+from fw_diag_tool.mctp.parser import ServerMgmtParser
+from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.session.session_manager import SessionDocument, SessionManager
+from fw_diag_tool.spi.engine import SPIDiagnosticEngine
+from fw_diag_tool.spi.models import SPIReport
+from fw_diag_tool.uart.parser import UARTCrashParser
 
 
 def _profile_identity(profile: BoardProfile) -> tuple[str, str, str]:
@@ -217,10 +224,320 @@ def replay_i2c_session(
 restore_i2c_session = replay_i2c_session
 
 
+def serialize_spi_session(
+    report: dict[str, Any] | SPIReport,
+    *,
+    input_name: str = "spi_capture.csv",
+    input_bytes: bytes | None = None,
+    max_page_size: int = 256,
+    config: dict[str, Any] | None = None,
+    notes: str = "",
+) -> str:
+    data_dict: dict[str, Any]
+    if hasattr(report, "to_dict") and callable(report.to_dict):
+        data_dict = report.to_dict()
+    elif dataclasses.is_dataclass(report) and not isinstance(report, type):
+        data_dict = dataclasses.asdict(report)
+    elif isinstance(report, dict):
+        data_dict = dict(report)
+    else:
+        data_dict = dict(getattr(report, "__dict__", {}))
+
+    data_dict.setdefault("protocol", "SPI")
+    if "anomaly_count" not in data_dict:
+        summary = data_dict.get("summary")
+        if isinstance(summary, dict) and "anomaly_count" in summary:
+            data_dict["anomaly_count"] = summary["anomaly_count"]
+        elif "anomalies" in data_dict and isinstance(data_dict["anomalies"], list):
+            data_dict["anomaly_count"] = len(data_dict["anomalies"])
+        else:
+            data_dict["anomaly_count"] = 0
+    if "summary" not in data_dict:
+        data_dict["summary"] = f"SPI Analysis (anomalies: {data_dict['anomaly_count']})"
+
+    cfg: dict[str, Any] = {
+        "input_name": input_name,
+        "max_page_size": max_page_size,
+    }
+    if config:
+        cfg.update(config)
+
+    return SessionManager.serialize_session(
+        "SPI Analysis",
+        data_dict,
+        capture_sha256=hashlib.sha256(input_bytes).hexdigest() if input_bytes is not None else None,
+        config=cfg,
+        provenance={"interface": "streamlit", "protocol": "spi"},
+        notes=notes,
+    )
+
+
+def replay_spi_session(
+    document: SessionDocument,
+    content: bytes | str,
+) -> SPIReport:
+    if not isinstance(document, SessionDocument):
+        raise TypeError("document must be a SessionDocument")
+    if isinstance(content, bytes):
+        capture_bytes = content
+        capture_text = content.decode("utf-8")
+    elif isinstance(content, str):
+        capture_text = content
+        capture_bytes = content.encode("utf-8")
+    else:
+        raise TypeError("SPI capture must be text or bytes")
+    match = capture_matches(document, capture_bytes)
+    if match is None:
+        raise ValueError("session has no capture SHA-256; replay cannot be verified")
+    if match is False:
+        raise ValueError("session capture SHA-256 does not match replay input")
+
+    max_page_size = int(document.config.get("max_page_size", 256))
+    return SPIDiagnosticEngine(max_page_size=max_page_size).analyze_csv_content(capture_text)
+
+
+restore_spi_session = replay_spi_session
+
+
+def serialize_uart_session(
+    report: dict[str, Any] | Any,
+    *,
+    input_name: str = "uart_log.txt",
+    input_bytes: bytes | None = None,
+    mode: str | None = None,
+    config: dict[str, Any] | None = None,
+    notes: str = "",
+) -> str:
+    data_dict: dict[str, Any]
+    if hasattr(report, "to_dict") and callable(report.to_dict):
+        data_dict = report.to_dict()
+    elif dataclasses.is_dataclass(report) and not isinstance(report, type):
+        data_dict = dataclasses.asdict(report)
+    elif isinstance(report, dict):
+        data_dict = dict(report)
+    else:
+        data_dict = dict(getattr(report, "__dict__", {}))
+
+    data_dict.setdefault("protocol", "UART")
+    if "anomaly_count" not in data_dict:
+        crash_type = str(data_dict.get("crash_type", ""))
+        if "generic" in crash_type.lower() or not crash_type:
+            data_dict["anomaly_count"] = 0
+        else:
+            data_dict["anomaly_count"] = 1
+    if "summary" not in data_dict:
+        data_dict["summary"] = data_dict.get(
+            "summary_title", f"UART Analysis: {data_dict.get('crash_type', 'Crash')}"
+        )
+
+    cfg: dict[str, Any] = {
+        "input_name": input_name,
+    }
+    if mode is not None:
+        cfg["mode"] = mode
+    if config:
+        cfg.update(config)
+
+    return SessionManager.serialize_session(
+        "UART Analysis",
+        data_dict,
+        capture_sha256=hashlib.sha256(input_bytes).hexdigest() if input_bytes is not None else None,
+        config=cfg,
+        provenance={"interface": "streamlit", "protocol": "uart"},
+        notes=notes,
+    )
+
+
+def replay_uart_session(
+    document: SessionDocument,
+    content: bytes | str,
+) -> Any:
+    if not isinstance(document, SessionDocument):
+        raise TypeError("document must be a SessionDocument")
+    if isinstance(content, bytes):
+        capture_bytes = content
+        capture_text = content.decode("utf-8")
+    elif isinstance(content, str):
+        capture_text = content
+        capture_bytes = content.encode("utf-8")
+    else:
+        raise TypeError("UART capture must be text or bytes")
+    match = capture_matches(document, capture_bytes)
+    if match is None:
+        raise ValueError("session has no capture SHA-256; replay cannot be verified")
+    if match is False:
+        raise ValueError("session capture SHA-256 does not match replay input")
+
+    return UARTCrashParser.parse_log_text(capture_text)
+
+
+restore_uart_session = replay_uart_session
+
+
+def serialize_pcie_session(
+    report: dict[str, Any],
+    *,
+    input_name: str = "pcie_dump.txt",
+    input_bytes: bytes | None = None,
+    mode: str = "lspci",
+    config: dict[str, Any] | None = None,
+    notes: str = "",
+) -> str:
+    data_dict = dict(report)
+    data_dict.setdefault("protocol", "PCIe")
+    data_dict.setdefault("mode", mode)
+    if "anomaly_count" not in data_dict:
+        if mode == "dmesg":
+            events = data_dict.get("events", [])
+            data_dict["anomaly_count"] = len(events) if isinstance(events, list) else 0
+        else:
+            devices = data_dict.get("devices", [])
+            count = 0
+            if isinstance(devices, list):
+                for d in devices:
+                    if isinstance(d, dict) and "findings" in d and isinstance(d["findings"], list):
+                        count += len(d["findings"])
+            data_dict["anomaly_count"] = count
+    if "summary" not in data_dict:
+        data_dict["summary"] = f"PCIe {mode} Analysis (anomalies: {data_dict['anomaly_count']})"
+
+    cfg: dict[str, Any] = {
+        "input_name": input_name,
+        "mode": mode,
+    }
+    if config:
+        cfg.update(config)
+
+    return SessionManager.serialize_session(
+        "PCIe Analysis",
+        data_dict,
+        capture_sha256=hashlib.sha256(input_bytes).hexdigest() if input_bytes is not None else None,
+        config=cfg,
+        provenance={"interface": "streamlit", "protocol": "pcie"},
+        notes=notes,
+    )
+
+
+def serialize_mctp_session(
+    report: dict[str, Any] | ServerMgmtReport,
+    *,
+    input_name: str = "mctp_dump.hex",
+    input_bytes: bytes | None = None,
+    protocol_mode: str = "auto",
+    config: dict[str, Any] | None = None,
+    notes: str = "",
+) -> str:
+    data_dict: dict[str, Any]
+    if hasattr(report, "to_dict") and callable(report.to_dict):
+        data_dict = report.to_dict()
+    elif dataclasses.is_dataclass(report) and not isinstance(report, type):
+        data_dict = dataclasses.asdict(report)
+    elif isinstance(report, dict):
+        data_dict = dict(report)
+    else:
+        data_dict = dict(getattr(report, "__dict__", {}))
+
+    data_dict.setdefault("protocol", "MCTP")
+    if "anomaly_count" not in data_dict:
+        errs = len(data_dict.get("errors", []))
+        warns = len(data_dict.get("warnings", []))
+        src_errs = len(data_dict.get("source_errors", []))
+        data_dict["anomaly_count"] = errs + warns + src_errs
+    if "summary" not in data_dict:
+        data_dict["summary"] = (
+            data_dict.get("summary_text")
+            or f"MCTP/IPMB Analysis ({data_dict.get('total_frames', 0)} frames)"
+        )
+
+    cfg: dict[str, Any] = {
+        "input_name": input_name,
+        "protocol_mode": protocol_mode,
+    }
+    if config:
+        cfg.update(config)
+
+    return SessionManager.serialize_session(
+        "MCTP Analysis",
+        data_dict,
+        capture_sha256=hashlib.sha256(input_bytes).hexdigest() if input_bytes is not None else None,
+        config=cfg,
+        provenance={"interface": "streamlit", "protocol": "mctp"},
+        notes=notes,
+    )
+
+
+def replay_pcie_session(
+    document: SessionDocument,
+    content: bytes | str,
+) -> Any:
+    if not isinstance(document, SessionDocument):
+        raise TypeError("document must be a SessionDocument")
+    if isinstance(content, bytes):
+        capture_bytes = content
+        capture_text = content.decode("utf-8")
+    elif isinstance(content, str):
+        capture_text = content
+        capture_bytes = content.encode("utf-8")
+    else:
+        raise TypeError("PCIe capture must be text or bytes")
+    match = capture_matches(document, capture_bytes)
+    if match is None:
+        raise ValueError("session has no capture SHA-256; replay cannot be verified")
+    if match is False:
+        raise ValueError("session capture SHA-256 does not match replay input")
+
+    mode = document.config.get("mode", "lspci")
+    if mode == "dmesg":
+        return PCIeAnalyzer.parse_dmesg_aer(capture_text)
+    return PCIeAnalyzer.parse_multi_lspci_text(capture_text)
+
+
+restore_pcie_session = replay_pcie_session
+
+
+def replay_mctp_session(
+    document: SessionDocument,
+    content: bytes | str,
+) -> ServerMgmtReport:
+    if not isinstance(document, SessionDocument):
+        raise TypeError("document must be a SessionDocument")
+    if isinstance(content, bytes):
+        capture_bytes = content
+        capture_text = content.decode("utf-8")
+    elif isinstance(content, str):
+        capture_text = content
+        capture_bytes = content.encode("utf-8")
+    else:
+        raise TypeError("MCTP capture must be text or bytes")
+    match = capture_matches(document, capture_bytes)
+    if match is None:
+        raise ValueError("session has no capture SHA-256; replay cannot be verified")
+    if match is False:
+        raise ValueError("session capture SHA-256 does not match replay input")
+
+    protocol_mode = document.config.get("protocol_mode", "auto")
+    return ServerMgmtParser.parse_text_dump(capture_text, protocol_mode=protocol_mode)
+
+
+restore_mctp_session = replay_mctp_session
+
+
 __all__ = [
     "capture_matches",
     "replay_i2c_session",
+    "replay_mctp_session",
+    "replay_pcie_session",
+    "replay_spi_session",
+    "replay_uart_session",
     "restore_i2c_board_profile",
     "restore_i2c_session",
+    "restore_mctp_session",
+    "restore_pcie_session",
+    "restore_spi_session",
+    "restore_uart_session",
     "serialize_i2c_session",
+    "serialize_mctp_session",
+    "serialize_pcie_session",
+    "serialize_spi_session",
+    "serialize_uart_session",
 ]

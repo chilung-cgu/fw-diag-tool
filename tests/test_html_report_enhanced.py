@@ -125,7 +125,9 @@ class TestMetadataHeader:
 
     def test_metadata_contains_timestamp(self) -> None:
         """Verify that custom timestamp is embedded in header grid."""
-        html = convert_markdown_to_html(SAMPLE_MD, title="Meta Test", timestamp="2026-08-30 12:00:00 UTC")
+        html = convert_markdown_to_html(
+            SAMPLE_MD, title="Meta Test", timestamp="2026-08-30 12:00:00 UTC"
+        )
         assert "2026-08-30 12:00:00 UTC" in html
         assert "產生時間（Generated）" in html
 

@@ -1,4 +1,5 @@
 """Tests for dashboard health check panel."""
+
 from __future__ import annotations
 
 import platform

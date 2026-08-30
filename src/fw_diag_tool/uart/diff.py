@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from typing import Any
 
 from .models import UARTReport
 
@@ -29,6 +31,27 @@ class UARTDiffResult:
             and len(self.new_symbols) == 0
             and len(self.resolved_symbols) == 0
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "crash_type_changed": self.crash_type_changed,
+            "baseline_crash_type": self.baseline_crash_type,
+            "candidate_crash_type": self.candidate_crash_type,
+            "fault_address_changed": self.fault_address_changed,
+            "new_symbols": list(self.new_symbols),
+            "resolved_symbols": list(self.resolved_symbols),
+            "common_symbols": list(self.common_symbols),
+            "new_anomalies": list(self.new_symbols),
+            "resolved_anomalies": list(self.resolved_symbols),
+            "common_anomalies": list(self.common_symbols),
+            "summary": self.summary,
+            "baseline_fault_address": self.baseline_fault_address,
+            "candidate_fault_address": self.candidate_fault_address,
+            "is_identical": self.is_identical,
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
 
 
 class UARTDiffEngine:
@@ -138,3 +161,5 @@ class UARTDiffEngine:
             common_symbols=common_symbols,
         )
 
+
+__all__ = ["UARTDiffEngine", "UARTDiffResult"]

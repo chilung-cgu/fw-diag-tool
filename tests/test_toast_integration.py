@@ -1,4 +1,5 @@
 """Test that toast notifications are integrated into analysis pages."""
+
 from __future__ import annotations
 
 import importlib

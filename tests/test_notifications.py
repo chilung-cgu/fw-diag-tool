@@ -63,7 +63,10 @@ def test_analysis_progress_marks_error_and_reraises(monkeypatch: pytest.MonkeyPa
     status_factory = MagicMock(return_value=status)
     monkeypatch.setattr(notifications.st, "status", status_factory)
 
-    with pytest.raises(RuntimeError, match="boom"), notifications.analysis_progress("SPI", ["解析"]):
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        notifications.analysis_progress("SPI", ["解析"]),
+    ):
         raise RuntimeError("boom")
 
     status.update.assert_called_once_with(label="SPI：分析失敗", state="error")

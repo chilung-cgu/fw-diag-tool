@@ -32,7 +32,9 @@ def test_parse_session_payload_supports_dict_str_bytes() -> None:
     assert parsed_from_str["name"] == "custom_name"
     assert parsed_from_str["report"]["anomaly_count"] == 0
 
-    sample_bytes = json.dumps({"name": "b_sess", "report": {"total_transactions": 10}}).encode("utf-8")
+    sample_bytes = json.dumps({"name": "b_sess", "report": {"total_transactions": 10}}).encode(
+        "utf-8"
+    )
     parsed_from_bytes = _parse_session_payload(sample_bytes, default_name="fallback")
     assert parsed_from_bytes["name"] == "b_sess"
 

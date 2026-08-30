@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from typing import Any
 
 from .models import PCIeConfigSpace, PCIeLinkInfo
 
@@ -37,6 +39,28 @@ class PCIeDiffResult:
             and len(self.resolved_quality_issues) == 0
         )
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "vendor_changed": self.vendor_changed,
+            "device_changed": self.device_changed,
+            "link_degradation_changed": self.link_degradation_changed,
+            "baseline_link_summary": self.baseline_link_summary,
+            "candidate_link_summary": self.candidate_link_summary,
+            "new_aer_errors": list(self.new_aer_errors),
+            "resolved_aer_errors": list(self.resolved_aer_errors),
+            "common_aer_errors": list(self.common_aer_errors),
+            "new_anomalies": list(self.new_aer_errors),
+            "resolved_anomalies": list(self.resolved_aer_errors),
+            "common_anomalies": list(self.common_aer_errors),
+            "new_quality_issues": list(self.new_quality_issues),
+            "resolved_quality_issues": list(self.resolved_quality_issues),
+            "summary": self.summary,
+            "is_identical": self.is_identical,
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
+
 
 class PCIeDiffEngine:
     """Compares baseline vs candidate PCIe configuration spaces."""
@@ -61,9 +85,7 @@ class PCIeDiffEngine:
         baseline: PCIeConfigSpace,
         candidate: PCIeConfigSpace,
     ) -> PCIeDiffResult:
-        if not isinstance(baseline, PCIeConfigSpace) or not isinstance(
-            candidate, PCIeConfigSpace
-        ):
+        if not isinstance(baseline, PCIeConfigSpace) or not isinstance(candidate, PCIeConfigSpace):
             raise TypeError("baseline and candidate must be PCIeConfigSpace instances")
 
         vendor_changed = baseline.vendor_id != candidate.vendor_id

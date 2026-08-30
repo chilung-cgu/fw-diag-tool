@@ -90,9 +90,7 @@ def test_cli_spi_analyze_pdf_option(tmp_path: Path) -> None:
     """Test CLI fw-diag spi analyze command with --pdf option."""
     spi_csv = tmp_path / "spi_sample.csv"
     spi_csv.write_text(
-        "Time,MOSI,MISO,CS\n"
-        "0.0001,0x9F,0x00,0\n"
-        "0.0002,0x00,0xEF,0\n",
+        "Time,MOSI,MISO,CS\n0.0001,0x9F,0x00,0\n0.0002,0x00,0xEF,0\n",
         encoding="utf-8",
     )
     pdf_out = tmp_path / "spi_cli_report.pdf"
@@ -158,7 +156,9 @@ def test_render_pdf_download_alternate_signature(monkeypatch: pytest.MonkeyPatch
     assert captured[0]["data"].startswith(b"%PDF-")
 
 
-def test_pdf_graceful_degrade_when_fpdf_unavailable(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_pdf_graceful_degrade_when_fpdf_unavailable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Test graceful degradation when fpdf2 is not available."""
     import fw_diag_tool.reporting.pdf_report as pdf_mod
 
@@ -177,7 +177,10 @@ def test_pdf_graceful_degrade_when_fpdf_unavailable(monkeypatch: pytest.MonkeyPa
     pdf_out = tmp_path / "no_fpdf.pdf"
     res = runner.invoke(app, ["i2c", "analyze", str(csv_file), "--pdf", str(pdf_out)])
     assert res.exit_code == 0
-    assert "警告：PDF 匯出需安裝 pdf 額外套件" in res.output or "Warning: PDF export requires 'pdf' extra" in res.output
+    assert (
+        "警告：PDF 匯出需安裝 pdf 額外套件" in res.output
+        or "Warning: PDF export requires 'pdf' extra" in res.output
+    )
     assert not pdf_out.exists()
 
 

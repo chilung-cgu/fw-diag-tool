@@ -132,6 +132,7 @@ def test_render_theme_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
     assert len(radio_calls) == 1
     assert radio_calls[0]["index"] == 0
 
+
 def test_render_metric_card(monkeypatch: pytest.MonkeyPatch) -> None:
     """Verify render_metric_card forwards arguments properly to st.metric."""
     metric_calls: list[dict[str, Any]] = []

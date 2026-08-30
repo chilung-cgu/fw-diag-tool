@@ -483,5 +483,3 @@ def _localize_mctp_error(value: object) -> str:
     if text.startswith("MCTP/IPMB 十六進位輸入") and "超過" in text:
         return text
     return "MCTP/IPMB 輸入格式錯誤：無法完成解碼；請確認十六進位位元組、封包邊界與協定模式。"
-
-

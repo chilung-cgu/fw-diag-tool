@@ -26,8 +26,10 @@ from fw_diag_tool.i2c.raw_adapter import raw_decode_to_events
 from fw_diag_tool.i2c.raw_capture import analyze_raw_i2c_csv
 from fw_diag_tool.i2c.reporter import I2CReporter
 from fw_diag_tool.limits import DEFAULT_ANALYSIS_LIMITS, AnalysisLimits
+from fw_diag_tool.mctp.diff import MCTPDiffEngine
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
+from fw_diag_tool.pcie.diff import PCIeDiffEngine
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
 from fw_diag_tool.reporting.pdf_report import is_fpdf_available, write_pdf_report
@@ -99,7 +101,9 @@ def compare_session_files(
         candidate_payload = json.loads(candidate.read_text(encoding="utf-8"))
         result = compare_sessions(baseline_payload, candidate_payload)
     except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
-        console.print(f"[bold red]錯誤：Session compare 執行失敗（Error: session compare failed）: {exc}[/]")
+        console.print(
+            f"[bold red]錯誤：Session compare 執行失敗（Error: session compare failed）: {exc}[/]"
+        )
         raise typer.Exit(code=2) from exc
 
     table = Table(title="Session Before/After 對比摘要（Session Comparison）", show_header=True)
@@ -132,7 +136,12 @@ def compare_session_files(
         "transactions",
     )
     protocol = result.metric_deltas["protocol"]
-    table.add_row("異常總數（Anomaly Count）", str(baseline_anomaly), str(candidate_anomaly), f"{anomaly_delta:+d}")
+    table.add_row(
+        "異常總數（Anomaly Count）",
+        str(baseline_anomaly),
+        str(candidate_anomaly),
+        f"{anomaly_delta:+d}",
+    )
     table.add_row(
         "交易總數（Total Transactions）",
         str(baseline_transactions),
@@ -160,7 +169,9 @@ def compare_session_files(
             f"| Verdict | | | {result.verdict} |\n\n{result.summary}\n"
         )
         markdown_out.write_text(md_text, encoding="utf-8")
-        console.print(f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]")
+        console.print(
+            f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]"
+        )
     if json_out:
         json_out.write_text(
             json.dumps(asdict(result), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
@@ -208,9 +219,7 @@ def analyze_i2c_trace(
     json_out: Path | None = typer.Option(
         None, "--json", "-j", help="Export JSON structured report to file"
     ),
-    pdf_out: Path | None = typer.Option(
-        None, "--pdf", help="Export PDF diagnostic report to file"
-    ),
+    pdf_out: Path | None = typer.Option(None, "--pdf", help="Export PDF diagnostic report to file"),
     smbus_timeout: float = typer.Option(
         25.0, "--smbus-timeout", help="SMBus clock stretching timeout in ms (default: 25.0)"
     ),
@@ -320,7 +329,9 @@ def analyze_i2c_trace(
                             "input_format": input_format,
                         },
                     )
-                    console.print(f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]")
+                    console.print(
+                        f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]"
+                    )
         if json_out:
             json_out.write_text(report.to_json(indent=2), encoding="utf-8")
             console.print(f"[green]✔ JSON report exported to {json_out}[/]")
@@ -354,9 +365,7 @@ def analyze_pcie(
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
     ),
-    pdf_out: Path | None = typer.Option(
-        None, "--pdf", help="Export PDF diagnostic report to file"
-    ),
+    pdf_out: Path | None = typer.Option(None, "--pdf", help="Export PDF diagnostic report to file"),
 ) -> None:
     """Analyze PCIe Config Space, Capability list, AER errors, and decode faulting TLP Headers."""
     try:
@@ -395,7 +404,9 @@ def analyze_pcie(
                         pdf_out,
                         title="Linux 核心 dmesg AER 診斷報告",
                     )
-                    console.print(f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]")
+                    console.print(
+                        f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]"
+                    )
         else:
             devices = PCIeAnalyzer.parse_multi_lspci_text(content)
             if not devices:
@@ -471,10 +482,127 @@ def analyze_pcie(
                         pdf_out,
                         title="PCIe 設定空間與 AER 診斷報告",
                     )
-                    console.print(f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]")
+                    console.print(
+                        f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]"
+                    )
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
         console.print(f"[bold red]錯誤：PCIe 輸入無效（Error: PCIe input is invalid）: {exc}[/]")
         raise typer.Exit(code=2) from exc
+
+
+@pcie_app.command("diff")
+def diff_pcie_configs(
+    baseline: Path = typer.Argument(..., help="Path to baseline PCIe lspci / hex dump file"),
+    candidate: Path = typer.Argument(..., help="Path to candidate PCIe lspci / hex dump file"),
+) -> None:
+    """Compare baseline vs candidate PCIe configuration spaces and report link, AER & capability diffs."""
+    if not baseline.exists() or not candidate.exists():
+        console.print(
+            "[bold red]錯誤：Baseline 與 Candidate 檔案都必須存在。"
+            "（Error: Both files must exist!）[/]"
+        )
+        raise typer.Exit(code=1)
+    try:
+        b_content = baseline.read_text(encoding="utf-8")
+        c_content = candidate.read_text(encoding="utf-8")
+        b_devices = PCIeAnalyzer.parse_multi_lspci_text(b_content)
+        b_cfg = (
+            b_devices[0]
+            if b_devices
+            else PCIeAnalyzer.decode_config_space(PCIeAnalyzer.parse_raw_hex(b_content))
+        )
+        c_devices = PCIeAnalyzer.parse_multi_lspci_text(c_content)
+        c_cfg = (
+            c_devices[0]
+            if c_devices
+            else PCIeAnalyzer.decode_config_space(PCIeAnalyzer.parse_raw_hex(c_content))
+        )
+        diff_res = PCIeDiffEngine.compare(b_cfg, c_cfg)
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]錯誤：PCIe diff 執行失敗（Error: PCIe diff failed）: {exc}[/]")
+        raise typer.Exit(code=2) from exc
+
+    table = Table(title="PCIe Before/After 對比摘要（PCIe Diff Summary）", show_header=True)
+    table.add_column("項目（Field）", style="cyan")
+    table.add_column("Baseline（基準）", style="magenta")
+    table.add_column("Candidate（待測）", style="yellow")
+    table.add_column("狀態 / 差異（Status / Delta）")
+
+    table.add_row(
+        "廠商 ID（Vendor ID）",
+        f"0x{b_cfg.vendor_id:04X}",
+        f"0x{c_cfg.vendor_id:04X}",
+        "[bold red]變更（Changed）[/]" if diff_res.vendor_changed else "[green]相同（Same）[/]",
+    )
+    table.add_row(
+        "裝置 ID（Device ID）",
+        f"0x{b_cfg.device_id:04X}",
+        f"0x{c_cfg.device_id:04X}",
+        "[bold red]變更（Changed）[/]" if diff_res.device_changed else "[green]相同（Same）[/]",
+    )
+    link_status = (
+        "[bold red]降級狀態變更（Degradation Changed）[/]"
+        if diff_res.link_degradation_changed
+        else (
+            "[yellow]變更（Changed）[/]"
+            if diff_res.baseline_link_summary != diff_res.candidate_link_summary
+            else "[green]相同（Same）[/]"
+        )
+    )
+    table.add_row(
+        "連線狀態（Link Summary）",
+        diff_res.baseline_link_summary,
+        diff_res.candidate_link_summary,
+        link_status,
+    )
+    table.add_row(
+        "AER 錯誤差異（AER Error Delta）",
+        f"修復 {len(diff_res.resolved_aer_errors)} 個",
+        f"新增 {len(diff_res.new_aer_errors)} 個",
+        f"+{len(diff_res.new_aer_errors)} / -{len(diff_res.resolved_aer_errors)}",
+    )
+    table.add_row(
+        "資料品質問題（Quality Issues）",
+        f"修復 {len(diff_res.resolved_quality_issues)} 個",
+        f"新增 {len(diff_res.new_quality_issues)} 個",
+        f"+{len(diff_res.new_quality_issues)} / -{len(diff_res.resolved_quality_issues)}",
+    )
+    console.print(table)
+
+    if diff_res.new_aer_errors:
+        aer_table = Table(title="新增 AER 錯誤（New AER Errors in Candidate）", show_header=True)
+        aer_table.add_column("錯誤名稱（AER Error Name）", style="bold red")
+        for err in diff_res.new_aer_errors:
+            aer_table.add_row(err)
+        console.print(aer_table)
+
+    if diff_res.resolved_aer_errors:
+        res_aer_table = Table(title="已修復 AER 錯誤（Resolved AER Errors）", show_header=True)
+        res_aer_table.add_column("錯誤名稱（AER Error Name）", style="bold green")
+        for err in diff_res.resolved_aer_errors:
+            res_aer_table.add_row(err)
+        console.print(res_aer_table)
+
+    if diff_res.new_quality_issues:
+        q_table = Table(
+            title="新增資料品質問題（New Quality Issues in Candidate）", show_header=True
+        )
+        q_table.add_column("問題描述（Issue Description）", style="bold yellow")
+        for issue in diff_res.new_quality_issues:
+            q_table.add_row(issue)
+        console.print(q_table)
+
+    if diff_res.resolved_quality_issues:
+        res_q_table = Table(title="已修復資料品質問題（Resolved Quality Issues）", show_header=True)
+        res_q_table.add_column("問題描述（Issue Description）", style="bold green")
+        for issue in diff_res.resolved_quality_issues:
+            res_q_table.add_row(issue)
+        console.print(res_q_table)
+
+    if diff_res.is_identical:
+        console.print("[bold green]✔ Baseline 與 Candidate PCIe 配置完全一致。[/]")
+    else:
+        console.print(Panel(diff_res.summary, title="[bold cyan]對比結論[/]"))
 
 
 @spi_app.command("analyze")
@@ -483,9 +611,7 @@ def analyze_spi_trace(
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
     ),
-    pdf_out: Path | None = typer.Option(
-        None, "--pdf", help="Export PDF diagnostic report to file"
-    ),
+    pdf_out: Path | None = typer.Option(None, "--pdf", help="Export PDF diagnostic report to file"),
     max_records: int = typer.Option(
         DEFAULT_ANALYSIS_LIMITS.max_records,
         "--max-records",
@@ -529,7 +655,6 @@ def analyze_spi_trace(
         raise typer.Exit(code=2) from exc
 
 
-
 @spi_app.command("diff")
 def diff_spi_traces(
     baseline: Path = typer.Argument(..., help="Path to baseline SPI CSV export"),
@@ -563,9 +688,7 @@ def diff_spi_traces(
     table.add_column("差異（Delta / Status）")
 
     tx_delta_str = (
-        f"{diff_res.transaction_count_delta:+d}"
-        if diff_res.transaction_count_delta != 0
-        else "0"
+        f"{diff_res.transaction_count_delta:+d}" if diff_res.transaction_count_delta != 0 else "0"
     )
     table.add_row(
         "交易總數（Total Transactions）",
@@ -615,9 +738,7 @@ def analyze_uart_crash(
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
     ),
-    pdf_out: Path | None = typer.Option(
-        None, "--pdf", help="Export PDF diagnostic report to file"
-    ),
+    pdf_out: Path | None = typer.Option(None, "--pdf", help="Export PDF diagnostic report to file"),
 ) -> None:
     """Analyze Linux Kernel Panic or ARM Cortex-M HardFault crash dumps."""
     try:
@@ -650,7 +771,6 @@ def analyze_uart_crash(
             f"[bold red]錯誤：UART 崩潰日誌或報告匯出無效（Error: UART crash log or report export is invalid）: {exc}[/]"
         )
         raise typer.Exit(code=2) from exc
-
 
 
 @uart_app.command("diff")
@@ -691,7 +811,9 @@ def diff_uart_crashes(
         "故障位址（Fault Address）",
         str(diff_res.baseline_fault_address or "N/A"),
         str(diff_res.candidate_fault_address or "N/A"),
-        "[bold red]變更（Changed）[/]" if diff_res.fault_address_changed else "[green]相同（Same）[/]",
+        "[bold red]變更（Changed）[/]"
+        if diff_res.fault_address_changed
+        else "[green]相同（Same）[/]",
     )
     table.add_row(
         "呼叫棧符號差異（Symbol Delta）",
@@ -727,9 +849,7 @@ def analyze_mctp(
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
     ),
-    pdf_out: Path | None = typer.Option(
-        None, "--pdf", help="Export PDF diagnostic report to file"
-    ),
+    pdf_out: Path | None = typer.Option(None, "--pdf", help="Export PDF diagnostic report to file"),
     json_out: Path | None = typer.Option(
         None, "--json", "-j", help="Export JSON structured report to file"
     ),
@@ -791,6 +911,119 @@ def analyze_mctp(
             f"[bold red]錯誤：MCTP/IPMB 輸入或報告匯出無效（Error: MCTP/IPMB input or report export is invalid）: {exc}[/]"
         )
         raise typer.Exit(code=2) from exc
+
+
+@mctp_app.command("diff")
+def diff_mctp_reports(
+    baseline: Path = typer.Argument(..., help="Path to baseline MCTP / IPMB hex dump file"),
+    candidate: Path = typer.Argument(..., help="Path to candidate MCTP / IPMB hex dump file"),
+    protocol_mode: str = typer.Option(
+        "auto",
+        "--protocol",
+        "-p",
+        help="Protocol demultiplexing mode (auto, mctp, ipmb).",
+    ),
+) -> None:
+    """Compare baseline vs candidate MCTP/IPMB logs and report packet, frame & error diffs."""
+    if not baseline.exists() or not candidate.exists():
+        console.print(
+            "[bold red]錯誤：Baseline 與 Candidate 檔案都必須存在。"
+            "（Error: Both files must exist!）[/]"
+        )
+        raise typer.Exit(code=1)
+    try:
+        b_content = baseline.read_text(encoding="utf-8")
+        c_content = candidate.read_text(encoding="utf-8")
+        b_rep = ServerMgmtParser.parse_text_dump(b_content, protocol_mode=protocol_mode)
+        c_rep = ServerMgmtParser.parse_text_dump(c_content, protocol_mode=protocol_mode)
+        diff_res = MCTPDiffEngine.compare(b_rep, c_rep)
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]錯誤：MCTP diff 執行失敗（Error: MCTP diff failed）: {exc}[/]")
+        raise typer.Exit(code=2) from exc
+
+    table = Table(title="MCTP / IPMB Before/After 對比摘要（MCTP Diff Summary）", show_header=True)
+    table.add_column("項目（Metric）", style="cyan")
+    table.add_column("Baseline（基準）", style="magenta")
+    table.add_column("Candidate（待測）", style="yellow")
+    table.add_column("差異 / 狀態（Delta / Status）")
+
+    table.add_row(
+        "協定模式（Protocol Mode）",
+        diff_res.baseline_protocol_mode,
+        diff_res.candidate_protocol_mode,
+        "[bold red]變更（Changed）[/]"
+        if diff_res.protocol_mode_changed
+        else "[green]相同（Same）[/]",
+    )
+    msg_delta_str = (
+        f"{diff_res.message_count_delta:+d}" if diff_res.message_count_delta != 0 else "0"
+    )
+    table.add_row(
+        "MCTP 訊息數（MCTP Messages）",
+        str(len(b_rep.mctp_messages)),
+        str(len(c_rep.mctp_messages)),
+        msg_delta_str,
+    )
+    ipmb_delta_str = (
+        f"{diff_res.ipmb_frame_count_delta:+d}" if diff_res.ipmb_frame_count_delta != 0 else "0"
+    )
+    table.add_row(
+        "IPMB 訊框數（IPMB Frames）",
+        str(len(b_rep.ipmb_frames)),
+        str(len(c_rep.ipmb_frames)),
+        ipmb_delta_str,
+    )
+    err_delta_str = f"{diff_res.error_count_delta:+d}" if diff_res.error_count_delta != 0 else "0"
+    b_err_count = len(b_rep.errors) if b_rep.errors else len(b_rep.source_errors)
+    c_err_count = len(c_rep.errors) if c_rep.errors else len(c_rep.source_errors)
+    table.add_row(
+        "錯誤總數（Total Errors）",
+        str(b_err_count),
+        str(c_err_count),
+        err_delta_str,
+    )
+    warn_delta = len(diff_res.new_warnings) - len(diff_res.resolved_warnings)
+    warn_delta_str = f"{warn_delta:+d}" if warn_delta != 0 else "0"
+    table.add_row(
+        "警告總數（Total Warnings）",
+        str(len(b_rep.warnings)),
+        str(len(c_rep.warnings)),
+        warn_delta_str,
+    )
+    console.print(table)
+
+    if diff_res.new_errors:
+        err_table = Table(title="新增錯誤（New Errors in Candidate）", show_header=True)
+        err_table.add_column("錯誤內容（Error Message）", style="bold red")
+        for err in diff_res.new_errors:
+            err_table.add_row(err)
+        console.print(err_table)
+
+    if diff_res.resolved_errors:
+        res_err_table = Table(title="已修復錯誤（Resolved Errors）", show_header=True)
+        res_err_table.add_column("錯誤內容（Error Message）", style="bold green")
+        for err in diff_res.resolved_errors:
+            res_err_table.add_row(err)
+        console.print(res_err_table)
+
+    if diff_res.new_warnings:
+        warn_table = Table(title="新增警告（New Warnings in Candidate）", show_header=True)
+        warn_table.add_column("警告內容（Warning Message）", style="bold yellow")
+        for warn in diff_res.new_warnings:
+            warn_table.add_row(warn)
+        console.print(warn_table)
+
+    if diff_res.resolved_warnings:
+        res_warn_table = Table(title="已修復警告（Resolved Warnings）", show_header=True)
+        res_warn_table.add_column("警告內容（Warning Message）", style="bold green")
+        for warn in diff_res.resolved_warnings:
+            res_warn_table.add_row(warn)
+        console.print(res_warn_table)
+
+    if diff_res.is_identical:
+        console.print("[bold green]✔ Baseline 與 Candidate MCTP/IPMB 報告完全一致。[/]")
+    else:
+        console.print(Panel(diff_res.summary, title="[bold cyan]對比結論[/]"))
 
 
 @reg_app.command("decode")
@@ -1261,9 +1494,19 @@ def check() -> None:
     # 1. Python 版本 >= 3.10
     py_ver = sys.version.split()[0]
     if sys.version_info >= (3, 10):  # noqa: UP036
-        table.add_row("Python 版本", f">= 3.10 (目前: {py_ver})", "[bold green]✔ 通過[/]", f"平台: {platform.platform()}")
+        table.add_row(
+            "Python 版本",
+            f">= 3.10 (目前: {py_ver})",
+            "[bold green]✔ 通過[/]",
+            f"平台: {platform.platform()}",
+        )
     else:
-        table.add_row("Python 版本", f">= 3.10 (目前: {py_ver})", "[bold red]✖ 失敗[/]", "Python 版本低於 3.10")
+        table.add_row(
+            "Python 版本",
+            f">= 3.10 (目前: {py_ver})",
+            "[bold red]✖ 失敗[/]",
+            "Python 版本低於 3.10",
+        )
         all_passed = False
 
     # 2. 必要依賴套件
@@ -1298,9 +1541,16 @@ def check() -> None:
             break
     if found_dir:
         sample_count = len(list(found_dir.glob("*")))
-        table.add_row("範例資料目錄", "examples/data/", "[bold green]✔ 通過[/]", f"找到 {sample_count} 個範例檔案 ({found_dir})")
+        table.add_row(
+            "範例資料目錄",
+            "examples/data/",
+            "[bold green]✔ 通過[/]",
+            f"找到 {sample_count} 個範例檔案 ({found_dir})",
+        )
     else:
-        table.add_row("範例資料目錄", "examples/data/", "[bold red]✖ 失敗[/]", "找不到 examples/data/ 目錄")
+        table.add_row(
+            "範例資料目錄", "examples/data/", "[bold red]✖ 失敗[/]", "找不到 examples/data/ 目錄"
+        )
         all_passed = False
 
     # 4. 核心 Parser 模組載入
@@ -1323,9 +1573,13 @@ def check() -> None:
 
     console.print(table)
     if all_passed:
-        console.print(Panel("[bold green]✔ 所有環境與依賴檢查均正常運作！[/]", border_style="green"))
+        console.print(
+            Panel("[bold green]✔ 所有環境與依賴檢查均正常運作！[/]", border_style="green")
+        )
     else:
-        console.print(Panel("[bold red]✖ 部分環境或依賴檢查未通過，請檢查上述錯誤。[/]", border_style="red"))
+        console.print(
+            Panel("[bold red]✖ 部分環境或依賴檢查未通過，請檢查上述錯誤。[/]", border_style="red")
+        )
         raise typer.Exit(code=1)
 
 

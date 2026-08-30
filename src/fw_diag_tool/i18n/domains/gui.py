@@ -183,12 +183,12 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
     "session_management": {"zh-TW": "💾 Session 管理", "en-US": "💾 Session Management"},
     "module_overview": {"zh-TW": "🛠 功能模組總覽", "en-US": "🛠 Feature Modules Overview"},
     "whats_new_title": {
-        "zh-TW": "📢 最近更新紀錄 (What's New in v1.4.0)",
-        "en-US": "📢 What's New in v1.4.0",
+        "zh-TW": "📢 最近更新紀錄 (What's New in v1.5.0)",
+        "en-US": "📢 What's New in v1.5.0",
     },
     "whats_new_expander": {
-        "zh-TW": "🎉 檢視 v1.4.0 重點更新項目",
-        "en-US": "🎉 View Key Updates in v1.4.0",
+        "zh-TW": "🎉 檢視 v1.5.0 重點更新項目",
+        "en-US": "🎉 View Key Updates in v1.5.0",
     },
     "language_selector_label": {
         "zh-TW": "🌐 語言 / Language",
@@ -245,6 +245,241 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
     "protocol_diff_download_report": {
         "zh-TW": "下載 Markdown 對比報告",
         "en-US": "Download Markdown Diff Report",
+    },
+    "protocol_diff_download_json_report": {
+        "zh-TW": "下載 JSON 差異報告",
+        "en-US": "Download JSON Diff Report",
+    },
+    # Batch Analysis
+    "batch_analysis_caption": {
+        "zh-TW": "批次上傳多個韌體追蹤或日誌檔案（支援 .csv, .log, .txt, .hex），自動或指定協定進行平行診斷並產生綜合報告與 ZIP 封裝。",
+        "en-US": "Batch upload multiple firmware trace or log files (.csv, .log, .txt, .hex supported) for parallel automated or protocol-specific diagnosis, consolidated reports, and ZIP packaging.",
+    },
+    "batch_protocol_select_label": {
+        "zh-TW": "協定選擇（Protocol Selection）",
+        "en-US": "Protocol Selection",
+    },
+    "batch_proto_auto": {
+        "zh-TW": "自動偵測（Auto Detect）",
+        "en-US": "Auto Detect",
+    },
+    "batch_uploader_label": {
+        "zh-TW": "上傳多個檔案（支援 .csv, .log, .txt, .hex）",
+        "en-US": "Upload multiple files (.csv, .log, .txt, .hex supported)",
+    },
+    "batch_btn_start": {
+        "zh-TW": "開始批次分析",
+        "en-US": "Start Batch Analysis",
+    },
+    "batch_empty_warning": {
+        "zh-TW": "請先上傳至少一個檔案再進行批次分析。",
+        "en-US": "Please upload at least one file before running batch analysis.",
+    },
+    "batch_no_files_analyzed": {
+        "zh-TW": "未找到符合指定協定或格式的檔案可進行分析。",
+        "en-US": "No files matching the specified protocol or format were found for analysis.",
+    },
+    "batch_metric_total": {
+        "zh-TW": "總檔案數",
+        "en-US": "Total Files",
+    },
+    "batch_metric_success": {
+        "zh-TW": "成功",
+        "en-US": "Success",
+    },
+    "batch_metric_warning": {
+        "zh-TW": "警告",
+        "en-US": "Warning",
+    },
+    "batch_metric_error": {
+        "zh-TW": "錯誤",
+        "en-US": "Error",
+    },
+    "batch_download_zip_btn": {
+        "zh-TW": "📦 下載全部報告 ZIP（Download All Reports ZIP）",
+        "en-US": "📦 Download All Reports ZIP",
+    },
+    # Settings & Preferences
+    "settings_caption": {
+        "zh-TW": "自訂全域協定分析逾時、介面語系、視覺主題與資料載入上限。",
+        "en-US": "Customize global protocol analysis timeout, UI locale, visual theme, and data load limits.",
+    },
+    "settings_i2c_timeout": {
+        "zh-TW": "I2C 預設 Timeout (ms)",
+        "en-US": "Default I2C Timeout (ms)",
+    },
+    "settings_i2c_timeout_help": {
+        "zh-TW": "I2C / SMBus 交易超時判定門檻（毫秒）。",
+        "en-US": "I2C / SMBus transaction timeout threshold in milliseconds.",
+    },
+    "settings_language_help": {
+        "zh-TW": "系統介面顯示語言。",
+        "en-US": "System UI display language.",
+    },
+    "settings_theme": {
+        "zh-TW": "預設主題",
+        "en-US": "Default Theme",
+    },
+    "settings_theme_help": {
+        "zh-TW": "UI 外觀配色主題。",
+        "en-US": "UI appearance color theme.",
+    },
+    "settings_max_rows": {
+        "zh-TW": "分析資料列數上限",
+        "en-US": "Max Analysis Data Rows",
+    },
+    "settings_max_rows_help": {
+        "zh-TW": "單次匯入分析之最大 CSV / 交易資料列數限制。",
+        "en-US": "Maximum row limit for a single CSV / transaction import.",
+    },
+    "settings_spi_page_size": {
+        "zh-TW": "SPI 預設 Page Size",
+        "en-US": "Default SPI Page Size",
+    },
+    "settings_spi_page_size_help": {
+        "zh-TW": "SPI NOR Flash Page Program 預設緩衝區大小（位元組）。",
+        "en-US": "Default SPI NOR Flash Page Program buffer size in bytes.",
+    },
+    "settings_reset_button": {
+        "zh-TW": "重設為預設值",
+        "en-US": "Reset to Defaults",
+    },
+    "settings_applied_toast": {
+        "zh-TW": "設定已成功套用！",
+        "en-US": "Settings applied successfully!",
+    },
+    "settings_reset_toast": {
+        "zh-TW": "已重設為預設設定！",
+        "en-US": "Reset to default settings!",
+    },
+    "settings_active_summary": {
+        "zh-TW": "目前生效設定摘要",
+        "en-US": "Active Settings Summary",
+    },
+    "settings_metric_i2c_timeout": {
+        "zh-TW": "I2C Timeout",
+        "en-US": "I2C Timeout",
+    },
+    "settings_metric_locale": {
+        "zh-TW": "語言",
+        "en-US": "Language",
+    },
+    "settings_metric_theme": {
+        "zh-TW": "主題",
+        "en-US": "Theme",
+    },
+    "settings_metric_max_rows": {
+        "zh-TW": "資料上限",
+        "en-US": "Data Limit",
+    },
+    "settings_metric_spi_page": {
+        "zh-TW": "SPI Page",
+        "en-US": "SPI Page",
+    },
+    # Protocol Diff (PCIe, MCTP, I2C, SPI, UART)
+    "diff_metric_new_aer": {
+        "zh-TW": "新增 AER 錯誤",
+        "en-US": "New AER Errors",
+    },
+    "diff_metric_resolved_aer": {
+        "zh-TW": "已解決 AER 錯誤",
+        "en-US": "Resolved AER Errors",
+    },
+    "diff_metric_common_aer": {
+        "zh-TW": "共同 AER 錯誤",
+        "en-US": "Common AER Errors",
+    },
+    "diff_metric_link_degradation": {
+        "zh-TW": "Link 降級",
+        "en-US": "Link Degradation",
+    },
+    "diff_metric_new_errors": {
+        "zh-TW": "新增錯誤",
+        "en-US": "New Errors",
+    },
+    "diff_metric_resolved_errors": {
+        "zh-TW": "已解決錯誤",
+        "en-US": "Resolved Errors",
+    },
+    "diff_metric_common_errors": {
+        "zh-TW": "共同錯誤",
+        "en-US": "Common Errors",
+    },
+    "diff_metric_message_count_delta": {
+        "zh-TW": "訊息數變化",
+        "en-US": "Message Count Delta",
+    },
+    "diff_metric_new_anomalies": {
+        "zh-TW": "新增異常",
+        "en-US": "New Anomalies",
+    },
+    "diff_metric_resolved_anomalies": {
+        "zh-TW": "已解決異常",
+        "en-US": "Resolved Anomalies",
+    },
+    "diff_metric_common_anomalies": {
+        "zh-TW": "共同異常",
+        "en-US": "Common Anomalies",
+    },
+    "diff_metric_tx_count_delta": {
+        "zh-TW": "交易數變化",
+        "en-US": "Transaction Count Delta",
+    },
+    "diff_metric_new_symbols": {
+        "zh-TW": "新增符號",
+        "en-US": "New Symbols",
+    },
+    "diff_metric_resolved_symbols": {
+        "zh-TW": "已解決符號",
+        "en-US": "Resolved Symbols",
+    },
+    "diff_metric_common_symbols": {
+        "zh-TW": "共同符號",
+        "en-US": "Common Symbols",
+    },
+    "diff_metric_fault_address": {
+        "zh-TW": "故障位址",
+        "en-US": "Fault Address",
+    },
+    "diff_status_changed": {
+        "zh-TW": "變更",
+        "en-US": "Changed",
+    },
+    "diff_status_identical": {
+        "zh-TW": "相同",
+        "en-US": "Identical",
+    },
+    "diff_section_new": {
+        "zh-TW": "新增項目（New）",
+        "en-US": "New Items",
+    },
+    "diff_section_resolved": {
+        "zh-TW": "已解決項目（Resolved）",
+        "en-US": "Resolved Items",
+    },
+    "diff_section_common": {
+        "zh-TW": "共同項目（Common）",
+        "en-US": "Common Items",
+    },
+    "diff_section_address_changes": {
+        "zh-TW": "位址變更（Address Changes）",
+        "en-US": "Address Changes",
+    },
+    "diff_section_none": {
+        "zh-TW": "無",
+        "en-US": "None",
+    },
+    "diff_uploader_file_label": {
+        "zh-TW": "上傳 {role} 檔案",
+        "en-US": "Upload {role} file",
+    },
+    "diff_pasted_text_label": {
+        "zh-TW": "或貼上內容",
+        "en-US": "Or paste content",
+    },
+    "diff_summary_label": {
+        "zh-TW": "分析摘要",
+        "en-US": "Analysis Summary",
     },
 }
 

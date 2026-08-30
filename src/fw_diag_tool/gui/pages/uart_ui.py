@@ -16,6 +16,7 @@ from fw_diag_tool.gui.uploads import (
 )
 from fw_diag_tool.resources import load_uart_sample
 from fw_diag_tool.uart.diff import UARTDiffEngine
+from fw_diag_tool.uart.models import CrashType
 from fw_diag_tool.uart.parser import UARTCrashParser
 from fw_diag_tool.uart.reporter import UARTReporter
 
@@ -175,9 +176,16 @@ def render() -> None:
                 mime="text/markdown",
                 key="uart_download_report",
             )
+            report_dict = u_report.to_dict()
+            anomaly_count = 0 if u_report.crash_type == CrashType.GENERIC_LOG else 1
+            if u_report.arm_hardfault and u_report.arm_hardfault.fault_flags:
+                anomaly_count = max(1, len(u_report.arm_hardfault.fault_flags))
+            report_dict["protocol"] = "UART"
+            report_dict["summary"] = u_report.summary_title
+            report_dict["anomaly_count"] = anomaly_count
             render_session_controls(
                 protocol="UART",
-                report_data=u_report.to_dict(),
+                report_data=report_dict,
                 config_data={"mode": u_mode},
             )
     else:

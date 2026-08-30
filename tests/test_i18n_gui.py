@@ -45,7 +45,9 @@ def test_gui_domain_translations_completeness() -> None:
     registry = create_default_registry()
 
     # 驗證詞條總數至少 30 個
-    assert len(GUI_TRANSLATIONS) >= 30, f"Expected >= 30 GUI translations, got {len(GUI_TRANSLATIONS)}"
+    assert len(GUI_TRANSLATIONS) >= 30, (
+        f"Expected >= 30 GUI translations, got {len(GUI_TRANSLATIONS)}"
+    )
 
     # 驗證所有 key 在兩個語系都有完整非空翻譯
     for key, trans_map in GUI_TRANSLATIONS.items():
@@ -66,8 +68,14 @@ def test_required_gui_strings_present() -> None:
     registry = create_default_registry()
 
     # 頁面標題
-    assert registry.t("title_i2c_diagnosis", locale="zh-TW", domain="gui") == "I2C / PMBus 診斷與波形檢視"
-    assert registry.t("title_i2c_diagnosis", locale="en-US", domain="gui") == "I2C / PMBus Waveform Diagnosis"
+    assert (
+        registry.t("title_i2c_diagnosis", locale="zh-TW", domain="gui")
+        == "I2C / PMBus 診斷與波形檢視"
+    )
+    assert (
+        registry.t("title_i2c_diagnosis", locale="en-US", domain="gui")
+        == "I2C / PMBus Waveform Diagnosis"
+    )
 
     # 共用按鈕
     assert registry.t("btn_load_example", locale="zh-TW", domain="gui") == "📋 載入範例"
@@ -75,19 +83,25 @@ def test_required_gui_strings_present() -> None:
     assert registry.t("btn_download_report", locale="zh-TW", domain="gui") == "⬇️ 下載報告"
     assert registry.t("btn_download_report", locale="en-US", domain="gui") == "⬇️ Download Report"
     assert registry.t("btn_save_session", locale="zh-TW", domain="gui") == "💾 儲存分析 Session"
-    assert registry.t("btn_save_session", locale="en-US", domain="gui") == "💾 Save Analysis Session"
+    assert (
+        registry.t("btn_save_session", locale="en-US", domain="gui") == "💾 Save Analysis Session"
+    )
 
     # 共用提示
     assert registry.t("please_upload_file", locale="zh-TW", domain="gui") == "請上傳檔案"
     assert registry.t("please_upload_file", locale="en-US", domain="gui") == "Please upload a file"
     assert registry.t("upload_label", locale="zh-TW", domain="gui") == "請上傳檔案或貼上內容"
-    assert registry.t("upload_label", locale="en-US", domain="gui") == "Upload file or paste content"
+    assert (
+        registry.t("upload_label", locale="en-US", domain="gui") == "Upload file or paste content"
+    )
 
     # 共用欄位標籤
     assert registry.t("analysis_results", locale="zh-TW", domain="gui") == "分析結果"
     assert registry.t("analysis_results", locale="en-US", domain="gui") == "Analysis Results"
     assert registry.t("system_dashboard", locale="zh-TW", domain="gui") == "📊 系統狀態儀表板"
-    assert registry.t("system_dashboard", locale="en-US", domain="gui") == "📊 System Status Dashboard"
+    assert (
+        registry.t("system_dashboard", locale="en-US", domain="gui") == "📊 System Status Dashboard"
+    )
 
 
 def test_render_language_selector_behavior(monkeypatch: pytest.MonkeyPatch) -> None:

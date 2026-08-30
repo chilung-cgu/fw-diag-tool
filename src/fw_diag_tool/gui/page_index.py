@@ -140,7 +140,9 @@ PAGE_INDEX: list[dict[str, str]] = [
         "title": "Virtual Device Emulator",
         "url": "emulator",
         "category": "Labs",
-        "keywords": "emulator virtual device eeprom lm75 ソ ina219 spi flash mux".replace("ソ ", ""),
+        "keywords": "emulator virtual device eeprom lm75 ソ ina219 spi flash mux".replace(
+            "ソ ", ""
+        ),
     },
     {
         "title": "Protocol Fuzz Lab",

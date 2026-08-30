@@ -144,7 +144,10 @@ def render() -> None:
             ]
             render_sarif_download(dmesg_findings, protocol="PCIe", filename_prefix="pcie_dmesg")
             report_dict = {
+                "protocol": "PCIe",
                 "mode": "dmesg",
+                "summary": f"Linux 核心 dmesg AER 診斷結果（共 {len(events)} 個事件）",
+                "anomaly_count": len(events),
                 "events": [
                     {
                         "timestamp": ev.timestamp,
@@ -238,8 +241,12 @@ def render() -> None:
                 )
             if devices:
                 render_sarif_download(all_findings, protocol="PCIe", filename_prefix="pcie_config")
+                total_anomalies = len(all_findings)
                 report_dict = {
+                    "protocol": "PCIe",
                     "mode": "lspci",
+                    "summary": f"PCIe 設定空間分析（共 {len(devices)} 個裝置，{total_anomalies} 項發現）",
+                    "anomaly_count": total_anomalies,
                     "devices": devices_data,
                 }
                 render_session_controls(

@@ -75,6 +75,38 @@ def _check_dependency(name: str) -> tuple[bool, str]:
         return False, "未安裝"
 
 
+def _render_environment_health() -> None:
+    """呈現環境健康看板，以 metric 卡片顯示關鍵依賴版本與 Python 環境健康狀態。"""
+    st.subheader("🏥 環境健康看板")
+    py_ver = platform.python_version()
+    py_parts = tuple(int(x) for x in py_ver.split(".")[:2])
+    py_ok = py_parts >= (3, 10)
+
+    key_deps = (
+        ("streamlit", "Streamlit"),
+        ("plotly", "Plotly"),
+        ("pandas", "Pandas"),
+        ("pydantic", "Pydantic"),
+        ("rich", "Rich"),
+    )
+
+    columns = st.columns(6)
+    with columns[0]:
+        st.metric(
+            label="Python",
+            value=py_ver,
+            delta="✅ >= 3.10" if py_ok else "⚠️ < 3.10",
+        )
+    for column, (dep_pkg, dep_name) in zip(columns[1:], key_deps):
+        ok, ver = _check_dependency(dep_pkg)
+        with column:
+            st.metric(
+                label=dep_name,
+                value=ver if ok else "未安裝",
+                delta="✅ 正常" if ok else "⚠️ 未安裝",
+            )
+
+
 def _render_health_check() -> None:
     """Render system health check panel in an expander."""
     with st.expander("🏥 系統健康檢查", expanded=False):
@@ -119,6 +151,68 @@ def _render_health_check() -> None:
             st.error("系統異常：Python 版本或核心套件不符合要求")
 
 
+def _render_quick_import() -> None:
+    """呈現快速匯入入口，支援一鍵載入最近一次 Session 檔案並繼續分析。"""
+    with st.expander("⚡ 快速匯入最近 Session", expanded=False):
+        try:
+            manager = SessionManager()
+            sessions = manager.list_sessions() if hasattr(manager, "list_sessions") else []
+        except Exception:
+            sessions = []
+
+        if not sessions:
+            st.info("尚無已儲存的 Session 檔案。請在各協定診斷頁面執行分析並點擊「儲存 Session」。")
+            return
+
+        latest = sessions[0]
+        latest_path = latest.get("path")
+        latest_name = latest.get("name") or latest.get("filename") or "未命名"
+        latest_time = latest.get("created_at", "未知時間")
+        latest_filename = latest.get("filename", "")
+
+        st.markdown(
+            f"**最近一次 Session**：`{latest_name}`（建立時間：`{latest_time}`）  \n"
+            f"**檔案名稱**：`{latest_filename}`"
+        )
+
+        load_btn = st.button("🚀 一鍵載入最近 Session", key="btn_quick_import_latest")
+
+        if load_btn:
+            if not latest_path:
+                st.error("無法取得最近 Session 檔案路徑。")
+                return
+            try:
+                doc = manager.load_document(latest_path)
+                if hasattr(st, "session_state"):
+                    st.session_state["dashboard_quick_imported_session"] = doc
+                st.success(f"✅ 成功載入 Session「{doc.name or latest_name}」！")
+
+                with st.container(border=True):
+                    st.markdown(f"##### 📋 Session 內容摘要：{doc.name or latest_name}")
+                    meta_c1, meta_c2, meta_c3 = st.columns(3)
+                    with meta_c1:
+                        st.metric("工具版本", doc.tool_version)
+                    with meta_c2:
+                        st.metric("建立時間", doc.created_at or "—")
+                    with meta_c3:
+                        report_keys_count = len(doc.report) if isinstance(doc.report, dict) else 0
+                        st.metric("報告欄位數", str(report_keys_count))
+
+                    if doc.notes:
+                        st.markdown(f"**備註**：{doc.notes}")
+
+                    st.markdown("**可進行的下一步操作**：")
+                    nav_c1, nav_c2, nav_c3 = st.columns(3)
+                    with nav_c1:
+                        _render_quick_link("session-compare", "⚖️ 前往 Session 比對")
+                    with nav_c2:
+                        _render_quick_link("session-analytics", "📈 前往 Session 趨勢分析")
+                    with nav_c3:
+                        _render_quick_link("i2c-diagnosis", "📊 前往 I2C 診斷")
+            except Exception as exc:
+                st.error(f"❌ 載入 Session 失敗：{exc}")
+
+
 def _render_recent_sessions() -> None:
     """Render a recent analysis sessions panel."""
     with st.expander("📂 最近分析記錄", expanded=False):
@@ -137,19 +231,62 @@ def _render_recent_sessions() -> None:
                     protocol = s.get("protocol", "—")
                     created_at = s.get("created_at", "—")
                 else:
-                    name = getattr(s, "name", str(s.session_id)[:8] if hasattr(s, "session_id") else "—")
+                    name = getattr(
+                        s, "name", str(s.session_id)[:8] if hasattr(s, "session_id") else "—"
+                    )
                     protocol = getattr(s, "protocol", "—")
                     created_at = getattr(s, "created_at", "—")
-                rows.append({
-                    "名稱": name,
-                    "協定": protocol,
-                    "建立時間": created_at,
-                })
+                rows.append(
+                    {
+                        "名稱": name,
+                        "協定": protocol,
+                        "建立時間": created_at,
+                    }
+                )
             if rows:
                 import pandas as pd
+
                 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         except Exception:
             st.caption("無法載入最近記錄。")
+
+
+def _render_analysis_history() -> None:
+    """呈現各協定分析次數歷史統計圖表。"""
+    st.subheader("📈 分析歷史統計")
+    collector = get_metrics_collector()
+    summary = collector.get_summary()
+    protocol_usage = summary.get("protocol_usage", {})
+
+    default_protocols = ["I2C", "SPI", "UART", "PCIe", "MCTP"]
+    chart_data = {proto: protocol_usage.get(proto, 0) for proto in default_protocols}
+    for proto, count in protocol_usage.items():
+        if proto not in chart_data:
+            chart_data[proto] = count
+
+    has_data = any(v > 0 for v in chart_data.values())
+
+    fig = go.Figure(
+        go.Bar(
+            x=list(chart_data.keys()),
+            y=list(chart_data.values()),
+            name="協定分析次數",
+            marker_color="#2563eb",
+            text=list(chart_data.values()),
+            textposition="auto",
+        )
+    )
+    fig.update_layout(
+        template=get_plotly_template(),
+        title="各協定使用頻率與分析次數",
+        xaxis_title="協定 (Protocol)",
+        yaxis_title="分析次數 (Count)",
+        height=320,
+        margin=dict(l=40, r=40, t=50, b=40),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    if not has_data:
+        st.caption("ℹ️ 目前尚無協定分析記錄。在各協定診斷頁面執行分析時將自動記錄並更新。")
 
 
 def _render_usage_metrics() -> None:
@@ -211,6 +348,7 @@ def render() -> None:
 
     _render_quick_actions()
     _render_system_info()
+    _render_environment_health()
     _render_health_check()
 
     # 系統狀態面板
@@ -255,6 +393,8 @@ def render() -> None:
         _render_quick_link("spi", t("quick_link_spi", domain="gui"))
     with qcols[5]:
         _render_quick_link("fault-arena", t("quick_link_fault_arena", domain="gui"))
+
+    _render_quick_import()
 
     st.divider()
 
@@ -393,15 +533,16 @@ def render() -> None:
     st.subheader(t("whats_new_title", domain="gui"))
     with st.expander(t("whats_new_expander", domain="gui"), expanded=True):
         st.markdown(
-            "- **🔀 協定 A/B 對比分析 (Protocol Diff)**：I2C / SPI / UART / PCIe / MCTP 五大協定雙檔差分比對，新增 PCIe AER 與 MCTP 差分引擎。\n"
-            "- **⚖️ Session A/B 對比分析**：雙 .fwsession.json 記錄比對，異常與交易數量 Delta 指標、改善 / 退化 / 持平 Verdict 判定。\n"
-            "- **📦 批次分析 (Batch Analysis)**：多檔平行上傳、智慧協定自動偵測、彙總表格與 ZIP 報告一鍵下載。\n"
-            "- **⚙️ 偏好設定 (Settings)**：I2C Timeout、語系、主題、資料列數上限、SPI Page Size 集中管理與即時生效。\n"
-            "- **🖨️ HTML 報告增強**：列印友善 CSS、TOC 錨點導覽、可摺疊 Details 區段。\n"
-            "- **♿ 無障礙改善**：Skip-to-content 導覽連結、Dashboard 最近 Sessions 面板。\n"
-            "- **🛠 shared.py 重構**：本地化字典抽離至 localization_maps.py、PAGE_INDEX 統一由 page_index.py 管理。"
+            "- **📟 CLI 差分對稱完善**：新增 `pcie diff` 與 `mctp diff` 子命令，五大協定均支援 CLI 差分對比。\n"
+            "- **🔗 跨協定時間線擴展**：Correlation UI 從 3 協定擴展至 5 協定 (I2C/SPI/UART/PCIe/MCTP)。\n"
+            "- **💾 Session 儲存對稱補齊**：SPI、UART、PCIe、MCTP 頁面新增「儲存分析 Session」功能。\n"
+            "- **📄 Diff JSON 匯出**：五大協定 Diff 結果支援 JSON 結構化報告下載。\n"
+            "- **🌍 i18n 完整性稽核**：補齊 40+ 缺少的翻譯詞條，新增 AST 自動化檢查測試。\n"
+            "- **📊 Dashboard 強化**：環境健康看板、分析歷史統計圖表、快速 Session 匯入。\n"
+            "- **📖 README 全面更新**：26 頁 GUI 功能矩陣表、完整 CLI 指令速查。"
         )
 
+    _render_analysis_history()
     _render_recent_sessions()
     _render_usage_metrics()
     render_page_footer()

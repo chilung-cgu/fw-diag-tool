@@ -36,10 +36,7 @@ class TestPageIndex:
         assert len(matches) >= 2
 
     def test_search_finds_spi(self) -> None:
-        matches = [
-            p for p in PAGE_INDEX
-            if "spi" in p["keywords"] or "spi" in p["title"].lower()
-        ]
+        matches = [p for p in PAGE_INDEX if "spi" in p["keywords"] or "spi" in p["title"].lower()]
         assert len(matches) >= 1
 
     def test_all_categories_non_empty(self) -> None:

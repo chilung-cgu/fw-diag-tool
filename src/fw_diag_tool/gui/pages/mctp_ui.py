@@ -116,9 +116,26 @@ def render() -> None:
                     mime="text/markdown",
                     key="mctp_download_report",
                 )
+                report_dict = dataclasses.asdict(m_report)
+                anomaly_count = (
+                    len(m_report.errors)
+                    + len(m_report.warnings)
+                    + len(m_report.source_errors)
+                    + sum(1 for m in m_report.mctp_messages if not m.is_complete or m.error)
+                    + sum(
+                        1
+                        for f in m_report.ipmb_frames
+                        if not f.checksum1_valid or not f.checksum2_valid
+                    )
+                )
+                report_dict["protocol"] = "MCTP"
+                report_dict["summary"] = (
+                    m_report.summary_text or f"MCTP/IPMB 共 {m_report.total_frames} 框架"
+                )
+                report_dict["anomaly_count"] = anomaly_count
                 render_session_controls(
                     protocol="MCTP",
-                    report_data=dataclasses.asdict(m_report),
+                    report_data=report_dict,
                     config_data={"protocol_mode": m_protocol_mode},
                 )
     else:

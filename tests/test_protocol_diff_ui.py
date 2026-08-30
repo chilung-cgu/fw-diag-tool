@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -8,6 +9,7 @@ from fw_diag_tool.gui.pages.protocol_diff_ui import (
     _analyze_input,
     _compare,
     _diff_lists,
+    format_protocol_diff_json,
     format_protocol_diff_markdown,
 )
 from fw_diag_tool.resources import load_pcie_lspci_sample
@@ -173,3 +175,16 @@ def test_mctp_markdown_contains_message_delta() -> None:
     assert "- line 2: bad checksum" in report
     assert "- line 1: timeout" in report
     assert "- line 3: unknown type" in report
+
+
+def test_format_protocol_diff_json_structure() -> None:
+    json_report = format_protocol_diff_json("I2C", _result("I2C"), timestamp="2026-08-30T12:00:00Z")
+    data = json.loads(json_report)
+    assert data["protocol"] == "I2C"
+    assert data["timestamp"] == "2026-08-30T12:00:00Z"
+    assert "baseline_summary" in data
+    assert "candidate_summary" in data
+    assert "diff" in data
+    assert data["diff"]["new_anomalies"] == ["New NACK"]
+    assert data["diff"]["resolved_anomalies"] == ["Old NACK"]
+    assert data["diff"]["common_anomalies"] == ["Clock Stretching"]

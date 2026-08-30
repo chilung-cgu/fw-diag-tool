@@ -73,8 +73,12 @@ def build_comparison_dataframe(
 
     b_anomalies = _extract_metric(b_rep, ("anomaly_count", "anomalies_count"), "anomalies")
     c_anomalies = _extract_metric(c_rep, ("anomaly_count", "anomalies_count"), "anomalies")
-    b_tx = _extract_metric(b_rep, ("total_transactions", "transaction_count", "transactions"), "transactions")
-    c_tx = _extract_metric(c_rep, ("total_transactions", "transaction_count", "transactions"), "transactions")
+    b_tx = _extract_metric(
+        b_rep, ("total_transactions", "transaction_count", "transactions"), "transactions"
+    )
+    c_tx = _extract_metric(
+        c_rep, ("total_transactions", "transaction_count", "transactions"), "transactions"
+    )
 
     proto_info = comparison.metric_deltas.get("protocol", {})
     b_proto = proto_info.get("baseline", _extract_protocol(baseline_payload, b_rep))
@@ -168,7 +172,13 @@ def get_sample_sessions() -> tuple[dict[str, Any], dict[str, Any]]:
 
 def render() -> None:
     """Render the Session A/B comparison page."""
-    st.header(t("title_session_compare", domain="gui", default="Session A/B 對比分析（Session Comparison）"))
+    st.header(
+        t(
+            "title_session_compare",
+            domain="gui",
+            default="Session A/B 對比分析（Session Comparison）",
+        )
+    )
     st.caption(
         "上傳或載入兩個診斷工作階段（.fwsession.json）檔案，對比異常數量、交易總數與協定一致性，"
         "快速評估修復效果與回歸風險。"
@@ -237,7 +247,9 @@ def render() -> None:
         try:
             candidate_payload = _parse_session_payload(
                 candidate_file.getvalue(),
-                default_name=candidate_file.name.replace(".fwsession.json", "").replace(".json", ""),
+                default_name=candidate_file.name.replace(".fwsession.json", "").replace(
+                    ".json", ""
+                ),
             )
         except Exception as exc:
             st.error(f"無法解析 Candidate Session：{exc}")
@@ -272,7 +284,9 @@ def render() -> None:
 
     c_rep = _extract_report(candidate_payload)
     c_anomalies = _extract_metric(c_rep, ("anomaly_count", "anomalies_count"), "anomalies")
-    c_tx = _extract_metric(c_rep, ("total_transactions", "transaction_count", "transactions"), "transactions")
+    c_tx = _extract_metric(
+        c_rep, ("total_transactions", "transaction_count", "transactions"), "transactions"
+    )
 
     if verdict == "improved":
         st.success(f"🎉 **判定結果：改善（Improved）** — 待測版本異常減少 {abs(anomaly_delta)} 項")
@@ -326,9 +340,7 @@ def render() -> None:
     st.dataframe(df, use_container_width=True, hide_index=True)
 
     st.subheader("⬇️ 匯出對比報告")
-    md_content = format_session_comparison_markdown(
-        comparison, baseline_payload, candidate_payload
-    )
+    md_content = format_session_comparison_markdown(comparison, baseline_payload, candidate_payload)
     st.download_button(
         "下載 Markdown 對比報告",
         data=md_content,

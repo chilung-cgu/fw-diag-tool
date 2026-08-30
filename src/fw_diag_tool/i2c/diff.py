@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from typing import Any
 
 from .models import I2CAnalysisReport, I2CTransaction
 
@@ -20,6 +22,22 @@ class I2CDiffResult:
     address_changes: list[str] = field(default_factory=list)
     summary: str = ""
     is_identical: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "baseline_transaction_count": self.baseline_transaction_count,
+            "candidate_transaction_count": self.candidate_transaction_count,
+            "transaction_count_delta": self.transaction_count_delta,
+            "new_anomalies": list(self.new_anomalies),
+            "resolved_anomalies": list(self.resolved_anomalies),
+            "common_anomalies": list(self.common_anomalies),
+            "address_changes": list(self.address_changes),
+            "summary": self.summary,
+            "is_identical": self.is_identical,
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
 
 
 class I2CDiffEngine:
@@ -46,16 +64,16 @@ class I2CDiffEngine:
         candidate_transactions = candidate_report.transactions
         changes: list[str] = []
         for index in range(max(len(baseline_transactions), len(candidate_transactions))):
-            baseline_tx = baseline_transactions[index] if index < len(baseline_transactions) else None
+            baseline_tx = (
+                baseline_transactions[index] if index < len(baseline_transactions) else None
+            )
             candidate_tx = (
                 candidate_transactions[index] if index < len(candidate_transactions) else None
             )
             baseline_address = cls._address_label(baseline_tx)
             candidate_address = cls._address_label(candidate_tx)
             if baseline_address != candidate_address:
-                changes.append(
-                    f"交易 #{index + 1}: {baseline_address} -> {candidate_address}"
-                )
+                changes.append(f"交易 #{index + 1}: {baseline_address} -> {candidate_address}")
         return changes
 
     @classmethod

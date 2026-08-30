@@ -69,7 +69,10 @@ def test_default_assets_validity() -> None:
 
     rep = UARTCrashParser.parse_log_text(DEFAULT_UART_PANIC_LOG)
     assert rep.kernel_panic is not None
-    assert "nvme_pci_complete_rq" in rep.kernel_panic.faulting_func
+    assert (
+        rep.kernel_panic.faulting_func is not None
+        and "nvme_pci_complete_rq" in rep.kernel_panic.faulting_func
+    )
 
 
 def test_apptest_tutorial_ui_renders_default() -> None:

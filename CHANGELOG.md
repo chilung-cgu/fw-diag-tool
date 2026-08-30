@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2026-08-30
+
+### Added
+- CLI: `pcie diff` and `mctp diff` subcommands with Rich-formatted output
+- Correlation UI extended to 5 protocols (I2C/SPI/UART/PCIe/MCTP) with cross-protocol anomaly clustering
+- Session save/export for SPI, UART, PCIe, MCTP GUI pages (previously I2C only)
+- Diff JSON export: all 5 diff engines now support `to_dict()`/`to_json()` serialization
+- Protocol Diff UI: JSON report download button alongside existing Markdown download
+- i18n audit: 40+ missing translation keys added (batch, settings, protocol diff metrics)
+- i18n completeness test with AST-based automated key coverage verification
+- Dashboard: environment health panel, analysis history chart, quick session import
+- README.md: 26-page GUI capability matrix, v1.5.0 highlights, full CLI command reference
+
+### Changed
+- Correlation timeline now supports PCIe AER/dmesg events and MCTP/IPMB packet anomalies
+- Session IO module expanded with serialize/replay for SPI, UART, PCIe, MCTP protocols
+- shared.py: added analyze_pcie_input, analyze_mctp_input helpers
+- Test suite grown from 977 to 1034 tests across 95+ files
+- pyproject.toml version bumped to 1.5.0
+
 ## [1.4.0] - 2026-08-30
 
 ### Added

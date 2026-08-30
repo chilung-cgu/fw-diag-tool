@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from typing import Any
 
 from .models import SPIReport
 
@@ -30,6 +32,22 @@ class SPIDiffResult:
             and self.transaction_count_delta == 0
             and not self.chip_changed
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "new_anomalies": list(self.new_anomalies),
+            "resolved_anomalies": list(self.resolved_anomalies),
+            "common_anomalies": list(self.common_anomalies),
+            "transaction_count_delta": self.transaction_count_delta,
+            "summary": self.summary,
+            "baseline_detected_chip": self.baseline_detected_chip,
+            "candidate_detected_chip": self.candidate_detected_chip,
+            "chip_changed": self.chip_changed,
+            "is_identical": self.is_identical,
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
 
 
 class SPIDiffEngine:
@@ -84,3 +102,5 @@ class SPIDiffEngine:
             chip_changed=chip_changed,
         )
 
+
+__all__ = ["SPIAnalysisReport", "SPIDiffEngine", "SPIDiffResult"]

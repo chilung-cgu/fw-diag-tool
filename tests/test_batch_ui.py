@@ -6,6 +6,7 @@ import io
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -43,7 +44,7 @@ def test_batch_ui_imports_and_all_attribute() -> None:
 
 def test_build_batch_dataframe_formats_columns_and_statuses() -> None:
     """測試 build_batch_dataframe 正確解析並格式化狀態與欄位。"""
-    entries = [
+    entries: list[dict[str, Any]] = [
         {
             "filename": "i2c_trace.csv",
             "protocol": "i2c",
@@ -136,7 +137,10 @@ def test_render_empty_upload_shows_warning(monkeypatch: pytest.MonkeyPatch) -> N
     render()
 
     mock_warning.assert_called_once()
-    assert "請先上傳至少一個檔案" in mock_warning.call_args[0][0]
+    assert any(
+        msg in mock_warning.call_args[0][0]
+        for msg in ("請先上傳至少一個檔案", "Please upload at least one file")
+    )
 
 
 def test_render_successful_batch_analysis(monkeypatch: pytest.MonkeyPatch) -> None:

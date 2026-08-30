@@ -26,9 +26,7 @@ def _load_sessions(uploaded_files: list[Any]) -> list[dict[str, Any]]:
             payload = json.loads(content)
             if isinstance(payload, dict):
                 if "name" not in payload:
-                    payload["name"] = f.name.replace(".fwsession.json", "").replace(
-                        ".json", ""
-                    )
+                    payload["name"] = f.name.replace(".fwsession.json", "").replace(".json", "")
                 sessions.append(payload)
         except (json.JSONDecodeError, UnicodeDecodeError):
             st.warning(f"Unable to parse: {f.name}")
@@ -64,27 +62,61 @@ def _render_trend_chart(report: SessionTrendReport) -> None:
     anomalies = [p.anomaly_count for p in report.points]
     transactions = [p.total_transactions for p in report.points]
     health_scores = [compute_health_score(p) for p in report.points]
-    fig.add_trace(go.Scatter(x=names, y=anomalies, mode="lines+markers", name="Anomalies",
-                             marker={"size": 10, "color": "#ef4444"},
-                             line={"width": 3, "color": "#ef4444"}))
-    fig.add_trace(go.Scatter(x=names, y=transactions, mode="lines+markers", name="Transactions",
-                             marker={"size": 8, "color": "#0ea5e9"},
-                             line={"width": 2, "color": "#0ea5e9", "dash": "dot"}, yaxis="y2"))
-    fig.add_trace(go.Scatter(x=names, y=health_scores, mode="lines+markers", name="Health Score",
-                             marker={"size": 8, "color": "#22c55e"},
-                             line={"width": 2, "color": "#22c55e"}))
-    fig.update_layout(template=get_plotly_template(), title="Session Trend", xaxis_title="Session",
-                      yaxis={"title": "Anomaly Count", "side": "left"},
-                      yaxis2={"title": "Transaction Count", "side": "right", "overlaying": "y"},
-                      height=400,
-                      legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1})
+    fig.add_trace(
+        go.Scatter(
+            x=names,
+            y=anomalies,
+            mode="lines+markers",
+            name="Anomalies",
+            marker={"size": 10, "color": "#ef4444"},
+            line={"width": 3, "color": "#ef4444"},
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=names,
+            y=transactions,
+            mode="lines+markers",
+            name="Transactions",
+            marker={"size": 8, "color": "#0ea5e9"},
+            line={"width": 2, "color": "#0ea5e9", "dash": "dot"},
+            yaxis="y2",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=names,
+            y=health_scores,
+            mode="lines+markers",
+            name="Health Score",
+            marker={"size": 8, "color": "#22c55e"},
+            line={"width": 2, "color": "#22c55e"},
+        )
+    )
+    fig.update_layout(
+        template=get_plotly_template(),
+        title="Session Trend",
+        xaxis_title="Session",
+        yaxis={"title": "Anomaly Count", "side": "left"},
+        yaxis2={"title": "Transaction Count", "side": "right", "overlaying": "y"},
+        height=400,
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 
 def _comparison_dataframe(report: SessionTrendReport) -> pd.DataFrame:
-    rows = [{"Session": p.session_name, "Created": p.created_at, "Protocol": p.protocol,
-             "Transactions": p.total_transactions, "Anomalies": p.anomaly_count,
-             "Status": p.status} for p in report.points]
+    rows = [
+        {
+            "Session": p.session_name,
+            "Created": p.created_at,
+            "Protocol": p.protocol,
+            "Transactions": p.total_transactions,
+            "Anomalies": p.anomaly_count,
+            "Status": p.status,
+        }
+        for p in report.points
+    ]
     return pd.DataFrame(rows)
 
 
@@ -117,11 +149,16 @@ def _build_trend_summary_markdown(report: SessionTrendReport) -> str:
 def render() -> None:
     """Render the Multi-Session Trend Analysis page."""
     st.header("Multi-Session Trend Analysis")
-    st.markdown("Upload multiple session files to compare key metrics, "
-                "visualize anomaly trends, and track debugging progress over time.")
-    uploaded = st.file_uploader("Upload Session Files", type=["json"],
-                                accept_multiple_files=True,
-                                help="Select 2+ .fwsession.json files for trend analysis.")
+    st.markdown(
+        "Upload multiple session files to compare key metrics, "
+        "visualize anomaly trends, and track debugging progress over time."
+    )
+    uploaded = st.file_uploader(
+        "Upload Session Files",
+        type=["json"],
+        accept_multiple_files=True,
+        help="Select 2+ .fwsession.json files for trend analysis.",
+    )
     if not uploaded:
         st.info("Drag and drop your .fwsession.json files here.")
         return
@@ -129,13 +166,20 @@ def render() -> None:
     if not sessions:
         st.error("No valid session files found.")
         return
-    protocols = sorted({s.get("config", {}).get("protocol",
-                        s.get("report", {}).get("protocol", "unknown")) for s in sessions})
+    protocols = sorted(
+        {
+            s.get("config", {}).get("protocol", s.get("report", {}).get("protocol", "unknown"))
+            for s in sessions
+        }
+    )
     if len(protocols) > 1:
         selected = st.multiselect("Filter by Protocol", protocols, default=protocols)
-        sessions = [s for s in sessions
-                    if s.get("config", {}).get("protocol",
-                       s.get("report", {}).get("protocol", "unknown")) in selected]
+        sessions = [
+            s
+            for s in sessions
+            if s.get("config", {}).get("protocol", s.get("report", {}).get("protocol", "unknown"))
+            in selected
+        ]
     report = analyze_session_trends(sessions)
     _render_metrics(report)
     _render_trend_chart(report)

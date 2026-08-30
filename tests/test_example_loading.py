@@ -137,9 +137,7 @@ def _uart_app() -> None:
 
 def test_gui_correlation_page_one_click_three_protocol_examples() -> None:
     at = AppTest.from_function(_correlation_app, default_timeout=30).run()
-    next(
-        button for button in at.button if button.label == "📋 載入三協定範例資料"
-    ).click().run()
+    next(button for button in at.button if button.label == "📋 載入三協定範例資料").click().run()
 
     assert not at.exception
     assert at.session_state["corr_i2c_text"] == load_i2c_sample("address-nack")

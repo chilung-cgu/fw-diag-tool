@@ -59,7 +59,9 @@ def compare_sessions(baseline: dict[str, Any], candidate: dict[str, Any]) -> Ses
     baseline_report = _report(baseline)
     candidate_report = _report(candidate)
     baseline_anomalies = _metric(baseline_report, ("anomaly_count", "anomalies_count"), "anomalies")
-    candidate_anomalies = _metric(candidate_report, ("anomaly_count", "anomalies_count"), "anomalies")
+    candidate_anomalies = _metric(
+        candidate_report, ("anomaly_count", "anomalies_count"), "anomalies"
+    )
     baseline_transactions = _metric(
         baseline_report,
         ("total_transactions", "transaction_count", "transactions"),

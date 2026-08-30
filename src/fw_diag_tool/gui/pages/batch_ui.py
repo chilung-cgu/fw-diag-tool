@@ -155,9 +155,13 @@ def render() -> None:
                 st.dataframe(df, use_container_width=True, hide_index=True)
 
                 if error_count > 0:
-                    st.error(f"批次分析完成：共 {total_count} 個檔案，其中 {error_count} 個出現錯誤。")
+                    st.error(
+                        f"批次分析完成：共 {total_count} 個檔案，其中 {error_count} 個出現錯誤。"
+                    )
                 elif warning_count > 0:
-                    st.warning(f"批次分析完成：共 {total_count} 個檔案，其中 {warning_count} 個有警告異常。")
+                    st.warning(
+                        f"批次分析完成：共 {total_count} 個檔案，其中 {warning_count} 個有警告異常。"
+                    )
                 else:
                     st.success(f"批次分析完成：全部 {total_count} 個檔案分析成功且無異常！")
 

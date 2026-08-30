@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import hashlib
-
 import plotly.graph_objects as go
 import streamlit as st
 
 from fw_diag_tool.gui.notifications import show_error_toast, show_success_toast
 from fw_diag_tool.gui.sarif_export import render_sarif_download
+from fw_diag_tool.gui.session_io import serialize_spi_session
 from fw_diag_tool.gui.shared import (
     _localize_gui_error,
     analyze_spi_input,
@@ -245,13 +244,14 @@ def render() -> None:
             ]
             render_sarif_download(findings, protocol="SPI", filename_prefix="spi_flash")
             report_dict = rep.to_dict()
-            session_json = SessionManager.serialize_session(
-                name="SPI Analysis",
-                data=report_dict,
-                config={"max_page_size": int(spi_page_size)},
-                capture_sha256=hashlib.sha256(csv_text.encode("utf-8")).hexdigest()
-                if csv_text
-                else None,
+            report_dict["protocol"] = "SPI"
+            report_dict["summary"] = rep.summary.to_dict()
+            report_dict["anomaly_count"] = rep.summary.anomaly_count
+            session_json = serialize_spi_session(
+                report_dict,
+                input_name=uploaded_spi.name if uploaded_spi is not None else "spi_capture.csv",
+                input_bytes=csv_text.encode("utf-8") if csv_text else None,
+                max_page_size=int(spi_page_size),
             )
             st.download_button(
                 "💾 儲存分析 Session",

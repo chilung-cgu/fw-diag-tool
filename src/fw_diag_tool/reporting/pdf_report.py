@@ -232,7 +232,9 @@ def build_pdf_report(
 
     # Banner Title
     pdf.set_xy(pdf.l_margin + 3, start_y + 3)
-    pdf.set_font(font_bold_family, style="B" if font_bold_family != font_family or cjk_bold else "", size=13)
+    pdf.set_font(
+        font_bold_family, style="B" if font_bold_family != font_family or cjk_bold else "", size=13
+    )
     pdf.set_text_color(14, 116, 144)  # Cyan 700 / Slate
     pdf.cell(pdf.epw - 6, 7, _sanitize_for_font(f"{title}"), align="L")
     pdf.ln(7)
@@ -315,17 +317,13 @@ def build_pdf_report(
 
             if len(table_lines) >= 2:
                 header_cells = [
-                    _clean_markdown_text(c)
-                    for c in table_lines[0].strip("|").split("|")
+                    _clean_markdown_text(c) for c in table_lines[0].strip("|").split("|")
                 ]
                 data_rows: list[list[str]] = []
                 for t_line in table_lines[2:]:
                     if not t_line.strip():
                         continue
-                    r_cells = [
-                        _clean_markdown_text(c)
-                        for c in t_line.strip("|").split("|")
-                    ]
+                    r_cells = [_clean_markdown_text(c) for c in t_line.strip("|").split("|")]
                     while len(r_cells) < len(header_cells):
                         r_cells.append("-")
                     data_rows.append(r_cells[: len(header_cells)])
@@ -379,33 +377,57 @@ def build_pdf_report(
             pdf.set_x(pdf.l_margin)
 
             if level == 1:
-                pdf.set_font(font_bold_family, style="B" if font_bold_family != font_family or cjk_bold else "", size=13)
+                pdf.set_font(
+                    font_bold_family,
+                    style="B" if font_bold_family != font_family or cjk_bold else "",
+                    size=13,
+                )
                 pdf.set_text_color(2, 132, 199)
-                pdf.cell(pdf.epw, 7, _sanitize_for_font(heading_text), new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(
+                    pdf.epw, 7, _sanitize_for_font(heading_text), new_x="LMARGIN", new_y="NEXT"
+                )
                 pdf.set_draw_color(2, 132, 199)
                 pdf.set_line_width(0.3)
                 pdf.line(pdf.l_margin, pdf.get_y(), 210 - pdf.r_margin, pdf.get_y())
                 pdf.set_x(pdf.l_margin)
                 pdf.ln(2)
             elif level == 2:
-                pdf.set_font(font_bold_family, style="B" if font_bold_family != font_family or cjk_bold else "", size=11)
+                pdf.set_font(
+                    font_bold_family,
+                    style="B" if font_bold_family != font_family or cjk_bold else "",
+                    size=11,
+                )
                 pdf.set_text_color(15, 23, 42)
-                pdf.cell(pdf.epw, 6, _sanitize_for_font(heading_text), new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(
+                    pdf.epw, 6, _sanitize_for_font(heading_text), new_x="LMARGIN", new_y="NEXT"
+                )
                 pdf.set_draw_color(203, 213, 225)
                 pdf.set_line_width(0.2)
                 pdf.line(pdf.l_margin, pdf.get_y(), 210 - pdf.r_margin, pdf.get_y())
                 pdf.set_x(pdf.l_margin)
                 pdf.ln(2)
             elif level == 3:
-                pdf.set_font(font_bold_family, style="B" if font_bold_family != font_family or cjk_bold else "", size=10)
+                pdf.set_font(
+                    font_bold_family,
+                    style="B" if font_bold_family != font_family or cjk_bold else "",
+                    size=10,
+                )
                 pdf.set_text_color(3, 105, 161)
-                pdf.cell(pdf.epw, 5.5, _sanitize_for_font(heading_text), new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(
+                    pdf.epw, 5.5, _sanitize_for_font(heading_text), new_x="LMARGIN", new_y="NEXT"
+                )
                 pdf.set_x(pdf.l_margin)
                 pdf.ln(1)
             else:
-                pdf.set_font(font_bold_family, style="B" if font_bold_family != font_family or cjk_bold else "", size=9.5)
+                pdf.set_font(
+                    font_bold_family,
+                    style="B" if font_bold_family != font_family or cjk_bold else "",
+                    size=9.5,
+                )
                 pdf.set_text_color(51, 65, 85)
-                pdf.cell(pdf.epw, 5, _sanitize_for_font(heading_text), new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(
+                    pdf.epw, 5, _sanitize_for_font(heading_text), new_x="LMARGIN", new_y="NEXT"
+                )
                 pdf.set_x(pdf.l_margin)
                 pdf.ln(1)
 
@@ -538,4 +560,3 @@ __all__ = [
     "is_fpdf_available",
     "write_pdf_report",
 ]
-

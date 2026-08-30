@@ -69,7 +69,9 @@ def _report(
 
 
 def test_i2c_diff_identical() -> None:
-    result = I2CDiffEngine.compare(_report([0x50, 0x58], ["Address NACK"]), _report([0x50, 0x58], ["Address NACK"]))
+    result = I2CDiffEngine.compare(
+        _report([0x50, 0x58], ["Address NACK"]), _report([0x50, 0x58], ["Address NACK"])
+    )
 
     assert isinstance(result, I2CDiffResult)
     assert result.is_identical is True
@@ -142,4 +144,3 @@ def test_i2c_diff_result_is_frozen() -> None:
 
     with pytest.raises(FrozenInstanceError):
         result.summary = "changed"  # type: ignore[misc]
-

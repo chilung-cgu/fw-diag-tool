@@ -15,10 +15,7 @@ def generate_chart_alt_text(
     summary = data_summary.strip() or "No data summary available"
     findings = [finding.strip() for finding in key_findings if finding.strip()]
     findings_text = "; ".join(findings) if findings else "None"
-    return (
-        f"Chart type: {chart_label}. Data summary: {summary}. "
-        f"Key findings: {findings_text}."
-    )
+    return f"Chart type: {chart_label}. Data summary: {summary}. Key findings: {findings_text}."
 
 
 def render_skip_nav_link() -> str:
@@ -28,11 +25,7 @@ def render_skip_nav_link() -> str:
 
 def render_aria_live_region(message: str) -> str:
     """Return a polite ARIA live region containing an escaped status message."""
-    return (
-        '<div role="status" aria-live="polite" aria-atomic="true">'
-        f"{escape(message)}"
-        "</div>"
-    )
+    return f'<div role="status" aria-live="polite" aria-atomic="true">{escape(message)}</div>'
 
 
 __all__ = [

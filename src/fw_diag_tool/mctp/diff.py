@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from typing import Any
 
 from .models import ProtocolMode, ServerMgmtReport
 
@@ -37,6 +39,30 @@ class MCTPDiffResult:
             and len(self.resolved_warnings) == 0
             and not self.protocol_mode_changed
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "message_count_delta": self.message_count_delta,
+            "ipmb_frame_count_delta": self.ipmb_frame_count_delta,
+            "error_count_delta": self.error_count_delta,
+            "new_errors": list(self.new_errors),
+            "resolved_errors": list(self.resolved_errors),
+            "common_errors": list(self.common_errors),
+            "new_anomalies": list(self.new_errors),
+            "resolved_anomalies": list(self.resolved_errors),
+            "common_anomalies": list(self.common_errors),
+            "new_warnings": list(self.new_warnings),
+            "resolved_warnings": list(self.resolved_warnings),
+            "common_warnings": list(self.common_warnings),
+            "protocol_mode_changed": self.protocol_mode_changed,
+            "baseline_protocol_mode": self.baseline_protocol_mode,
+            "candidate_protocol_mode": self.candidate_protocol_mode,
+            "summary": self.summary,
+            "is_identical": self.is_identical,
+        }
+
+    def to_json(self, indent: int = 2) -> str:
+        return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
 
 
 class MCTPDiffEngine:
@@ -153,4 +179,3 @@ class MCTPDiffEngine:
 
 
 __all__ = ["MCTPDiffEngine", "MCTPDiffResult"]
-

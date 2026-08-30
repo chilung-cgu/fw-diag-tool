@@ -175,13 +175,16 @@ def test_symbol_table_symbolicate_kernel_panic():
     assert report.kernel_panic is not None
     report.kernel_panic.faulting_ip = "0x18"
     report = st.symbolicate(report)
+    assert report.kernel_panic is not None
     assert report.kernel_panic.symbolicated_ip == "nvme_pci_complete_rq+0x8"
 
     # Test non-0x or invalid hex
     report.kernel_panic.faulting_ip = "invalid_hex"
     report = st.symbolicate(report)
+    assert report.kernel_panic is not None
     report.kernel_panic.faulting_ip = "0xinvalid"
     report = st.symbolicate(report)
+    assert report.kernel_panic is not None
     report.kernel_panic.faulting_ip = "0x9999"  # Symbol not found in table
     report = st.symbolicate(report)
 
@@ -194,5 +197,6 @@ def test_symbol_table_symbolicate_none_matches():
     hf = ARMHardFaultReport(pc_faulting=None, lr_exc_return=0x0500)
     report = UARTReport(crash_type=CrashType.ARM_HARDFAULT, summary_title="Test", arm_hardfault=hf)
     report = st.symbolicate(report)
+    assert report.arm_hardfault is not None
     assert report.arm_hardfault.symbolicated_pc is None
     assert report.arm_hardfault.symbolicated_lr is None

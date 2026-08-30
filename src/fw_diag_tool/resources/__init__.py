@@ -65,6 +65,15 @@ def load_pcie_lspci_sample() -> str:
     return files(__package__).joinpath(_PCIE_LSPCI_SAMPLE_FILE).read_text(encoding="utf-8")
 
 
+def load_pcie_sample(sample: str = "lspci") -> str:
+    """Return a packaged PCIe lspci or dmesg AER teaching sample."""
+    if sample == "dmesg":
+        return load_pcie_dmesg_sample()
+    if sample == "lspci":
+        return load_pcie_lspci_sample()
+    raise ValueError(f"unknown PCIe sample {sample!r}; choose one of: 'lspci', 'dmesg'")
+
+
 def load_uart_sample(sample: str = "kernel-panic") -> str:
     """Return a packaged UART kernel panic or HardFault sample log."""
     try:
@@ -90,6 +99,7 @@ __all__ = [
     "load_mctp_sample",
     "load_pcie_dmesg_sample",
     "load_pcie_lspci_sample",
+    "load_pcie_sample",
     "load_spi_sample",
     "load_uart_sample",
     "load_waveform_diff_samples",

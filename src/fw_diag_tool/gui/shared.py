@@ -32,6 +32,8 @@ from fw_diag_tool.gui.theme import get_current_theme, get_plotly_template
 from fw_diag_tool.i2c.input import I2CInputFormat
 from fw_diag_tool.i18n import TranslationRegistry, get_global_registry
 from fw_diag_tool.limits import AnalysisLimits
+from fw_diag_tool.mctp.parser import ServerMgmtParser
+from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 
 DEFAULT_I2C_TIMEOUT_MS = 25.0
@@ -75,6 +77,31 @@ def analyze_i2c_input(
 @st.cache_data(show_spinner="正在解析 SPI 輸入資料…")
 def analyze_spi_input(csv_content: str, max_page_size: int = 256) -> Any:
     return SPIDiagnosticEngine(max_page_size=max_page_size).analyze_csv_content(csv_content)
+
+
+@st.cache_data(show_spinner="正在解析 PCIe 輸入資料…")
+def analyze_pcie_input(text: str) -> list[Any]:
+    stripped = text.strip()
+    if "PCIe Bus Error:" in stripped or (
+        "AER:" in stripped
+        and "lspci" not in stripped.lower()
+        and not any(line.strip().startswith("00:") for line in stripped.splitlines())
+    ):
+        return PCIeAnalyzer.parse_dmesg_aer(stripped)
+    devices = PCIeAnalyzer.parse_multi_lspci_text(stripped)
+    if not devices:
+        bdf, raw_bytes = PCIeAnalyzer.parse_lspci_text(stripped)
+        devices = [PCIeAnalyzer.decode_config_space(raw_bytes, bdf=bdf)]
+    return devices
+
+
+@st.cache_data(show_spinner="正在解析 MCTP/IPMB 輸入資料…")
+def analyze_mctp_input(
+    text: str,
+    protocol_mode: str = "auto",
+) -> Any:
+    return ServerMgmtParser.parse_hex_input(text, protocol_mode=protocol_mode)
+
 
 def render_html_download(
     markdown_report: str,
@@ -263,6 +290,28 @@ def render_session_controls(
                 else:
                     data_dict = dict(report_data)
 
+                data_dict.setdefault("protocol", protocol.upper())
+                if "anomaly_count" not in data_dict:
+                    summary_field = data_dict.get("summary")
+                    if isinstance(summary_field, dict) and "anomaly_count" in summary_field:
+                        data_dict["anomaly_count"] = summary_field["anomaly_count"]
+                    elif "anomalies" in data_dict and isinstance(data_dict["anomalies"], list):
+                        data_dict["anomaly_count"] = len(data_dict["anomalies"])
+                    elif "events" in data_dict and isinstance(data_dict["events"], list):
+                        data_dict["anomaly_count"] = len(data_dict["events"])
+                    elif "devices" in data_dict and isinstance(data_dict["devices"], list):
+                        data_dict["anomaly_count"] = sum(
+                            len(d.get("findings", []))
+                            for d in data_dict["devices"]
+                            if isinstance(d, dict)
+                        )
+                    elif "errors" in data_dict and isinstance(data_dict["errors"], list):
+                        data_dict["anomaly_count"] = len(data_dict["errors"])
+                if "summary" not in data_dict:
+                    data_dict["summary"] = data_dict.get(
+                        "summary_title", f"{protocol.upper()} Analysis"
+                    )
+
                 payload = SessionManager.build_payload(
                     name=f"{protocol.upper()} Analysis",
                     data=data_dict,
@@ -334,6 +383,8 @@ __all__ = [
     "_localize_register_meaning",
     "_reset_i2c_session_state",
     "analyze_i2c_input",
+    "analyze_mctp_input",
+    "analyze_pcie_input",
     "analyze_spi_input",
     "get_plotly_template",
     "get_translator",

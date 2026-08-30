@@ -680,6 +680,7 @@ def _inline_markdown_to_html(text: str) -> str:
 
     return out
 
+
 def _slugify(text: str) -> str:
     """Generate URL-friendly and anchor-friendly slug ID from heading text."""
     cleaned = re.sub(r"[`*_~]", "", text)

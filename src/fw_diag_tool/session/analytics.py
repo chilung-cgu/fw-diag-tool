@@ -128,9 +128,7 @@ def _build_summary(points: list[SessionTrendPoint], trend: str) -> str:
     ]
     if protocols:
         parts.append(f"protocols: {', '.join(protocols)}")
-    parts.append(
-        f"total transactions {total_transactions:,}, total anomalies {total_anomalies:,}"
-    )
+    parts.append(f"total transactions {total_transactions:,}, total anomalies {total_anomalies:,}")
     parts.append(f"trend: {trend_label}")
 
     if total_sessions >= 2:

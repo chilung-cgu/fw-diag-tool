@@ -185,8 +185,12 @@ def test_uart_diff_symbols_and_fault_address():
             CallTraceFrame(index=1, function_name="new_driver_func", offset="0x20"),
         ],
     )
-    rep1 = UARTReport(crash_type=CrashType.KERNEL_PANIC, summary_title="Panic 1", kernel_panic=panic1)
-    rep2 = UARTReport(crash_type=CrashType.KERNEL_PANIC, summary_title="Panic 2", kernel_panic=panic2)
+    rep1 = UARTReport(
+        crash_type=CrashType.KERNEL_PANIC, summary_title="Panic 1", kernel_panic=panic1
+    )
+    rep2 = UARTReport(
+        crash_type=CrashType.KERNEL_PANIC, summary_title="Panic 2", kernel_panic=panic2
+    )
 
     result = UARTDiffEngine.compare(rep1, rep2)
     assert result.is_identical is False
@@ -244,7 +248,9 @@ def test_cli_spi_diff(tmp_path: Path):
     assert "完全一致" in res_id.output
 
     # Missing file
-    res_err = runner.invoke(app, ["spi", "diff", str(base_file), str(tmp_path / "non_existent.csv")])
+    res_err = runner.invoke(
+        app, ["spi", "diff", str(base_file), str(tmp_path / "non_existent.csv")]
+    )
     assert res_err.exit_code == 1
 
 
@@ -283,4 +289,3 @@ Call Trace:
     # Missing file
     res_err = runner.invoke(app, ["uart", "diff", str(log1_file), str(tmp_path / "missing.txt")])
     assert res_err.exit_code == 1
-

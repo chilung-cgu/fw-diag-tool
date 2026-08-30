@@ -33,7 +33,9 @@ def test_compare_sessions_returns_frozen_result() -> None:
 
 
 def test_extracts_names_and_numeric_deltas() -> None:
-    result = compare_sessions(_session(anomalies=8, transactions=10), _session(name="v2", anomalies=3, transactions=17))
+    result = compare_sessions(
+        _session(anomalies=8, transactions=10), _session(name="v2", anomalies=3, transactions=17)
+    )
     assert result.baseline_name == "baseline"
     assert result.candidate_name == "v2"
     assert result.metric_deltas["anomaly_count"] == -5
@@ -70,7 +72,10 @@ def test_equal_anomaly_count_is_unchanged() -> None:
 
 def test_supports_list_fallbacks_and_report_protocol() -> None:
     baseline = {"name": "old", "report": {"anomalies": [1, 2], "transactions": [1]}}
-    candidate = {"name": "new", "report": {"anomalies": [1], "transactions": [1, 2], "protocol": "uart"}}
+    candidate = {
+        "name": "new",
+        "report": {"anomalies": [1], "transactions": [1, 2], "protocol": "uart"},
+    }
     result = compare_sessions(baseline, candidate)
     assert result.metric_deltas["anomaly_count"] == -1
     assert result.metric_deltas["total_transactions"] == 1

@@ -146,16 +146,19 @@ def test_session_manager_uart_hardfault_roundtrip():
 
 def uart_app_render() -> None:
     from fw_diag_tool.gui.pages.uart_ui import render
+
     render()
 
 
 def spi_app_render() -> None:
     from fw_diag_tool.gui.pages.spi_ui import render
+
     render()
 
 
 def standalone_session_render() -> None:
     from fw_diag_tool.gui.shared import render_session_controls
+
     render_session_controls("custom_proto", {"custom_key": "custom_val"}, {"cfg": 1})
 
 
@@ -203,8 +206,6 @@ def test_render_session_controls_standalone():
 
     # Upload invalid JSON to verify error handling
     session_uploader = next(u for u in at.file_uploader if u.key and "session" in u.key.lower())
-    session_uploader.upload(
-        "bad.fwsession.json", b"not valid json", "application/json"
-    ).run()
+    session_uploader.upload("bad.fwsession.json", b"not valid json", "application/json").run()
     assert not at.exception
     assert any("無法載入 Session" in err.value for err in at.error)
