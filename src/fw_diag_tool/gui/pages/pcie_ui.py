@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
 import streamlit as st
 
+from fw_diag_tool.gui.notifications import show_error_toast, show_success_toast
 from fw_diag_tool.gui.sarif_export import render_sarif_download
 from fw_diag_tool.gui.shared import (
-    _localize_gui_error,
     _localize_pcie_input_error,
     render_guide_expander,
+    render_page_footer,
+    render_session_controls,
 )
 from fw_diag_tool.gui.uploads import MAX_TEXT_BYTES, decode_uploaded_text, validate_pasted_text
 from fw_diag_tool.pcie.diagnostics import diagnose_pcie_device
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
 from fw_diag_tool.resources import load_pcie_dmesg_sample, load_pcie_lspci_sample
-from fw_diag_tool.session.session_manager import SessionManager
 
 
 def render() -> None:
@@ -24,23 +24,6 @@ def render() -> None:
     render_guide_expander(
         "chapters/ch07_pcie_aer.md", "📖 點擊展開：PCIe Config Space 與 AER 診斷教學"
     )
-    session_upload = st.file_uploader(
-        "載入可重現 Session（.fwsession.json）",
-        type=["json"],
-        max_upload_size=SessionManager.MAX_SESSION_BYTES // (1024 * 1024),
-        key="pcie_session_upload",
-    )
-    if session_upload is not None:
-        try:
-            loaded_session = SessionManager.deserialize_session(session_upload.getvalue())
-            st.info(
-                f"已載入 Session：{loaded_session.name or 'PCIe Analysis'}｜"
-                f"工具版本：{loaded_session.tool_version}"
-            )
-            with st.expander("檢視 Session 報告摘要", expanded=False):
-                st.json(loaded_session.report, expanded=False)
-        except (TypeError, ValueError) as exc:
-            st.error(f"無法載入 Session：{_localize_gui_error(exc, domain='session')}")
     lspci_mode = "貼上 lspci -xxxx／十六進位傾印（Hex Dump）"
     dmesg_mode = "貼上 Linux dmesg AER 錯誤日誌（AER Error Log）"
     if st.button(
@@ -127,6 +110,7 @@ def render() -> None:
             raw_input = validate_pasted_text(raw_input, label="PCIe 日誌／傾印（log/dump）")
         except (TypeError, ValueError) as exc:
             st.error(f"PCIe 輸入錯誤：{_localize_pcie_input_error(exc)}")
+            show_error_toast("PCIe 分析失敗")
             st.stop()
         if input_mode == dmesg_mode:
             events = PCIeAnalyzer.parse_dmesg_aer(raw_input)
@@ -138,6 +122,7 @@ def render() -> None:
                     "沒有找到可解析的 AER 事件；請確認貼上的內容包含完整核心 dmesg 日誌（kernel dmesg）。"
                 )
             pcie_dmesg_md = PCIeReporter.format_dmesg_events(events)
+            show_success_toast("PCIe AER 分析完成")
             st.markdown(pcie_dmesg_md)
             st.download_button(
                 "下載 PCIe dmesg Markdown 診斷報告",
@@ -173,18 +158,10 @@ def render() -> None:
                     for ev in events
                 ],
             }
-            session_json = SessionManager.serialize_session(
-                name="PCIe dmesg AER Analysis",
-                data=report_dict,
-                config={"mode": "dmesg"},
-                capture_sha256=hashlib.sha256(raw_input.encode("utf-8")).hexdigest(),
-            )
-            st.download_button(
-                "💾 儲存分析 Session",
-                data=session_json,
-                file_name="pcie_dmesg_analysis.fwsession.json",
-                mime="application/json",
-                key="pcie_dmesg_download_session",
+            render_session_controls(
+                protocol="PCIe",
+                report_data=report_dict,
+                config_data={"mode": "dmesg"},
             )
         else:
             try:
@@ -194,6 +171,7 @@ def render() -> None:
                     devices = [PCIeAnalyzer.decode_config_space(raw_bytes, bdf=bdf)]
             except (TypeError, ValueError) as exc:
                 st.error(f"PCIe 輸入錯誤：{_localize_pcie_input_error(exc)}")
+                show_error_toast("PCIe 分析失敗")
                 devices = []
             if any(cfg.data_quality_issues for cfg in devices):
                 quality_messages = "；".join(
@@ -264,19 +242,19 @@ def render() -> None:
                     "mode": "lspci",
                     "devices": devices_data,
                 }
-                session_json = SessionManager.serialize_session(
-                    name="PCIe Config Space Analysis",
-                    data=report_dict,
-                    config={"mode": "lspci"},
-                    capture_sha256=hashlib.sha256(raw_input.encode("utf-8")).hexdigest(),
+                render_session_controls(
+                    protocol="PCIe",
+                    report_data=report_dict,
+                    config_data={"mode": "lspci"},
                 )
-                st.download_button(
-                    "💾 儲存分析 Session",
-                    data=session_json,
-                    file_name="pcie_config_analysis.fwsession.json",
-                    mime="application/json",
-                    key="pcie_config_download_session",
-                )
+    else:
+        render_session_controls(
+            protocol="PCIe",
+            report_data=None,
+            config_data={"mode": input_mode},
+        )
+
+    render_page_footer()
 
 
 __all__ = ["render"]

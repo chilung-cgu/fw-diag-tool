@@ -129,7 +129,7 @@ def format_protocol_diff_markdown(
 
 def _render_details(protocol: str, result: Any) -> None:
     new_items, resolved_items, common_items = _diff_lists(protocol, result)
-    labels = (
+    labels: tuple[tuple[str, list[str]], ...] = (
         ("新增項目（New）", new_items),
         ("已解決項目（Resolved）", resolved_items),
         ("共同項目（Common）", common_items),

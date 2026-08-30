@@ -6,6 +6,7 @@ from typing import Any
 import streamlit as st
 
 from fw_diag_tool.fuzz.fuzzer import FuzzingGenerator
+from fw_diag_tool.gui.shared import render_page_footer
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
@@ -429,6 +430,8 @@ def render() -> None:
                 f"📋 檢視完整 {total_runs} 筆測試歷程紀錄", expanded=(crash_count > 0)
             ):
                 st.dataframe(results_log, use_container_width=True)
+
+    render_page_footer()
 
 
 __all__ = ["render"]

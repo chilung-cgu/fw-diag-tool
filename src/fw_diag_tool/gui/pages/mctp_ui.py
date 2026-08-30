@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import dataclasses
+
 import streamlit as st
 
-from fw_diag_tool.gui.shared import _localize_mctp_error, render_guide_expander
+from fw_diag_tool.gui.notifications import show_error_toast, show_success_toast
+from fw_diag_tool.gui.shared import (
+    _localize_mctp_error,
+    render_guide_expander,
+    render_page_footer,
+    render_session_controls,
+)
 from fw_diag_tool.gui.uploads import (
     MAX_TEXT_BYTES,
     decode_uploaded_text,
@@ -89,6 +97,7 @@ def render() -> None:
             )
         except (TypeError, ValueError) as exc:
             st.error(f"MCTP／IPMB 輸入錯誤：{_localize_mctp_error(exc)}")
+            show_error_toast("MCTP 分析失敗")
         else:
             if not m_report.total_frames:
                 st.warning(
@@ -97,6 +106,7 @@ def render() -> None:
                     "並保留原始擷取資料（capture）與協定標頭（header）以便人工核對。"
                 )
             else:
+                show_success_toast("MCTP 分析完成")
                 mctp_md = ServerMgmtReporter.to_markdown(m_report)
                 st.markdown(mctp_md)
                 st.download_button(
@@ -106,6 +116,19 @@ def render() -> None:
                     mime="text/markdown",
                     key="mctp_download_report",
                 )
+                render_session_controls(
+                    protocol="MCTP",
+                    report_data=dataclasses.asdict(m_report),
+                    config_data={"protocol_mode": m_protocol_mode},
+                )
+    else:
+        render_session_controls(
+            protocol="MCTP",
+            report_data=None,
+            config_data={"protocol_mode": m_protocol_mode},
+        )
+
+    render_page_footer()
 
 
 __all__ = ["render"]

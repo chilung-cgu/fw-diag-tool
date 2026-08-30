@@ -12,7 +12,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from fw_diag_tool.gui.shared import render_guide_expander
+from fw_diag_tool.gui.shared import render_guide_expander, render_page_footer
 from fw_diag_tool.i2c.chip_db import (
     CHIP_DATABASE,
     ChipProfile,
@@ -593,6 +593,8 @@ def render() -> None:
                 st.markdown(f"- **{title}**：{content}")
         else:
             st.caption("尚無專屬韌體工程指引。")
+
+    render_page_footer()
 
 
 __all__ = ["render"]

@@ -19,6 +19,7 @@ from fw_diag_tool.gui.shared import (
     MAX_PACKET_HEX_CHARS,
     _localize_gui_error,
     render_guide_expander,
+    render_page_footer,
 )
 from fw_diag_tool.i2c.localization import localize_direction, localize_platform, localize_preset
 from fw_diag_tool.i2c.transfer_spec import Endianness, I2CTransferOperation, I2CTransferSpec
@@ -323,3 +324,5 @@ def render() -> None:
         st.error(f"輸入超過安全資源上限：{_localize_gui_error(exc, domain='i2c_builder')}")
     except (TypeError, ValueError) as exc:
         st.error(f"輸入格式錯誤：{_localize_gui_error(exc, domain='i2c_builder')}")
+
+    render_page_footer()

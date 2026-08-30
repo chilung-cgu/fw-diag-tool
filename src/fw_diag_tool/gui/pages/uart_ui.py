@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import streamlit as st
 
+from fw_diag_tool.gui.notifications import show_error_toast, show_success_toast
 from fw_diag_tool.gui.shared import (
     _localize_gui_error,
     render_guide_expander,
+    render_page_footer,
     render_session_controls,
 )
 from fw_diag_tool.gui.uploads import (
@@ -13,6 +15,7 @@ from fw_diag_tool.gui.uploads import (
     validate_pasted_text,
 )
 from fw_diag_tool.resources import load_uart_sample
+from fw_diag_tool.uart.diff import UARTDiffEngine
 from fw_diag_tool.uart.parser import UARTCrashParser
 from fw_diag_tool.uart.reporter import UARTReporter
 
@@ -22,6 +25,86 @@ def render() -> None:
     render_guide_expander(
         "chapters/ch04_uart_crash.md", "📖 點擊展開：UART 崩潰與 ARM HardFault 診斷教學"
     )
+    with st.expander("⚖️ UART Crash Before/After 對比", expanded=False):
+        st.markdown(
+            "比對修復前後或兩次不同測試的 UART 崩潰日誌，確認 Crash 類型轉移、Fault Address 偏移與 Call Trace 符號變化。"
+        )
+        diff_col1, diff_col2 = st.columns(2)
+        with diff_col1:
+            uploaded_u_base = st.file_uploader(
+                "選擇 Baseline（修復前）UART 日誌",
+                type=["txt", "log"],
+                key="uart_diff_baseline_uploader",
+            )
+        with diff_col2:
+            uploaded_u_cand = st.file_uploader(
+                "選擇 Candidate（修復後）UART 日誌",
+                type=["txt", "log"],
+                key="uart_diff_candidate_uploader",
+            )
+
+        if uploaded_u_base is not None and uploaded_u_cand is not None:
+            try:
+                base_log = decode_uploaded_text(
+                    uploaded_u_base, allowed_extensions={".txt", ".log"}
+                )
+                cand_log = decode_uploaded_text(
+                    uploaded_u_cand, allowed_extensions={".txt", ".log"}
+                )
+                base_rep = UARTCrashParser.parse_log_text(base_log)
+                cand_rep = UARTCrashParser.parse_log_text(cand_log)
+                diff_res = UARTDiffEngine.compare(base_rep, cand_rep)
+
+                if diff_res.is_identical:
+                    st.success(f"✔ {diff_res.summary}")
+                elif diff_res.crash_type_changed or diff_res.fault_address_changed:
+                    st.warning(f"⚠ {diff_res.summary}")
+                else:
+                    st.info(f"ℹ️ {diff_res.summary}")
+
+                m1, m2, m3 = st.columns(3)
+                m1.metric(
+                    "崩潰類型變化",
+                    "變更" if diff_res.crash_type_changed else "相同",
+                    delta=None,
+                )
+                m2.metric(
+                    "故障位址變化",
+                    "變更" if diff_res.fault_address_changed else "相同",
+                    delta=None,
+                )
+                m3.metric(
+                    "Call Trace 符號增減",
+                    f"+{len(diff_res.new_symbols)} / -{len(diff_res.resolved_symbols)}",
+                )
+
+                t_col1, t_col2 = st.columns(2)
+                with t_col1:
+                    st.markdown(f"**Baseline Crash Type**: `{diff_res.baseline_crash_type}`")
+                    st.markdown(
+                        f"**Baseline Fault Address**: `{diff_res.baseline_fault_address or 'N/A'}`"
+                    )
+                with t_col2:
+                    st.markdown(f"**Candidate Crash Type**: `{diff_res.candidate_crash_type}`")
+                    st.markdown(
+                        f"**Candidate Fault Address**: `{diff_res.candidate_fault_address or 'N/A'}`"
+                    )
+
+                if diff_res.new_symbols:
+                    st.warning(
+                        "🆕 **Candidate 新增之呼叫棧符號（New Symbols）**：\n"
+                        + "\n".join(f"- `{s}`" for s in diff_res.new_symbols)
+                    )
+                if diff_res.resolved_symbols:
+                    st.success(
+                        "🎉 **已消除之呼叫棧符號（Resolved Symbols）**：\n"
+                        + "\n".join(f"- `{s}`" for s in diff_res.resolved_symbols)
+                    )
+
+            except (TypeError, ValueError) as exc:
+                st.error(f"UART 對比分析失敗：{_localize_gui_error(exc, domain='uart')}")
+                show_error_toast("UART 對比分析失敗")
+
     u_mode = st.radio(
         "選擇輸入方式",
         [
@@ -75,12 +158,14 @@ def render() -> None:
             )
         except (TypeError, ValueError) as exc:
             st.error(f"UART 輸入錯誤：{_localize_gui_error(exc, domain='uart')}")
+            show_error_toast("UART 分析失敗")
         else:
             st.caption(
                 "證據範圍：報告只整理輸入日誌中可解析的故障欄位（fault fields）；請使用相同建置版本的 "
                 "ELF（matching ELF）、符號（symbol）、核心原始碼（kernel source），並在目標板重現"
                 "以確認根因（root cause）。"
             )
+            show_success_toast("UART 分析完成")
             uart_md = UARTReporter.to_markdown(u_report)
             st.markdown(uart_md)
             st.download_button(
@@ -101,6 +186,8 @@ def render() -> None:
             report_data=None,
             config_data={"mode": u_mode},
         )
+
+    render_page_footer()
 
 
 __all__ = ["render"]

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import ipaddress
 import json
-from dataclasses import replace
+import platform
+import sys
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import typer
@@ -27,8 +30,12 @@ from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
 from fw_diag_tool.pcie.reporter import PCIeReporter
+from fw_diag_tool.reporting.pdf_report import is_fpdf_available, write_pdf_report
+from fw_diag_tool.session.comparator import compare_sessions
+from fw_diag_tool.spi.diff import SPIDiffEngine
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.spi.reporter import SPIReporter
+from fw_diag_tool.uart.diff import UARTDiffEngine
 from fw_diag_tool.uart.parser import UARTCrashParser
 from fw_diag_tool.uart.reporter import UARTReporter
 
@@ -58,6 +65,107 @@ app.add_typer(gen_app)
 console = Console()
 register_extra_commands(app, i2c_app, console)
 MAX_CLI_RECORDS = 250_000
+
+
+def _session_metric(report: dict[str, object], keys: tuple[str, ...], list_key: str) -> int:
+    for key in keys:
+        value = report.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+    values = report.get(list_key)
+    return len(values) if isinstance(values, list) else 0
+
+
+@app.command("compare")
+def compare_session_files(
+    baseline: Path = typer.Argument(..., help="Path to baseline session JSON"),
+    candidate: Path = typer.Argument(..., help="Path to candidate session JSON"),
+    markdown_out: Path | None = typer.Option(
+        None, "--md", "-m", help="Export markdown comparison report to file"
+    ),
+    json_out: Path | None = typer.Option(
+        None, "--json", "-j", help="Export JSON comparison result to file"
+    ),
+) -> None:
+    """Compare two saved diagnostic sessions."""
+    if not baseline.exists() or not candidate.exists():
+        console.print(
+            "[bold red]錯誤：Baseline 與 Candidate 檔案都必須存在。"
+            "（Error: Both files must exist!）[/]"
+        )
+        raise typer.Exit(code=1)
+    try:
+        baseline_payload = json.loads(baseline.read_text(encoding="utf-8"))
+        candidate_payload = json.loads(candidate.read_text(encoding="utf-8"))
+        result = compare_sessions(baseline_payload, candidate_payload)
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]錯誤：Session compare 執行失敗（Error: session compare failed）: {exc}[/]")
+        raise typer.Exit(code=2) from exc
+
+    table = Table(title="Session Before/After 對比摘要（Session Comparison）", show_header=True)
+    table.add_column("指標 / 項目（Metric）", style="cyan")
+    table.add_column("Baseline（基準）", style="magenta")
+    table.add_column("Candidate（待測）", style="yellow")
+    table.add_column("差異（Delta / Status）")
+    anomaly_delta = result.metric_deltas["anomaly_count"]
+    transaction_delta = result.metric_deltas["total_transactions"]
+    baseline_report = baseline_payload.get("report", baseline_payload)
+    candidate_report = candidate_payload.get("report", candidate_payload)
+    if not isinstance(baseline_report, dict):
+        baseline_report = {}
+    if not isinstance(candidate_report, dict):
+        candidate_report = {}
+    baseline_anomaly = _session_metric(
+        baseline_report, ("anomaly_count", "anomalies_count"), "anomalies"
+    )
+    candidate_anomaly = _session_metric(
+        candidate_report, ("anomaly_count", "anomalies_count"), "anomalies"
+    )
+    baseline_transactions = _session_metric(
+        baseline_report,
+        ("total_transactions", "transaction_count", "transactions"),
+        "transactions",
+    )
+    candidate_transactions = _session_metric(
+        candidate_report,
+        ("total_transactions", "transaction_count", "transactions"),
+        "transactions",
+    )
+    protocol = result.metric_deltas["protocol"]
+    table.add_row("異常總數（Anomaly Count）", str(baseline_anomaly), str(candidate_anomaly), f"{anomaly_delta:+d}")
+    table.add_row(
+        "交易總數（Total Transactions）",
+        str(baseline_transactions),
+        str(candidate_transactions),
+        f"{transaction_delta:+d}",
+    )
+    table.add_row(
+        "協定（Protocol）",
+        protocol["baseline"],
+        protocol["candidate"],
+        "[bold red]變更（Changed）[/]" if protocol["changed"] else "[green]一致（Same）[/]",
+    )
+    table.add_row("判定（Verdict）", "", "", result.verdict)
+    console.print(table)
+    console.print(Panel(result.summary, title="[bold cyan]對比結論[/]"))
+
+    if markdown_out:
+        md_text = (
+            "# Session Comparison\n\n"
+            "| Metric | Baseline | Candidate | Delta / Status |\n"
+            "|---|---:|---:|---|\n"
+            f"| Anomaly Count | {baseline_anomaly} | {candidate_anomaly} | {anomaly_delta:+d} |\n"
+            f"| Total Transactions | {baseline_transactions} | {candidate_transactions} | {transaction_delta:+d} |\n"
+            f"| Protocol | {protocol['baseline']} | {protocol['candidate']} | {'changed' if protocol['changed'] else 'same'} |\n"
+            f"| Verdict | | | {result.verdict} |\n\n{result.summary}\n"
+        )
+        markdown_out.write_text(md_text, encoding="utf-8")
+        console.print(f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]")
+    if json_out:
+        json_out.write_text(
+            json.dumps(asdict(result), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        console.print(f"[green]✔ JSON 結果已匯出（JSON result exported to）: {json_out}[/]")
 
 
 def _analysis_limits(max_records: int) -> AnalysisLimits:
@@ -99,6 +207,9 @@ def analyze_i2c_trace(
     ),
     json_out: Path | None = typer.Option(
         None, "--json", "-j", help="Export JSON structured report to file"
+    ),
+    pdf_out: Path | None = typer.Option(
+        None, "--pdf", help="Export PDF diagnostic report to file"
     ),
     smbus_timeout: float = typer.Option(
         25.0, "--smbus-timeout", help="SMBus clock stretching timeout in ms (default: 25.0)"
@@ -168,7 +279,7 @@ def analyze_i2c_trace(
                     "decoded CSV input produced no transactions; use --text-trace for tokenized text logs"
                 )
         I2CReporter.render_terminal(report, console=console)
-        if markdown_out:
+        if markdown_out or pdf_out:
             input_format = (
                 "raw_digital" if raw_digital else ("text_trace" if text_trace else "decoded_csv")
             )
@@ -190,8 +301,26 @@ def analyze_i2c_trace(
                     "evidence_sample_count": report.timing_stats.frequency_sample_count,
                 },
             )
-            markdown_out.write_text(md_text, encoding="utf-8")
-            console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
+            if markdown_out:
+                markdown_out.write_text(md_text, encoding="utf-8")
+                console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
+            if pdf_out:
+                if not is_fpdf_available():
+                    console.print(
+                        "[bold yellow]警告：PDF 匯出需安裝 pdf 額外套件：pip install fw-diag-tool[pdf]（Warning: PDF export requires 'pdf' extra; skipping PDF generation）[/]"
+                    )
+                else:
+                    write_pdf_report(
+                        md_text,
+                        pdf_out,
+                        title="I2C / SMBus / PMBus 協定診斷報告",
+                        metadata={
+                            "tool": f"fw-diag-tool {__version__}",
+                            "input_name": str(file_path),
+                            "input_format": input_format,
+                        },
+                    )
+                    console.print(f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]")
         if json_out:
             json_out.write_text(report.to_json(indent=2), encoding="utf-8")
             console.print(f"[green]✔ JSON report exported to {json_out}[/]")
@@ -225,6 +354,9 @@ def analyze_pcie(
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
     ),
+    pdf_out: Path | None = typer.Option(
+        None, "--pdf", help="Export PDF diagnostic report to file"
+    ),
 ) -> None:
     """Analyze PCIe Config Space, Capability list, AER errors, and decode faulting TLP Headers."""
     try:
@@ -252,6 +384,18 @@ def analyze_pcie(
                 console.print(
                     f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]"
                 )
+            if pdf_out:
+                if not is_fpdf_available():
+                    console.print(
+                        "[bold yellow]警告：PDF 匯出需安裝 pdf 額外套件：pip install fw-diag-tool[pdf]（Warning: PDF export requires 'pdf' extra; skipping PDF generation）[/]"
+                    )
+                else:
+                    write_pdf_report(
+                        report_md,
+                        pdf_out,
+                        title="Linux 核心 dmesg AER 診斷報告",
+                    )
+                    console.print(f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]")
         else:
             devices = PCIeAnalyzer.parse_multi_lspci_text(content)
             if not devices:
@@ -316,6 +460,18 @@ def analyze_pcie(
                 console.print(
                     f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]"
                 )
+            if pdf_out:
+                if not is_fpdf_available():
+                    console.print(
+                        "[bold yellow]警告：PDF 匯出需安裝 pdf 額外套件：pip install fw-diag-tool[pdf]（Warning: PDF export requires 'pdf' extra; skipping PDF generation）[/]"
+                    )
+                else:
+                    write_pdf_report(
+                        "\n\n---\n\n".join(all_mds),
+                        pdf_out,
+                        title="PCIe 設定空間與 AER 診斷報告",
+                    )
+                    console.print(f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]")
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
         console.print(f"[bold red]錯誤：PCIe 輸入無效（Error: PCIe input is invalid）: {exc}[/]")
         raise typer.Exit(code=2) from exc
@@ -326,6 +482,9 @@ def analyze_spi_trace(
     file_path: Path = typer.Argument(..., help="Path to Saleae Logic 2 SPI CSV export"),
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
+    ),
+    pdf_out: Path | None = typer.Option(
+        None, "--pdf", help="Export PDF diagnostic report to file"
     ),
     max_records: int = typer.Option(
         DEFAULT_ANALYSIS_LIMITS.max_records,
@@ -347,11 +506,105 @@ def analyze_spi_trace(
             console.print(
                 f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]"
             )
+        if pdf_out:
+            if not is_fpdf_available():
+                console.print(
+                    "[bold yellow]警告：PDF 匯出需安裝 pdf 額外套件：pip install fw-diag-tool[pdf]（Warning: PDF export requires 'pdf' extra; skipping PDF generation）[/]"
+                )
+            else:
+                write_pdf_report(
+                    SPIReporter.to_markdown(report),
+                    pdf_out,
+                    title="SPI / QSPI Flash 診斷報告",
+                    metadata={
+                        "tool": f"fw-diag-tool {__version__}",
+                        "input_name": str(file_path),
+                    },
+                )
+                console.print(f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]")
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
         console.print(
             f"[bold red]錯誤：SPI CSV 或報告匯出無效（Error: SPI CSV or report export is invalid）: {exc}[/]"
         )
         raise typer.Exit(code=2) from exc
+
+
+
+@spi_app.command("diff")
+def diff_spi_traces(
+    baseline: Path = typer.Argument(..., help="Path to baseline SPI CSV export"),
+    candidate: Path = typer.Argument(..., help="Path to candidate SPI CSV export"),
+    max_records: int = typer.Option(
+        DEFAULT_ANALYSIS_LIMITS.max_records,
+        "--max-records",
+        help=f"Maximum source rows (1..{MAX_CLI_RECORDS}).",
+    ),
+) -> None:
+    """Compare baseline vs candidate SPI traces and report anomaly & transaction diffs."""
+    if not baseline.exists() or not candidate.exists():
+        console.print(
+            "[bold red]錯誤：Baseline 與 Candidate 檔案都必須存在。"
+            "（Error: Both files must exist!）[/]"
+        )
+        raise typer.Exit(code=1)
+    try:
+        engine = SPIDiagnosticEngine(limits=_analysis_limits(max_records))
+        b_rep = engine.analyze_csv_file(baseline)
+        c_rep = engine.analyze_csv_file(candidate)
+        diff_res = SPIDiffEngine.compare(b_rep, c_rep)
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]錯誤：SPI diff 執行失敗（Error: SPI diff failed）: {exc}[/]")
+        raise typer.Exit(code=2) from exc
+
+    table = Table(title="SPI Before/After 對比摘要（SPI Diff Summary）", show_header=True)
+    table.add_column("指標 / 項目（Metric）", style="cyan")
+    table.add_column("Baseline（基準）", style="magenta")
+    table.add_column("Candidate（待測）", style="yellow")
+    table.add_column("差異（Delta / Status）")
+
+    tx_delta_str = (
+        f"{diff_res.transaction_count_delta:+d}"
+        if diff_res.transaction_count_delta != 0
+        else "0"
+    )
+    table.add_row(
+        "交易總數（Total Transactions）",
+        str(b_rep.summary.total_transactions),
+        str(c_rep.summary.total_transactions),
+        tx_delta_str,
+    )
+    table.add_row(
+        "異常總數（Anomaly Count）",
+        str(b_rep.summary.anomaly_count),
+        str(c_rep.summary.anomaly_count),
+        f"{c_rep.summary.anomaly_count - b_rep.summary.anomaly_count:+d}",
+    )
+    table.add_row(
+        "識別晶片（Detected Flash Chip）",
+        str(b_rep.summary.detected_flash_chip or "N/A"),
+        str(c_rep.summary.detected_flash_chip or "N/A"),
+        "[bold red]變更（Changed）[/]" if diff_res.chip_changed else "[green]一致（Same）[/]",
+    )
+    console.print(table)
+
+    if diff_res.new_anomalies:
+        anom_table = Table(title="新增異常（New Anomalies in Candidate）", show_header=True)
+        anom_table.add_column("異常名稱（Anomaly Title）", style="bold red")
+        for anom in diff_res.new_anomalies:
+            anom_table.add_row(anom)
+        console.print(anom_table)
+
+    if diff_res.resolved_anomalies:
+        res_table = Table(title="已修復異常（Resolved Anomalies）", show_header=True)
+        res_table.add_column("異常名稱（Anomaly Title）", style="bold green")
+        for anom in diff_res.resolved_anomalies:
+            res_table.add_row(anom)
+        console.print(res_table)
+
+    if diff_res.is_identical:
+        console.print("[bold green]✔ Baseline 與 Candidate SPI 報告完全一致。[/]")
+    else:
+        console.print(Panel(diff_res.summary, title="[bold cyan]對比結論[/]"))
 
 
 @uart_app.command("analyze")
@@ -361,6 +614,9 @@ def analyze_uart_crash(
     ),
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
+    ),
+    pdf_out: Path | None = typer.Option(
+        None, "--pdf", help="Export PDF diagnostic report to file"
     ),
 ) -> None:
     """Analyze Linux Kernel Panic or ARM Cortex-M HardFault crash dumps."""
@@ -377,6 +633,18 @@ def analyze_uart_crash(
             console.print(
                 f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]"
             )
+        if pdf_out:
+            if not is_fpdf_available():
+                console.print(
+                    "[bold yellow]警告：PDF 匯出需安裝 pdf 額外套件：pip install fw-diag-tool[pdf]（Warning: PDF export requires 'pdf' extra; skipping PDF generation）[/]"
+                )
+            else:
+                write_pdf_report(
+                    UARTReporter.to_markdown(report),
+                    pdf_out,
+                    title="UART 崩潰日誌診斷報告",
+                )
+                console.print(f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]")
     except (OSError, UnicodeError, TypeError, ValueError) as exc:
         console.print(
             f"[bold red]錯誤：UART 崩潰日誌或報告匯出無效（Error: UART crash log or report export is invalid）: {exc}[/]"
@@ -384,11 +652,83 @@ def analyze_uart_crash(
         raise typer.Exit(code=2) from exc
 
 
+
+@uart_app.command("diff")
+def diff_uart_crashes(
+    baseline: Path = typer.Argument(..., help="Path to baseline UART crash log"),
+    candidate: Path = typer.Argument(..., help="Path to candidate UART crash log"),
+) -> None:
+    """Compare baseline vs candidate UART crash logs and report crash type, fault address & symbol diffs."""
+    if not baseline.exists() or not candidate.exists():
+        console.print(
+            "[bold red]錯誤：Baseline 與 Candidate 檔案都必須存在。"
+            "（Error: Both files must exist!）[/]"
+        )
+        raise typer.Exit(code=1)
+    try:
+        b_content = baseline.read_text(encoding="utf-8")
+        c_content = candidate.read_text(encoding="utf-8")
+        b_rep = UARTCrashParser.parse_log_text(b_content)
+        c_rep = UARTCrashParser.parse_log_text(c_content)
+        diff_res = UARTDiffEngine.compare(b_rep, c_rep)
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]錯誤：UART diff 執行失敗（Error: UART diff failed）: {exc}[/]")
+        raise typer.Exit(code=2) from exc
+
+    table = Table(title="UART Crash Before/After 對比摘要（UART Diff Summary）", show_header=True)
+    table.add_column("項目（Field）", style="cyan")
+    table.add_column("Baseline（基準）", style="magenta")
+    table.add_column("Candidate（待測）", style="yellow")
+    table.add_column("狀態（Status）")
+
+    table.add_row(
+        "崩潰類型（Crash Type）",
+        diff_res.baseline_crash_type,
+        diff_res.candidate_crash_type,
+        "[bold red]變更（Changed）[/]" if diff_res.crash_type_changed else "[green]相同（Same）[/]",
+    )
+    table.add_row(
+        "故障位址（Fault Address）",
+        str(diff_res.baseline_fault_address or "N/A"),
+        str(diff_res.candidate_fault_address or "N/A"),
+        "[bold red]變更（Changed）[/]" if diff_res.fault_address_changed else "[green]相同（Same）[/]",
+    )
+    table.add_row(
+        "呼叫棧符號差異（Symbol Delta）",
+        f"消退 {len(diff_res.resolved_symbols)} 個",
+        f"新增 {len(diff_res.new_symbols)} 個",
+        f"+{len(diff_res.new_symbols)} / -{len(diff_res.resolved_symbols)}",
+    )
+    console.print(table)
+
+    if diff_res.new_symbols:
+        sym_table = Table(title="新增符號（New Symbols in Candidate Call Trace）", show_header=True)
+        sym_table.add_column("符號名稱（Symbol Name）", style="bold red")
+        for sym in diff_res.new_symbols:
+            sym_table.add_row(sym)
+        console.print(sym_table)
+
+    if diff_res.resolved_symbols:
+        res_table = Table(title="已消除符號（Resolved / Removed Symbols）", show_header=True)
+        res_table.add_column("符號名稱（Symbol Name）", style="bold green")
+        for sym in diff_res.resolved_symbols:
+            res_table.add_row(sym)
+        console.print(res_table)
+
+    if diff_res.is_identical:
+        console.print("[bold green]✔ Baseline 與 Candidate UART 崩潰報告完全一致。[/]")
+    else:
+        console.print(Panel(diff_res.summary, title="[bold cyan]對比結論[/]"))
+
+
 @mctp_app.command("analyze")
 def analyze_mctp(
     file_or_dump: str = typer.Argument(..., help="Path to MCTP / IPMB hex dump file or text line"),
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export markdown diagnostic report to file"
+    ),
+    pdf_out: Path | None = typer.Option(
+        None, "--pdf", help="Export PDF diagnostic report to file"
     ),
     json_out: Path | None = typer.Option(
         None, "--json", "-j", help="Export JSON structured report to file"
@@ -414,6 +754,21 @@ def analyze_mctp(
             console.print(
                 f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]"
             )
+        if pdf_out:
+            if not is_fpdf_available():
+                console.print(
+                    "[bold yellow]警告：PDF 匯出需安裝 pdf 額外套件：pip install fw-diag-tool[pdf]（Warning: PDF export requires 'pdf' extra; skipping PDF generation）[/]"
+                )
+            else:
+                write_pdf_report(
+                    ServerMgmtReporter.to_markdown(report),
+                    pdf_out,
+                    title="MCTP / IPMB 伺服器管理協定報告",
+                    metadata={
+                        "protocol_mode": protocol_mode,
+                    },
+                )
+                console.print(f"[green]✔ PDF 報告已匯出（PDF report exported to）: {pdf_out}[/]")
         if json_out:
             json_out.write_text(
                 json.dumps(
@@ -780,6 +1135,112 @@ def info() -> None:
             border_style="cyan",
         )
     )
+
+
+def _doctor_python_version() -> tuple[tuple[int, int], str]:
+    return (sys.version_info[:2], platform.python_version())
+
+
+def _find_examples_dir() -> Path | None:
+    candidates = (
+        Path.cwd() / "examples" / "data",
+        Path(__file__).resolve().parents[2] / "examples" / "data",
+        Path(__file__).resolve().parent / "resources",
+    )
+    for candidate in candidates:
+        if candidate.is_dir() and any(candidate.iterdir()):
+            return candidate
+    return None
+
+
+@app.command()
+def doctor() -> None:
+    """執行 fw-diag-tool 環境健康檢查。"""
+    required_packages = (
+        ("streamlit", "streamlit"),
+        ("plotly", "plotly"),
+        ("pandas", "pandas"),
+        ("rich", "rich"),
+        ("typer", "typer"),
+        ("pyyaml", "yaml"),
+        ("pydantic", "pydantic"),
+    )
+    table = Table(title="fw-diag-tool 環境健康檢查", show_header=True)
+    table.add_column("檢查項目", style="cyan", width=18)
+    table.add_column("目標 / 元件", style="magenta", width=20)
+    table.add_column("狀態", width=12)
+    table.add_column("詳細資訊", style="dim")
+
+    all_passed = True
+    python_info, python_version = _doctor_python_version()
+    if python_info >= (3, 10):
+        table.add_row(
+            "Python 版本",
+            ">= 3.10",
+            "[bold green]✓ 通過[/]",
+            f"目前: {python_version}；平台: {platform.platform()}",
+        )
+    else:
+        table.add_row(
+            "Python 版本",
+            ">= 3.10",
+            "[bold red]✗ 失敗[/]",
+            f"目前: {python_version}",
+        )
+        all_passed = False
+
+    for package_name, import_name in required_packages:
+        try:
+            module = importlib.import_module(import_name)
+            module_version = getattr(module, "__version__", "已安裝")
+            table.add_row(
+                "核心依賴",
+                package_name,
+                "[bold green]✓ 通過[/]",
+                f"版本: {module_version}",
+            )
+        except Exception as exc:
+            table.add_row("核心依賴", package_name, "[bold red]✗ 失敗[/]", f"載入錯誤: {exc}")
+            all_passed = False
+
+    try:
+        pdf_module = importlib.import_module("fpdf")
+        pdf_version = getattr(pdf_module, "__version__", "已安裝")
+        table.add_row("可選依賴", "fpdf2", "[bold green]✓ 通過[/]", f"版本: {pdf_version}")
+    except Exception as exc:
+        table.add_row("可選依賴", "fpdf2", "[bold yellow]⚠ 警告[/]", f"未安裝（可選）: {exc}")
+
+    examples_dir = _find_examples_dir()
+    if examples_dir is None:
+        table.add_row("範例資料", "examples/data", "[bold red]✗ 失敗[/]", "找不到可用範例資料")
+        all_passed = False
+    else:
+        sample_count = sum(1 for item in examples_dir.iterdir() if item.is_file())
+        table.add_row(
+            "範例資料",
+            "examples/data",
+            "[bold green]✓ 通過[/]",
+            f"找到 {sample_count} 個檔案（{examples_dir}）",
+        )
+
+    try:
+        pytest_module = importlib.import_module("pytest")
+        pytest_version = getattr(pytest_module, "__version__", "已安裝")
+        table.add_row("測試工具", "pytest", "[bold green]✓ 通過[/]", f"版本: {pytest_version}")
+    except Exception as exc:
+        table.add_row("測試工具", "pytest", "[bold red]✗ 失敗[/]", f"載入錯誤: {exc}")
+        all_passed = False
+
+    if __version__ != "0+unknown":
+        table.add_row("版本資訊", "fw-diag-tool", "[bold green]✓ 通過[/]", f"版本: {__version__}")
+    else:
+        table.add_row(
+            "版本資訊", "fw-diag-tool", "[bold yellow]⚠ 警告[/]", "無法取得已安裝套件版本"
+        )
+
+    console.print(table)
+    if not all_passed:
+        raise typer.Exit(code=1)
 
 
 @app.command()

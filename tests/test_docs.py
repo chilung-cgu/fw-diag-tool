@@ -28,7 +28,8 @@ def test_local_markdown_links_resolve() -> None:
 def test_canonical_guide_indexes_all_gui_pages() -> None:
     guide = (ROOT / "docs" / "index.md").read_text(encoding="utf-8")
     page_rows = re.findall(r"^\|\s*(\d{1,2})\s*\|", guide, flags=re.MULTILINE)
-    assert page_rows == [str(page_id) for page_id in range(1, 13)]
+    assert page_rows == [str(page_id) for page_id in range(1, 21)]
+    assert "[ch11_board_profile.md](chapters/ch11_board_profile.md)" in guide
     assert "[ch12_sop.md](chapters/ch12_sop.md)" in guide
 
 
@@ -36,7 +37,7 @@ def test_gui_reading_map_covers_all_pages_and_evidence_levels() -> None:
     reading_map = (ROOT / "docs" / "chapters" / "appendix_gui_reading_guide.md").read_text(
         encoding="utf-8"
     )
-    for page_id in range(1, 13):
+    for page_id in range(1, 21):
         assert f"### {page_id}." in reading_map
     for term in ("Measured", "Inferred", "Reconstructed", "Unavailable", "不能證明什麼"):
         assert term in reading_map

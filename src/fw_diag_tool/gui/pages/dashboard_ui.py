@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import importlib.metadata
 import platform
 from pathlib import Path
 
+import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from fw_diag_tool import __version__
 from fw_diag_tool.gui.shared import _FAULT_ARENA_CASES_ZH, render_page_footer
+from fw_diag_tool.gui.theme import get_plotly_template
+from fw_diag_tool.i18n import t
+from fw_diag_tool.metrics import get_metrics_collector
 
 
 def _get_example_data_count() -> int:
@@ -31,25 +37,161 @@ def _render_quick_link(url_path: str, label: str) -> None:
         st.markdown(f"[{label}]({url_path})")
 
 
+def _render_quick_actions() -> None:
+    with st.expander("⚡ 快速操作", expanded=False):
+        actions = (
+            ("i2c-diagnosis", "📊 I2C 診斷"),
+            ("spi", "⚡ SPI Flash"),
+            ("pcie", "🚀 PCIe AER"),
+            ("fault-arena", "🏆 Fault Arena"),
+        )
+        columns = st.columns(4)
+        for column, (url_path, label) in zip(columns, actions):
+            with column:
+                _render_quick_link(url_path, label)
+
+
+def _render_system_info() -> None:
+    st.subheader("📋 系統資訊")
+    metrics = (
+        ("Python 版本", platform.python_version()),
+        ("工具版本", f"v{__version__}"),
+        ("頁面數", "21"),
+        ("協定數", "5"),
+    )
+    columns = st.columns(4)
+    for column, (label, value) in zip(columns, metrics):
+        with column:
+            st.metric(label=label, value=value)
+
+
+def _check_dependency(name: str) -> tuple[bool, str]:
+    """Check if a Python package is importable and return (ok, version)."""
+    try:
+        version = importlib.metadata.version(name)
+        return True, version
+    except importlib.metadata.PackageNotFoundError:
+        return False, "未安裝"
+
+
+def _render_health_check() -> None:
+    """Render system health check panel in an expander."""
+    with st.expander("🏥 系統健康檢查", expanded=False):
+        py_ver = platform.python_version()
+        py_parts = tuple(int(x) for x in py_ver.split(".")[:2])
+        py_ok = py_parts >= (3, 10)
+
+        st.markdown("**Python 環境**")
+        if py_ok:
+            st.markdown(f"✅ Python {py_ver} (>= 3.10 ✓)")
+        else:
+            st.markdown(f"❌ Python {py_ver} (需要 >= 3.10)")
+
+        st.markdown("**核心套件**")
+        core_deps = ["streamlit", "plotly", "pandas", "pydantic", "rich", "typer", "pyyaml"]
+        all_core_ok = True
+        for dep in core_deps:
+            ok, ver = _check_dependency(dep)
+            if not ok:
+                all_core_ok = False
+            icon = "✅" if ok else "❌"
+            st.markdown(f"{icon} {dep}: {ver}")
+
+        st.markdown("**可選套件**")
+        optional_deps = [("fpdf2", "PDF 報告匯出"), ("hypothesis", "模糊測試")]
+        for dep, purpose in optional_deps:
+            ok, ver = _check_dependency(dep)
+            icon = "✅" if ok else "⚠️"
+            st.markdown(f"{icon} {dep} ({purpose}): {ver}")
+
+        st.markdown("**範例資料**")
+        example_count = _get_example_data_count()
+        icon = "✅" if example_count > 0 else "⚠️"
+        st.markdown(f"{icon} 內建範例檔案：{example_count} 個")
+
+        st.divider()
+        if py_ok and all_core_ok:
+            st.success("系統健康：所有核心檢查通過 ✓")
+        elif py_ok:
+            st.warning("系統部分健康：部分核心套件缺失")
+        else:
+            st.error("系統異常：Python 版本或核心套件不符合要求")
+
+
+def _render_usage_metrics() -> None:
+    collector = get_metrics_collector()
+    summary = collector.get_summary()
+
+    with st.expander("📊 本次使用統計", expanded=False):
+        page_usage = summary["page_usage"]
+        if page_usage:
+            fig = go.Figure(
+                go.Bar(x=list(page_usage.keys()), y=list(page_usage.values()), name="Page usage")
+            )
+            fig.update_layout(
+                template=get_plotly_template(),
+                title="各頁面使用次數",
+                xaxis_title="頁面",
+                yaxis_title="次數",
+                height=320,
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("尚未記錄使用事件。")
+
+        recent_events = collector.get_recent_events(10)
+        if recent_events:
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "時間": event.timestamp,
+                            "頁面": event.page_name,
+                            "動作": event.action,
+                            "協定": event.protocol or "",
+                            "耗時 (ms)": event.duration_ms,
+                        }
+                        for event in recent_events
+                    ]
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.caption("最近事件：無")
+
+        st.download_button(
+            "下載使用統計 CSV",
+            data=collector.export_csv(),
+            file_name="fw_diag_usage_metrics.csv",
+            mime="text/csv",
+            key="dashboard_usage_metrics_csv",
+        )
+
+
 def render() -> None:
-    st.header("韌體訊號與協定診斷套件 — 總覽")
+    st.header(t("title_dashboard", domain="gui"))
     st.caption(
         f"⚡ fw-diag-tool v{__version__} — 專為韌體與嵌入式系統工程師打造的離線訊號、協定與崩潰轉儲診斷分析套件。"
     )
 
+    _render_quick_actions()
+    _render_system_info()
+    _render_health_check()
+
     # 系統狀態面板
-    st.subheader("📊 系統狀態儀表板")
+    st.subheader(t("system_dashboard", domain="gui"))
     stat_col1, stat_col2, stat_col3 = st.columns(3)
     with stat_col1:
         st.metric(
-            label="工具版本 / 執行環境",
+            label=t("tool_version_runtime", domain="gui"),
             value=f"v{__version__}",
             delta=f"Python {platform.python_version()}",
             delta_color="off",
         )
     with stat_col2:
         st.metric(
-            label="已安裝功能模組 / 支援協定",
+            label=t("installed_modules_protocols", domain="gui"),
             value="20 Pages",
             delta="6 大協定 (I2C, SPI, UART, PCIe, MCTP, DTS)",
             delta_color="off",
@@ -58,27 +200,27 @@ def render() -> None:
         fault_arena_count = len(_FAULT_ARENA_CASES_ZH)
         example_count = _get_example_data_count()
         st.metric(
-            label="實戰情境 / 範例檔案",
+            label=t("scenarios_example_files", domain="gui"),
             value=f"{fault_arena_count} Scenarios",
             delta=f"{example_count} 個內建範例檔",
             delta_color="off",
         )
 
     # 快速啟動按鈕
-    st.markdown("#### ⚡ 常用診斷快速啟動")
+    st.markdown(f"#### {t('quick_launch', domain='gui')}")
     qcols = st.columns(6)
     with qcols[0]:
-        _render_quick_link("i2c-diagnosis", "📊 I2C 診斷")
+        _render_quick_link("i2c-diagnosis", t("quick_link_i2c", domain="gui"))
     with qcols[1]:
-        _render_quick_link("waveform-diff", "⚖️ 雙波形差分")
+        _render_quick_link("waveform-diff", t("quick_link_diff", domain="gui"))
     with qcols[2]:
-        _render_quick_link("pcie", "🚀 PCIe AER")
+        _render_quick_link("pcie", t("quick_link_pcie", domain="gui"))
     with qcols[3]:
-        _render_quick_link("uart", "📟 UART Crash")
+        _render_quick_link("uart", t("quick_link_uart", domain="gui"))
     with qcols[4]:
-        _render_quick_link("spi", "⚡ SPI Flash")
+        _render_quick_link("spi", t("quick_link_spi", domain="gui"))
     with qcols[5]:
-        _render_quick_link("fault-arena", "🏆 Fault Arena")
+        _render_quick_link("fault-arena", t("quick_link_fault_arena", domain="gui"))
 
     st.divider()
 
@@ -107,9 +249,9 @@ def render() -> None:
             "- **新人培訓、故障模式排查練習或建立除錯心智模型**：推薦 **🏆 Fault Arena** 與 **📚 除錯 SOP**。"
         )
 
-    st.subheader("🛠 功能模組總覽")
+    st.subheader(t("module_overview", domain="gui"))
 
-    st.markdown("#### 協定分析與波形")
+    st.markdown(f"#### {t('nav_category_protocols', domain='gui')}")
     col1, col2, col3 = st.columns(3)
     with col1, st.container(border=True):
         st.markdown("##### 📊 I2C/PMBus 診斷")
@@ -135,7 +277,7 @@ def render() -> None:
             "**適用場景**：板卡 A/B 對比除錯、找出首次通訊分歧點（Timing Jitter、位址/資料 NACK 差異、長度不符）"
         )
 
-    st.markdown("#### 系統協定")
+    st.markdown(f"#### {t('nav_category_system', domain='gui')}")
     col4, col5, col6, col7 = st.columns(4)
     with col4, st.container(border=True):
         st.markdown("##### 📟 UART Crash")
@@ -170,7 +312,7 @@ def render() -> None:
             "**適用場景**：SPI NOR Flash 讀寫異常、JEDEC ID 全 0xFF/0x00 排查、Page Program 遺漏 WREN (0x06)、Page Buffer (256B) 跨頁回繞覆蓋偵測"
         )
 
-    st.markdown("#### 產生器與工具")
+    st.markdown(f"#### {t('nav_category_tools', domain='gui')}")
     col8, col9, col10 = st.columns(3)
     with col8, st.container(border=True):
         st.markdown("##### 🌲 Device Tree")
@@ -196,7 +338,7 @@ def render() -> None:
             "**適用場景**：韌體/驅動開發中將暫存器定義自動轉換為符合規範的 C 語言 #define 位移、遮罩與讀改寫 (RMW) 巨集"
         )
 
-    st.markdown("#### 學習與實驗")
+    st.markdown(f"#### {t('nav_category_labs', domain='gui')}")
     col11, col12 = st.columns(2)
     with col11, st.container(border=True):
         st.markdown("##### 🏆 Fault Arena")
@@ -214,8 +356,8 @@ def render() -> None:
         )
 
     st.markdown("---")
-    st.subheader("📢 最近更新紀錄 (What's New in v1.2.0)")
-    with st.expander("🎉 檢視 v1.2.0 重點更新項目", expanded=True):
+    st.subheader(t("whats_new_title", domain="gui"))
+    with st.expander(t("whats_new_expander", domain="gui"), expanded=True):
         st.markdown(
             "- **🔗 跨協定時間線關聯分析 (Cross-Protocol Correlation)**：同步整合 I2C、SPI、UART、PCIe 異常事件時間軸，自動識別叢集並分析跨介面連鎖故障根因。\n"
             "- **📋 Board Profile 視覺化編輯器**：支援板級拓撲、匯流排裝置、中斷與暫存器對映視覺化編輯、語意驗證與 YAML 匯入匯出。\n"
@@ -226,6 +368,7 @@ def render() -> None:
             "- **🌐 全介面繁體中文與體驗優化**：全模組落實繁體中文語意本地化、統一頁尾與主題樣式。"
         )
 
+    _render_usage_metrics()
     render_page_footer()
 
 

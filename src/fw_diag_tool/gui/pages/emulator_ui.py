@@ -8,6 +8,7 @@ from fw_diag_tool.emulator.i2c_mux import VirtualPCA9548A
 from fw_diag_tool.emulator.ina219 import VirtualINA219
 from fw_diag_tool.emulator.lm75 import VirtualLM75
 from fw_diag_tool.emulator.spi_flash import VirtualSPIFlashW25Q128
+from fw_diag_tool.gui.shared import render_page_footer
 
 
 def parse_hex_bytes(text: str) -> list[int]:
@@ -940,20 +941,20 @@ def _render_ina219_tab() -> None:
 
 def _render_pca9548a_tab() -> None:
     if "emulator_pca9548a" not in st.session_state:
-        pca = VirtualPCA9548A(addr_7bit=0x70)
+        init_pca = VirtualPCA9548A(addr_7bit=0x70)
         # Mount diverse virtual downstream devices on channels to demonstrate isolation and conflicts
-        pca.attach_device(0, VirtualLM75(addr_7bit=0x48))  # CH0: LM75 Temp #1 (0x48)
-        pca.attach_device(
+        init_pca.attach_device(0, VirtualLM75(addr_7bit=0x48))  # CH0: LM75 Temp #1 (0x48)
+        init_pca.attach_device(
             1, VirtualLM75(addr_7bit=0x48)
         )  # CH1: LM75 Temp #2 (0x48) - conflict with CH0!
-        pca.attach_device(2, VirtualEEPROM24C64(addr_7bit=0x50))  # CH2: EEPROM #1 (0x50)
-        pca.attach_device(3, VirtualINA219(addr_7bit=0x40))  # CH3: INA219 Power Monitor (0x40)
-        pca.attach_device(4, VirtualLM75(addr_7bit=0x49))  # CH4: LM75 Temp #3 (0x49)
-        pca.attach_device(
+        init_pca.attach_device(2, VirtualEEPROM24C64(addr_7bit=0x50))  # CH2: EEPROM #1 (0x50)
+        init_pca.attach_device(3, VirtualINA219(addr_7bit=0x40))  # CH3: INA219 Power Monitor (0x40)
+        init_pca.attach_device(4, VirtualLM75(addr_7bit=0x49))  # CH4: LM75 Temp #3 (0x49)
+        init_pca.attach_device(
             5, VirtualEEPROM24C64(addr_7bit=0x50)
         )  # CH5: EEPROM #2 (0x50) - conflict with CH2!
-        pca.select_channel(0)
-        st.session_state["emulator_pca9548a"] = pca
+        init_pca.select_channel(0)
+        st.session_state["emulator_pca9548a"] = init_pca
 
     pca: VirtualPCA9548A = st.session_state["emulator_pca9548a"]
 
@@ -1172,6 +1173,8 @@ def render() -> None:
 
     with tab_mux:
         _render_pca9548a_tab()
+
+    render_page_footer()
 
 
 __all__ = ["render"]

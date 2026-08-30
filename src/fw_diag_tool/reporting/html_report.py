@@ -306,6 +306,298 @@ hr {
 }
 """
 
+# Light theme CSS aligned with fw-diag GUI light mode (#ffffff, #f1f5f9, #0369a1, #1e293b)
+_LIGHT_THEME_CSS = """
+:root {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f1f5f9;
+    --bg-tertiary: #e2e8f0;
+    --bg-code: #f8fafc;
+    --text-primary: #1e293b;
+    --text-muted: #64748b;
+    --accent-primary: #0369a1;
+    --accent-secondary: #0284c7;
+    --accent-hover: #075985;
+    --border-color: #cbd5e1;
+    --border-subtle: #e2e8f0;
+    --color-success: #059669;
+    --color-warning: #d97706;
+    --color-error: #dc2626;
+    --color-info: #2563eb;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    padding: 2rem 1rem;
+}
+
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+    background-color: var(--bg-primary);
+}
+
+.report-header {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.75rem 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+}
+
+.report-header h1 {
+    color: var(--accent-primary);
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.report-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.meta-item {
+    font-size: 0.875rem;
+}
+
+.meta-label {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+}
+
+.meta-value {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-family: var(--font-mono);
+}
+
+.report-body {
+    background-color: transparent;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary);
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+h1 {
+    font-size: 1.6rem;
+    color: var(--accent-primary);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+    margin: 2rem 0 1rem;
+}
+
+h2 {
+    font-size: 1.3rem;
+    color: var(--accent-secondary);
+    margin: 1.75rem 0 0.875rem;
+    border-bottom: 1px solid var(--border-subtle);
+    padding-bottom: 0.35rem;
+}
+
+h3 {
+    font-size: 1.1rem;
+    color: var(--accent-primary);
+    margin: 1.25rem 0 0.5rem;
+}
+
+h4, h5, h6 {
+    font-size: 1rem;
+    margin: 1rem 0 0.5rem;
+}
+
+p {
+    margin-bottom: 1rem;
+}
+
+a {
+    color: var(--accent-primary);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+    color: var(--accent-hover);
+}
+
+blockquote {
+    background-color: rgba(241, 245, 249, 0.8);
+    border-left: 4px solid var(--accent-primary);
+    border-radius: 0 8px 8px 0;
+    padding: 0.875rem 1.25rem;
+    margin: 1.25rem 0;
+    color: var(--text-primary);
+}
+
+blockquote p:last-child {
+    margin-bottom: 0;
+}
+
+ul, ol {
+    margin: 0.75rem 0 1.25rem 1.75rem;
+}
+
+li {
+    margin-bottom: 0.35rem;
+}
+
+li > ul, li > ol {
+    margin-top: 0.35rem;
+    margin-bottom: 0.35rem;
+}
+
+code {
+    background-color: var(--bg-secondary);
+    color: var(--accent-primary);
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+}
+
+pre {
+    background-color: var(--bg-code);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin: 1.25rem 0;
+    overflow-x: auto;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+pre code {
+    background-color: transparent;
+    color: var(--text-primary);
+    padding: 0;
+    border: none;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    display: block;
+}
+
+/* Tables */
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    margin: 1.25rem 0;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    text-align: left;
+}
+
+thead th {
+    background-color: var(--bg-secondary);
+    color: var(--accent-primary);
+    font-weight: 600;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    white-space: nowrap;
+}
+
+tbody td {
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+}
+
+tbody tr:last-child td {
+    border-bottom: none;
+}
+
+tbody tr:nth-child(even) {
+    background-color: rgba(241, 245, 249, 0.7);
+}
+
+tbody tr:hover {
+    background-color: rgba(226, 232, 240, 0.6);
+}
+
+hr {
+    border: none;
+    border-top: 1px solid var(--border-color);
+    margin: 2rem 0;
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    vertical-align: middle;
+}
+
+.badge-error {
+    background-color: #fee2e2;
+    color: #b91c1c;
+    border: 1px solid #fca5a5;
+}
+
+.badge-warning {
+    background-color: #fef3c7;
+    color: #b45309;
+    border: 1px solid #fcd34d;
+}
+
+.badge-info {
+    background-color: #dbeafe;
+    color: #1d4ed8;
+    border: 1px solid #93c5fd;
+}
+
+.badge-success {
+    background-color: #d1fae5;
+    color: #047857;
+    border: 1px solid #6ee7b7;
+}
+
+/* Footer */
+.report-footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-align: center;
+}
+"""
+
 
 def _inline_markdown_to_html(text: str) -> str:
     """Convert inline Markdown tags into HTML formatting."""
@@ -384,10 +676,14 @@ def convert_markdown_to_html(
     title: str = "Firmware Diagnostic Report",
     tool_version: str | None = None,
     timestamp: str | None = None,
+    theme: str = "dark",
 ) -> str:
     """Convert Markdown diagnostic report into a standalone, styled HTML document."""
     version_str = tool_version or __version__
     ts_str = timestamp or time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+    is_light = theme.strip().lower() in ("light", "亮色")
+    theme_css = _LIGHT_THEME_CSS if is_light else _DARK_THEME_CSS
+    format_label = "Standalone Light HTML" if is_light else "Standalone Dark HTML"
 
     lines = markdown_text.splitlines()
     body_html: list[str] = []
@@ -507,7 +803,7 @@ def convert_markdown_to_html(
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{html.escape(title)}</title>
     <style>
-{_DARK_THEME_CSS}
+{theme_css}
     </style>
 </head>
 <body>
@@ -525,7 +821,7 @@ def convert_markdown_to_html(
                 </div>
                 <div class="meta-item">
                     <div class="meta-label">報告格式（Format）</div>
-                    <div class="meta-value">Standalone Dark HTML</div>
+                    <div class="meta-value">{format_label}</div>
                 </div>
             </div>
         </header>
@@ -550,6 +846,7 @@ def build_html_report(
     title: str = "Firmware Diagnostic Report",
     tool_version: str | None = None,
     timestamp: str | None = None,
+    theme: str = "dark",
 ) -> str:
     """Alias for convert_markdown_to_html to provide consistent builder naming."""
     return convert_markdown_to_html(
@@ -557,6 +854,7 @@ def build_html_report(
         title=title,
         tool_version=tool_version,
         timestamp=timestamp,
+        theme=theme,
     )
 
 
@@ -567,6 +865,7 @@ def write_html_report(
     title: str = "Firmware Diagnostic Report",
     tool_version: str | None = None,
     timestamp: str | None = None,
+    theme: str = "dark",
 ) -> Path:
     """Convert Markdown text to HTML and save to output file."""
     out_p = Path(output_path)
@@ -576,6 +875,7 @@ def write_html_report(
         title=title,
         tool_version=tool_version,
         timestamp=timestamp,
+        theme=theme,
     )
     out_p.write_text(html_content, encoding="utf-8")
     return out_p

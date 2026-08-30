@@ -9,6 +9,7 @@ import streamlit as st
 from fw_diag_tool import __version__
 from fw_diag_tool.board_profile import load_board_profile
 from fw_diag_tool.errors import ResourceLimitError
+from fw_diag_tool.gui.notifications import show_error_toast, show_success_toast
 from fw_diag_tool.gui.sarif_export import render_sarif_download
 from fw_diag_tool.gui.session_io import (
     capture_matches,
@@ -23,8 +24,13 @@ from fw_diag_tool.gui.shared import (
     analyze_i2c_input,
     render_guide_expander,
     render_html_download,
+    render_page_footer,
+    render_pdf_download,
+    render_session_controls,
 )
 from fw_diag_tool.gui.uploads import MAX_UPLOAD_BYTES, decode_uploaded_text
+from fw_diag_tool.i2c.diff import I2CDiffEngine
+from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.input import I2CInputFormat, normalize_i2c_input_format
 from fw_diag_tool.i2c.localization import (
     localize_ack,
@@ -51,6 +57,7 @@ from fw_diag_tool.i2c.status import get_transaction_status
 from fw_diag_tool.i2c.timing import frequency_samples_khz
 from fw_diag_tool.i2c.timing_charts import I2CTimingCharts
 from fw_diag_tool.i2c.waveform import I2CWaveformReconstructor
+from fw_diag_tool.i18n import t
 from fw_diag_tool.resources import load_i2c_sample
 from fw_diag_tool.session.session_manager import SessionManager
 
@@ -58,13 +65,13 @@ MAX_UPLOAD_MIB = MAX_UPLOAD_BYTES // (1024 * 1024)
 
 
 def render() -> None:
-    st.header("I2C / SMBus / PMBus 協定分析與數位波形檢視")
-    render_guide_expander("chapters/ch01_i2c_pmbus.md", "📖 點擊展開：I2C/PMBus 波形診斷手冊")
+    st.header(t("title_i2c_diagnosis_full", domain="gui"))
+    render_guide_expander("chapters/ch01_i2c_pmbus.md", t("guide_expander_i2c", domain="gui"))
     render_guide_expander(
-        "chapters/appendix_chart_guide.md", "📊 點擊展開：附錄 A 圖表與數據判讀指南"
+        "chapters/appendix_chart_guide.md", t("guide_expander_appendix", domain="gui")
     )
     session_upload = st.file_uploader(
-        "載入可重現 Session（需另行提供原始 capture 才能重播）",
+        t("load_reproducible_session", domain="gui"),
         type=["json"],
         max_upload_size=SessionManager.MAX_SESSION_BYTES // (1024 * 1024),
         key="i2c_session_upload",
@@ -188,7 +195,7 @@ def render() -> None:
     sample_label = st.selectbox(
         "教學範例（可直接載入；完整檔案與欄位契約見 ch01）", list(sample_specs)
     )
-    use_sample = st.button("載入內建測試波形")
+    use_sample = st.button(t("btn_load_example", domain="gui"))
     if use_sample:
         sample_key, sample_format, _sample_filename = sample_specs[sample_label]
         st.session_state["i2c_input_format"] = sample_format.value
@@ -320,6 +327,71 @@ def render() -> None:
         if profile_text.strip():
             board_profile_yaml = profile_text
 
+    with st.expander("⚖️ I2C Before/After 對比分析", expanded=False):
+        st.caption("上傳兩份解碼 CSV；工具會以相同 SMBus timeout 與板級設定分別分析後比較。")
+        diff_baseline = st.file_uploader(
+            "Baseline（基準）I2C CSV",
+            type=["csv"],
+            max_upload_size=MAX_UPLOAD_MIB,
+            key="i2c_diff_baseline_upload",
+        )
+        diff_candidate = st.file_uploader(
+            "Candidate（待測）I2C CSV",
+            type=["csv"],
+            max_upload_size=MAX_UPLOAD_MIB,
+            key="i2c_diff_candidate_upload",
+        )
+        if diff_baseline is not None and diff_candidate is not None:
+            try:
+                baseline_csv = decode_uploaded_text(
+                    diff_baseline, allowed_extensions={".csv"}
+                )
+                candidate_csv = decode_uploaded_text(
+                    diff_candidate, allowed_extensions={".csv"}
+                )
+                diff_engine = I2CDiagnosticEngine(
+                    smbus_timeout_ms=float(smbus_timeout),
+                    board_profile=load_board_profile(board_profile_yaml)
+                    if board_profile_yaml
+                    else None,
+                    limits=GUI_ANALYSIS_LIMITS,
+                )
+                baseline_report = diff_engine.analyze_csv_content(baseline_csv)
+                candidate_report = diff_engine.analyze_csv_content(candidate_csv)
+                diff_result = I2CDiffEngine.compare(baseline_report, candidate_report)
+            except (TypeError, UnicodeError, ValueError) as exc:
+                st.error(f"無法執行 I2C Before/After 對比：{exc}")
+            else:
+                metric1, metric2, metric3 = st.columns(3)
+                metric1.metric(
+                    "交易數差異",
+                    f"{diff_result.transaction_count_delta:+d}",
+                    help=(
+                        f"Baseline {diff_result.baseline_transaction_count} → "
+                        f"Candidate {diff_result.candidate_transaction_count}"
+                    ),
+                )
+                metric2.metric("新增異常", len(diff_result.new_anomalies))
+                metric3.metric("修復異常", len(diff_result.resolved_anomalies))
+                if diff_result.is_identical:
+                    st.success(diff_result.summary)
+                else:
+                    st.warning(diff_result.summary)
+                if diff_result.address_changes:
+                    st.markdown("**位址變更（Address Changes）**")
+                    for change in diff_result.address_changes:
+                        st.markdown(f"- {change}")
+                if diff_result.new_anomalies:
+                    st.markdown("**Candidate 新增異常（New Anomalies）**")
+                    for anomaly in diff_result.new_anomalies:
+                        st.markdown(f"- {anomaly}")
+                if diff_result.resolved_anomalies:
+                    st.markdown("**Baseline 已修復異常（Resolved Anomalies）**")
+                    for anomaly in diff_result.resolved_anomalies:
+                        st.markdown(f"- {anomaly}")
+        elif diff_baseline is not None or diff_candidate is not None:
+            st.info("請同時上傳 Baseline 與 Candidate CSV 才能執行對比。")
+
     if csv_content is not None:
         try:
             report, raw_capture_result = analyze_i2c_input(
@@ -327,6 +399,7 @@ def render() -> None:
             )
         except (TypeError, ValueError) as exc:
             st.error(f"無法解析 I2C 輸入：{exc}")
+            show_error_toast("I2C 分析失敗")
             st.stop()
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
         kpi1.metric("總傳輸次數", report.total_transactions)
@@ -377,11 +450,11 @@ def render() -> None:
 
         tab_tx, tab_wave, tab_anom, tab_timing, tab_md = st.tabs(
             [
-                "📜 封包交易列表（Transactions）",
-                "📈 數位方波與協定軌（Waveform）",
-                "🚨 異常診斷（Anomalies）",
-                "📊 匯流排時序與健康圖表（Bus Timing & Health）",
-                "📝 Markdown 診斷報告（Markdown Report）",
+                t("tab_transactions", domain="gui"),
+                t("tab_waveform", domain="gui"),
+                t("tab_anomalies", domain="gui"),
+                t("tab_timing", domain="gui"),
+                t("tab_report", domain="gui"),
             ]
         )
 
@@ -503,6 +576,7 @@ def render() -> None:
                     st.warning("沒有被證明的協定異常；但資料證據不完整，不能直接視為完全正常。")
                 else:
                     st.success("🎉 未偵測到任何 I2C/SMBus 時序與通訊異常！")
+                    show_success_toast("I2C 分析完成")
             else:
                 st.caption(
                     f"共 {len(report.issues)} 筆；優先顯示前 50 筆，避免大型 capture 讓瀏覽器一次展開數千面板。"
@@ -621,6 +695,7 @@ def render() -> None:
                 st.code(md_out, language="markdown")
             st.download_button("下載 Markdown 報告", md_out, file_name="i2c_report.md")
             render_html_download(md_out, protocol="I2C", filename_prefix="i2c_report")
+            render_pdf_download(md_out, protocol="I2C", filename_prefix="i2c_report", metadata=metadata)
             sarif_findings = [
                 {
                     "code": issue.code,
@@ -649,3 +724,14 @@ def render() -> None:
                     mime="application/json",
                 )
                 st.caption("Session 只保存報告、設定與輸入 SHA-256；請另外保留原始 capture。")
+            render_session_controls(
+                protocol="I2C",
+                report_data=report.to_dict(),
+                config_data={
+                    "input_mode": input_mode,
+                    "smbus_timeout_ms": float(smbus_timeout),
+                },
+                include_uploader=False,
+            )
+
+    render_page_footer()

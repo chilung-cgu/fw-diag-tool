@@ -6,6 +6,7 @@ from fw_diag_tool.fault_arena.fixtures import FaultArenaFixtures
 from fw_diag_tool.gui.shared import (
     _FAULT_ARENA_CASES_ZH,
     render_guide_expander,
+    render_page_footer,
 )
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.reporter import I2CReporter
@@ -76,6 +77,8 @@ def render() -> None:
         f"**練習假設（Hypothesis）**：{case_detail['hypothesis']}\n\n"
         f"**區分測試／排查關鍵字（Discriminating test）**：{case_detail['check']}"
     )
+
+    render_page_footer()
 
 
 __all__ = ["render"]

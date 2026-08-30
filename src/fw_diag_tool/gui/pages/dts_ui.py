@@ -4,7 +4,11 @@ import streamlit as st
 import yaml
 
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
-from fw_diag_tool.gui.shared import _localize_gui_error, render_guide_expander
+from fw_diag_tool.gui.shared import (
+    _localize_gui_error,
+    render_guide_expander,
+    render_page_footer,
+)
 from fw_diag_tool.gui.uploads import (
     MAX_TEXT_BYTES,
     decode_uploaded_text,
@@ -77,6 +81,8 @@ def render() -> None:
             )
         except (TypeError, ValueError, yaml.YAMLError) as exc:
             st.error(f"DTS 輸入錯誤：{_localize_gui_error(exc, domain='dts')}")
+
+    render_page_footer()
 
 
 __all__ = ["render"]

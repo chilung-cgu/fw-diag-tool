@@ -23,100 +23,172 @@ from fw_diag_tool.gui.pages import (
     i2c_diagnosis,
     mctp_ui,
     pcie_ui,
+    protocol_diff_ui,
     register_ui,
+    session_analytics_ui,
+    session_compare_ui,
     sop_ui,
     spi_ui,
     tutorial_ui,
     uart_ui,
     waveform_diff_ui,
 )
+from fw_diag_tool.gui.shared import (
+    render_global_search,
+    render_keyboard_shortcuts,
+    render_language_selector,
+)
+from fw_diag_tool.i18n import t
 
 st.set_page_config(page_title="韌體訊號與協定診斷套件", page_icon="⚡", layout="wide")
 
-from fw_diag_tool.gui.theme import inject_custom_theme
+from fw_diag_tool.gui.theme import inject_custom_theme, render_theme_toggle
 
 inject_custom_theme()
 
+render_language_selector()
+
 pages = {
-    "協定分析與波形": [
+    t("nav_category_protocols", domain="gui"): [
         st.Page(
             i2c_diagnosis.render,
-            title="I2C / PMBus 診斷與波形檢視",
+            title=t("title_i2c_diagnosis", domain="gui"),
             icon="📊",
             url_path="i2c-diagnosis",
         ),
         st.Page(
             i2c_builder_ui.render,
-            title="I2C 封包模擬器與驅動產生",
+            title=t("title_i2c_builder", domain="gui"),
             icon="🎨",
             url_path="i2c-builder",
         ),
         st.Page(
-            waveform_diff_ui.render, title="雙波形對比檢視", icon="⚖️", url_path="waveform-diff"
+            waveform_diff_ui.render,
+            title=t("title_waveform_diff", domain="gui"),
+            icon="⚖️",
+            url_path="waveform-diff",
+        ),
+        st.Page(
+            protocol_diff_ui.render,
+            title=t("title_protocol_diff", domain="gui"),
+            icon="🔀",
+            url_path="protocol-diff",
         ),
     ],
-    "進階分析": [
+    t("nav_category_advanced", domain="gui"): [
         st.Page(
             correlation_ui.render,
-            title="跨協定時間線關聯分析",
+            title=t("title_correlation", domain="gui"),
             icon="🔗",
             url_path="correlation",
         ),
+        st.Page(
+            session_analytics_ui.render,
+            title=t("title_session_analytics", domain="gui"),
+            icon="📈",
+            url_path="session-analytics",
+        ),
+        st.Page(
+            session_compare_ui.render,
+            title=t("title_session_compare", domain="gui"),
+            icon="⚖️",
+            url_path="session-compare",
+        ),
     ],
-    "總覽": [
+    t("nav_category_overview", domain="gui"): [
         st.Page(
             dashboard_ui.render,
-            title="功能總覽與快速入門",
+            title=t("title_overview", domain="gui"),
             icon="🏠",
             url_path="dashboard",
         ),
     ],
-    "系統協定診斷": [
-        st.Page(uart_ui.render, title="UART 崩潰轉儲與 HardFault 分析", icon="📟", url_path="uart"),
-        st.Page(mctp_ui.render, title="MCTP／IPMB 伺服器管理協定解析", icon="🌐", url_path="mctp"),
-        st.Page(pcie_ui.render, title="PCIe 設定空間與 AER 診斷", icon="🚀", url_path="pcie"),
-        st.Page(spi_ui.render, title="SPI Flash 協定診斷", icon="⚡", url_path="spi"),
+    t("nav_category_system", domain="gui"): [
+        st.Page(
+            uart_ui.render,
+            title=t("title_uart", domain="gui"),
+            icon="📟",
+            url_path="uart",
+        ),
+        st.Page(
+            mctp_ui.render,
+            title=t("title_mctp", domain="gui"),
+            icon="🌐",
+            url_path="mctp",
+        ),
+        st.Page(
+            pcie_ui.render,
+            title=t("title_pcie", domain="gui"),
+            icon="🚀",
+            url_path="pcie",
+        ),
+        st.Page(
+            spi_ui.render,
+            title=t("title_spi", domain="gui"),
+            icon="⚡",
+            url_path="spi",
+        ),
     ],
-    "產生器與硬體工具": [
+    t("nav_category_tools", domain="gui"): [
         st.Page(
             board_profile_ui.render,
-            title="Board Profile 視覺化編輯器",
+            title=t("title_board_profile", domain="gui"),
             icon="📋",
             url_path="board-profile",
         ),
-        st.Page(dts_ui.render, title="Device Tree 產生器", icon="🌲", url_path="dts"),
-        st.Page(register_ui.render, title="暫存器 Bitfield 解碼器", icon="🎛", url_path="register"),
-        st.Page(codegen_ui.render, title="C Register 巨集產生器", icon="🛠", url_path="codegen"),
+        st.Page(
+            dts_ui.render,
+            title=t("title_dts", domain="gui"),
+            icon="🌲",
+            url_path="dts",
+        ),
+        st.Page(
+            register_ui.render,
+            title=t("title_register", domain="gui"),
+            icon="🎛",
+            url_path="register",
+        ),
+        st.Page(
+            codegen_ui.render,
+            title=t("title_codegen", domain="gui"),
+            icon="🛠",
+            url_path="codegen",
+        ),
     ],
-    "實驗室與學習": [
+    t("nav_category_labs", domain="gui"): [
         st.Page(
             tutorial_ui.render,
-            title="互動式教學導覽",
+            title=t("title_tutorial", domain="gui"),
             icon="🎓",
             url_path="tutorial",
         ),
         st.Page(
             fault_arena_ui.render,
-            title="Firmware 實戰除錯實驗室",
+            title=t("title_fault_arena", domain="gui"),
             icon="🏆",
             url_path="fault-arena",
         ),
-        st.Page(sop_ui.render, title="韌體除錯指南與 SOP", icon="📚", url_path="sop"),
+        st.Page(
+            sop_ui.render,
+            title=t("title_sop", domain="gui"),
+            icon="📚",
+            url_path="sop",
+        ),
         st.Page(
             chip_db_ui.render,
-            title="I2C 晶片資料庫瀏覽器",
+            title=t("title_chip_db", domain="gui"),
             icon="🔍",
             url_path="chip-db",
         ),
         st.Page(
             emulator_ui.render,
-            title="虛擬設備模擬器實驗室",
+            title=t("title_emulator", domain="gui"),
             icon="🧪",
             url_path="emulator",
         ),
         st.Page(
             fuzz_lab_ui.render,
-            title="協定解析器 Fuzz 測試",
+            title=t("title_fuzz_lab", domain="gui"),
             icon="🎲",
             url_path="fuzz-lab",
         ),
@@ -124,6 +196,10 @@ pages = {
 }
 
 nav = st.navigation(pages)
+
+render_theme_toggle()
+render_global_search()
+render_keyboard_shortcuts()
 
 st.sidebar.caption(f"fw-diag-tool v{__version__}")
 

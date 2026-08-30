@@ -17,6 +17,7 @@ from fw_diag_tool.gui.shared import (
     analyze_i2c_input,
     analyze_spi_input,
     render_guide_expander,
+    render_page_footer,
 )
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.localization import localize_ack, localize_direction
@@ -388,6 +389,8 @@ def render() -> None:
         c1.info("📊 **I2C/PMBus 診斷**\n\n分析 Saleae 匯出檔與時鐘延展")
         c2.info("⚡ **SPI Flash 協定**\n\n檢查 NOR Flash 狀態機與跨頁覆蓋")
         c3.info("📟 **UART 崩潰轉儲**\n\n解析 ARM HardFault 與 Linux Panic")
+
+    render_page_footer()
 
 
 __all__ = ["render"]

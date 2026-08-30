@@ -2,17 +2,23 @@ from __future__ import annotations
 
 import hashlib
 
+import plotly.graph_objects as go
 import streamlit as st
 
+from fw_diag_tool.gui.notifications import show_error_toast, show_success_toast
 from fw_diag_tool.gui.sarif_export import render_sarif_download
 from fw_diag_tool.gui.shared import (
     _localize_gui_error,
     analyze_spi_input,
     render_guide_expander,
+    render_html_download,
+    render_page_footer,
+    render_pdf_download,
 )
 from fw_diag_tool.gui.uploads import MAX_UPLOAD_BYTES, decode_uploaded_text
 from fw_diag_tool.resources import load_spi_sample
 from fw_diag_tool.session.session_manager import SessionManager
+from fw_diag_tool.spi.diff import SPIDiffEngine
 from fw_diag_tool.spi.reporter import SPIReporter
 
 MAX_UPLOAD_MIB = MAX_UPLOAD_BYTES // (1024 * 1024)
@@ -57,6 +63,119 @@ def render() -> None:
         step=1,
         help="請依實際 Flash datasheet 設定；這會影響 Page Program 跨頁風險判定。",
     )
+    with st.expander("⚖️ SPI Before/After 對比分析", expanded=False):
+        st.markdown("比對修復前後或正常／異常板卡的 SPI Trace，分析異常消除與交易計數變化。")
+        diff_col1, diff_col2 = st.columns(2)
+        with diff_col1:
+            uploaded_baseline = st.file_uploader(
+                "選擇 Baseline（修復前／正常）SPI CSV",
+                type=["csv", "txt"],
+                key="spi_diff_baseline_uploader",
+            )
+        with diff_col2:
+            uploaded_candidate = st.file_uploader(
+                "選擇 Candidate（修復後／待測）SPI CSV",
+                type=["csv", "txt"],
+                key="spi_diff_candidate_uploader",
+            )
+
+        if uploaded_baseline is not None and uploaded_candidate is not None:
+            try:
+                base_text = decode_uploaded_text(
+                    uploaded_baseline, allowed_extensions={".csv", ".txt"}
+                )
+                cand_text = decode_uploaded_text(
+                    uploaded_candidate, allowed_extensions={".csv", ".txt"}
+                )
+                base_rep = analyze_spi_input(base_text, int(spi_page_size))
+                cand_rep = analyze_spi_input(cand_text, int(spi_page_size))
+                diff_result = SPIDiffEngine.compare(base_rep, cand_rep)
+
+                if diff_result.is_identical:
+                    st.success(f"✔ {diff_result.summary}")
+                elif len(diff_result.new_anomalies) > 0:
+                    st.error(f"❌ {diff_result.summary}")
+                elif len(diff_result.resolved_anomalies) > 0:
+                    st.success(f"✅ {diff_result.summary}")
+                else:
+                    st.warning(f"⚠ {diff_result.summary}")
+
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric(
+                    "交易總數變化",
+                    f"{cand_rep.summary.total_transactions}",
+                    delta=f"{diff_result.transaction_count_delta:+d}",
+                )
+                m2.metric(
+                    "Baseline 異常數",
+                    f"{base_rep.summary.anomaly_count}",
+                )
+                m3.metric(
+                    "Candidate 異常數",
+                    f"{cand_rep.summary.anomaly_count}",
+                    delta=f"{cand_rep.summary.anomaly_count - base_rep.summary.anomaly_count:+d}",
+                    delta_color="inverse",
+                )
+                m4.metric(
+                    "修復異常數",
+                    f"{len(diff_result.resolved_anomalies)} 項",
+                )
+
+                if diff_result.new_anomalies:
+                    st.error(
+                        "🚨 **新增異常（New Anomalies in Candidate）**：\n"
+                        + "\n".join(f"- {a}" for a in diff_result.new_anomalies)
+                    )
+                if diff_result.resolved_anomalies:
+                    st.success(
+                        "🎉 **已修復異常（Resolved Anomalies）**：\n"
+                        + "\n".join(f"- {a}" for a in diff_result.resolved_anomalies)
+                    )
+                if diff_result.common_anomalies:
+                    st.info(
+                        "ℹ️ **兩者皆存在之異常（Common Anomalies）**：\n"
+                        + "\n".join(f"- {a}" for a in diff_result.common_anomalies)
+                    )
+
+                fig = go.Figure()
+                fig.add_trace(
+                    go.Bar(
+                        x=["異常事件數", "讀取次數", "寫入次數", "抹除次數"],
+                        y=[
+                            base_rep.summary.anomaly_count,
+                            base_rep.summary.read_count,
+                            base_rep.summary.write_count,
+                            base_rep.summary.erase_count,
+                        ],
+                        name="Baseline（基準）",
+                        marker_color="#EF553B",
+                    )
+                )
+                fig.add_trace(
+                    go.Bar(
+                        x=["異常事件數", "讀取次數", "寫入次數", "抹除次數"],
+                        y=[
+                            cand_rep.summary.anomaly_count,
+                            cand_rep.summary.read_count,
+                            cand_rep.summary.write_count,
+                            cand_rep.summary.erase_count,
+                        ],
+                        name="Candidate（待測）",
+                        marker_color="#00CC96",
+                    )
+                )
+                fig.update_layout(
+                    barmode="group",
+                    title="<b>SPI Before / After 統計指標對比</b>",
+                    template="plotly_dark",
+                    height=350,
+                    margin=dict(l=30, r=20, t=40, b=30),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            except (TypeError, ValueError) as exc:
+                st.error(f"SPI 對比分析失敗：{_localize_gui_error(exc, domain='spi')}")
+
     csv_text = None
     if uploaded_spi is not None:
         try:
@@ -86,6 +205,7 @@ def render() -> None:
             rep = analyze_spi_input(csv_text, int(spi_page_size))
         except (TypeError, ValueError) as exc:
             st.error(f"無法解析 SPI 追蹤記錄（trace）：{_localize_gui_error(exc, domain='spi')}")
+            show_error_toast("SPI 分析失敗")
         else:
             st.caption(
                 "本頁分析的是分析器已解碼的 MOSI／MISO／CS 交易（analyzer-decoded transaction）。"
@@ -94,6 +214,7 @@ def render() -> None:
                 "資料表（datasheet）。"
             )
             s1, s2, s3, s4 = st.columns(4)
+            show_success_toast("SPI 分析完成")
             s1.metric("總傳輸次數", rep.summary.total_transactions)
             s2.metric("讀取次數", rep.summary.read_count)
             s3.metric("頁面程式寫入（Page Program）", rep.summary.write_count)
@@ -109,6 +230,8 @@ def render() -> None:
                 mime="text/markdown",
                 key="spi_download_report",
             )
+            render_html_download(spi_md, protocol="SPI", filename_prefix="spi_flash")
+            render_pdf_download(spi_md, protocol="SPI", filename_prefix="spi_flash")
             findings = [
                 {
                     "code": issue.code,
@@ -137,3 +260,5 @@ def render() -> None:
                 mime="application/json",
                 key="spi_download_session",
             )
+
+    render_page_footer()

@@ -5,7 +5,11 @@ from pathlib import Path
 import streamlit as st
 
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
-from fw_diag_tool.gui.shared import _localize_gui_error, render_guide_expander
+from fw_diag_tool.gui.shared import (
+    _localize_gui_error,
+    render_guide_expander,
+    render_page_footer,
+)
 
 
 def render() -> None:
@@ -43,3 +47,5 @@ def render() -> None:
             file_name=header_filename,
             mime="text/x-c",
         )
+
+    render_page_footer()

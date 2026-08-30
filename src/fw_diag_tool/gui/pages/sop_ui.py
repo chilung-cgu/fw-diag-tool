@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from fw_diag_tool.gui.shared import render_guide_expander
+from fw_diag_tool.gui.shared import render_guide_expander, render_page_footer
 
 
 def render() -> None:
@@ -97,6 +97,8 @@ def render() -> None:
             ]
         )
     )
+
+    render_page_footer()
 
 
 __all__ = ["render"]

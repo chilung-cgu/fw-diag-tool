@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import json
 import re
@@ -11,7 +12,9 @@ from fw_diag_tool import __version__
 from fw_diag_tool.board_profile import load_board_profile
 from fw_diag_tool.gui.guide_resources import load_guide_text, prepare_guide_markdown
 from fw_diag_tool.gui.pages.i2c_page import analyze_i2c as analyze_i2c_controller
+from fw_diag_tool.gui.theme import get_current_theme, get_plotly_template
 from fw_diag_tool.i2c.input import I2CInputFormat
+from fw_diag_tool.i18n import TranslationRegistry, get_global_registry
 from fw_diag_tool.limits import AnalysisLimits
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 
@@ -540,6 +543,7 @@ def render_html_download(
     html_content = convert_markdown_to_html(
         markdown_report,
         title=title or f"韌體診斷報告（{protocol} Diagnostic Report）",
+        theme=get_current_theme(),
     )
     file_name = (
         f"{filename_prefix}.html"
@@ -557,6 +561,74 @@ def render_html_download(
         mime="text/html",
         key=f"html_download_{protocol.lower()}",
     )
+
+
+def render_pdf_download(
+    markdown_report: str = "",
+    protocol: str = "I2C",
+    filename_prefix: str = "fw_diag",
+    title: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> None:
+    """在 GUI 頁面顯示 PDF 報告下載按鈕。若 fpdf2 未安裝則顯示提示訊息。"""
+    actual_title = title
+    actual_md = markdown_report
+    actual_meta = metadata
+    actual_protocol = protocol
+
+    if "markdown_content" in kwargs:
+        actual_md = kwargs["markdown_content"]
+        if "title" in kwargs:
+            actual_title = kwargs["title"]
+        elif markdown_report and not ("\n" in markdown_report or len(markdown_report) > 100):
+            actual_title = markdown_report
+        if "metadata" in kwargs:
+            actual_meta = kwargs["metadata"]
+    elif "\n" in protocol or (len(protocol) > 100 and "\n" not in markdown_report):
+        actual_title = markdown_report
+        actual_md = protocol
+        if isinstance(filename_prefix, dict):
+            actual_meta = filename_prefix
+            filename_prefix = "fw_diag"
+        actual_protocol = "Report"
+
+    if not actual_md:
+        return
+
+    from fw_diag_tool.reporting.pdf_report import build_pdf_report, is_fpdf_available
+
+    if not is_fpdf_available():
+        st.info("PDF 匯出需安裝 pdf 額外套件：`pip install fw-diag-tool[pdf]`")
+        return
+
+    try:
+        report_title = actual_title or f"韌體診斷報告（{actual_protocol} Diagnostic Report）"
+        pdf_bytes = build_pdf_report(
+            title=report_title,
+            markdown_content=actual_md,
+            metadata=actual_meta,
+        )
+        clean_proto = actual_protocol.lower()
+        file_name = (
+            f"{filename_prefix}.pdf"
+            if filename_prefix.endswith(".pdf")
+            else (
+                f"{filename_prefix}.pdf"
+                if clean_proto in filename_prefix.lower()
+                else f"{filename_prefix}_{clean_proto}.pdf"
+            )
+        )
+        clean_key_prefix = filename_prefix.replace(".", "_").replace("-", "_")
+        st.download_button(
+            f"下載 PDF 報告（{actual_protocol}）",
+            data=pdf_bytes,
+            file_name=file_name,
+            mime="application/pdf",
+            key=f"pdf_download_{clean_proto}_{clean_key_prefix}",
+        )
+    except Exception as exc:
+        st.warning(f"PDF 報告產生失敗：{exc}")
 
 
 def render_guide_expander(
@@ -588,6 +660,9 @@ def render_session_controls(
     protocol: str,
     report_data: dict[str, Any] | None,
     config_data: dict[str, Any] | None = None,
+    *,
+    key_prefix: str | None = None,
+    include_uploader: bool = True,
 ) -> dict[str, Any] | None:
     """通用 session 存讀控件。
 
@@ -595,6 +670,8 @@ def render_session_controls(
         protocol: 協定名稱 (如 "spi", "uart")
         report_data: 分析報告 dict
         config_data: 設定 dict
+        key_prefix: 自訂 widget key 前綴 (避免同一頁面 key 重複)
+        include_uploader: 是否包含 session 上傳元件 (若頁面已有自訂 session 上傳可設為 False)
 
     Returns:
         如果載入了 session，回傳 report dict；否則 None。
@@ -602,30 +679,32 @@ def render_session_controls(
     from fw_diag_tool.session.session_manager import SessionManager
 
     loaded_report: dict[str, Any] | None = None
-    proto = protocol.lower()
+    proto = (key_prefix or protocol).lower()
 
     with st.expander("💾 Session 管理", expanded=False):
-        session_upload = st.file_uploader(
-            "載入可重現 Session（.fwsession.json）",
-            type=["json"],
-            max_upload_size=SessionManager.MAX_SESSION_BYTES // (1024 * 1024),
-            key=f"{proto}_session_upload",
-        )
-        if session_upload is not None:
-            try:
-                session_doc = SessionManager.deserialize_session(session_upload.getvalue())
-                loaded_report = session_doc.report
-                st.info(
-                    f"已載入 Session：{session_doc.name or f'{protocol.upper()} Analysis'}｜"
-                    f"工具版本：{session_doc.tool_version}"
-                )
-                with st.expander("檢視 Session 報告摘要", expanded=False):
-                    st.json(loaded_report, expanded=False)
-            except (TypeError, ValueError) as exc:
-                st.error(f"無法載入 Session：{_localize_gui_error(exc, domain='session')}")
+        if include_uploader:
+            session_upload = st.file_uploader(
+                "載入可重現 Session（.fwsession.json）",
+                type=["json"],
+                max_upload_size=SessionManager.MAX_SESSION_BYTES // (1024 * 1024),
+                key=f"{proto}_session_upload",
+            )
+            if session_upload is not None:
+                try:
+                    session_doc = SessionManager.deserialize_session(session_upload.getvalue())
+                    loaded_report = session_doc.report
+                    st.info(
+                        f"已載入 Session：{session_doc.name or f'{protocol.upper()} Analysis'}｜"
+                        f"工具版本：{session_doc.tool_version}"
+                    )
+                    with st.expander("檢視 Session 報告摘要", expanded=False):
+                        st.json(loaded_report, expanded=False)
+                except (TypeError, ValueError) as exc:
+                    st.error(f"無法載入 Session：{_localize_gui_error(exc, domain='session')}")
 
         if report_data is not None:
-            st.divider()
+            if include_uploader:
+                st.divider()
             try:
                 data_dict: dict[str, Any]
                 if hasattr(report_data, "to_dict") and callable(report_data.to_dict):
@@ -656,10 +735,47 @@ def render_session_controls(
     return loaded_report
 
 
+def get_translator() -> TranslationRegistry:
+    """取得全域 TranslationRegistry 單例，並與 session_state 語言同步（若可用）。"""
+    registry = get_global_registry()
+    with contextlib.suppress(Exception):
+        if hasattr(st, "session_state") and "locale" in st.session_state:
+            registry.set_locale(st.session_state["locale"])
+    return registry
+
+
+def render_language_selector() -> str:
+    """在 sidebar 渲染語系選擇器，並同步至 session_state 與 TranslationRegistry。"""
+    if "locale" not in st.session_state:
+        st.session_state["locale"] = "zh-TW"
+
+    options = ["zh-TW", "en-US"]
+    labels = {"zh-TW": "🇹🇼 繁體中文 (zh-TW)", "en-US": "🇺🇸 English (en-US)"}
+
+    current_locale = st.session_state.get("locale", "zh-TW")
+    current_index = options.index(current_locale) if current_locale in options else 0
+
+    selected_locale = st.sidebar.selectbox(
+        "🌐 語言 / Language",
+        options=options,
+        index=current_index,
+        format_func=lambda code: labels.get(code, code),
+        key="gui_locale_selector",
+    )
+
+    if selected_locale != st.session_state["locale"]:
+        st.session_state["locale"] = selected_locale
+
+    translator = get_translator()
+    translator.set_locale(selected_locale)
+    return selected_locale
+
+
 __all__ = [
     "DEFAULT_I2C_TIMEOUT_MS",
     "GUI_ANALYSIS_LIMITS",
     "MAX_PACKET_HEX_CHARS",
+    "PAGE_INDEX",
     "_FAULT_ARENA_CASES_ZH",
     "_PCIE_INPUT_ERROR_ZH",
     "_REGISTER_DESCRIPTION_ZH",
@@ -672,8 +788,105 @@ __all__ = [
     "_reset_i2c_session_state",
     "analyze_i2c_input",
     "analyze_spi_input",
+    "get_plotly_template",
+    "get_translator",
+    "render_breadcrumb",
+    "render_global_search",
     "render_guide_expander",
     "render_html_download",
+    "render_keyboard_shortcuts",
+    "render_language_selector",
     "render_page_footer",
+    "render_pdf_download",
     "render_session_controls",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Page index for global search and navigation
+# ---------------------------------------------------------------------------
+
+PAGE_INDEX: list[dict[str, str]] = [
+    {"title": "I2C / PMBus Diagnosis", "url": "i2c-diagnosis",
+     "category": "Protocol Analysis", "keywords": "i2c pmbus waveform decode csv saleae"},
+    {"title": "I2C Packet Builder", "url": "i2c-builder",
+     "category": "Protocol Analysis", "keywords": "i2c packet builder driver generate simulate"},
+    {"title": "Waveform Diff", "url": "waveform-diff",
+     "category": "Protocol Analysis", "keywords": "waveform diff compare golden failing before after"},
+    {"title": "Cross-Protocol Correlation", "url": "correlation",
+     "category": "Advanced Analysis", "keywords": "correlation timeline cross protocol i2c spi uart cluster"},
+    {"title": "Multi-Session Trend Analysis", "url": "session-analytics",
+     "category": "Advanced Analysis", "keywords": "session trend analytics multi compare progress"},
+    {"title": "Dashboard", "url": "dashboard",
+     "category": "Overview", "keywords": "dashboard overview summary status quick start"},
+    {"title": "UART Crash Dump", "url": "uart",
+     "category": "System Protocol", "keywords": "uart crash kernel panic hardfault arm cortex dump"},
+    {"title": "MCTP / IPMB Protocol", "url": "mctp",
+     "category": "System Protocol", "keywords": "mctp ipmb pldm spdm server management bmc"},
+    {"title": "PCIe Config & AER", "url": "pcie",
+     "category": "System Protocol", "keywords": "pcie config aer lspci link degrade tlp error"},
+    {"title": "SPI Flash Protocol", "url": "spi",
+     "category": "System Protocol", "keywords": "spi flash jedec w25q128 wren erase program opcode"},
+    {"title": "Board Profile Editor", "url": "board-profile",
+     "category": "Tools", "keywords": "board profile topology yaml json i2c mux pca9548 bus device"},
+    {"title": "Device Tree Generator", "url": "dts",
+     "category": "Tools", "keywords": "device tree dts dtsi linux openbmc bsp generate"},
+    {"title": "Register Decoder", "url": "register",
+     "category": "Tools", "keywords": "register bitfield decode pmbus pcie hex raw"},
+    {"title": "C Register Macro Gen", "url": "codegen",
+     "category": "Tools", "keywords": "codegen c header macro register rmw misra yaml"},
+    {"title": "Interactive Tutorial", "url": "tutorial",
+     "category": "Labs", "keywords": "tutorial learn beginner guide step interactive walkthrough"},
+    {"title": "Fault Arena", "url": "fault-arena",
+     "category": "Labs", "keywords": "fault arena debug practice exercise scenario firmware lab"},
+    {"title": "Debug SOP Guide", "url": "sop",
+     "category": "Labs", "keywords": "sop debug guide mental model l1 l7 systematic"},
+    {"title": "I2C Chip Database", "url": "chip-db",
+     "category": "Labs", "keywords": "chip database i2c address lookup eeprom sensor pmbus"},
+    {"title": "Virtual Device Emulator", "url": "emulator",
+     "category": "Labs", "keywords": "emulator virtual device eeprom lm75 ina219 spi flash mux"},
+    {"title": "Protocol Fuzz Lab", "url": "fuzz-lab",
+     "category": "Labs", "keywords": "fuzz fuzzing test stress parser edge case random"},
+]
+
+
+def render_global_search() -> None:
+    """Render a global search box in the sidebar."""
+    query = st.sidebar.text_input("Search pages", placeholder="e.g. I2C, SPI, crash...",
+                                  key="global_search_query")
+    if not query:
+        return
+    query_lower = query.lower()
+    results = [
+        p for p in PAGE_INDEX
+        if query_lower in p["title"].lower()
+        or query_lower in p["keywords"]
+        or query_lower in p["category"].lower()
+    ]
+    if results:
+        for p in results:
+            st.sidebar.markdown(f"- [{p['title']}](/{p['url']})")
+    else:
+        st.sidebar.caption("No matching pages found.")
+
+
+def render_breadcrumb(category: str, page_title: str) -> None:
+    """Render a breadcrumb navigation bar at the top of a page."""
+    st.markdown(
+        f"<small style='color:#94a3b8'>"
+        f"<a href='/dashboard' style='color:#94a3b8;text-decoration:none'>Home</a>"
+        f" &rsaquo; {category}"
+        f" &rsaquo; <b>{page_title}</b>"
+        f"</small>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_keyboard_shortcuts() -> None:
+    """Render a collapsible keyboard shortcuts panel in the sidebar."""
+    with st.sidebar.expander("Keyboard Shortcuts"):
+        st.markdown(
+            "- **Ctrl+K** / **Cmd+K** — Focus search\n"
+            "- **Ctrl+/** — Toggle sidebar\n"
+            "- **R** — Rerun current page"
+        )

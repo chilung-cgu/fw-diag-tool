@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from fw_diag_tool.gui.shared import render_guide_expander
+from fw_diag_tool.gui.shared import render_guide_expander, render_page_footer
 from fw_diag_tool.gui.uploads import MAX_UPLOAD_BYTES, decode_uploaded_text
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.waveform_diff import WaveformDiffEngine
@@ -152,6 +152,8 @@ def render() -> None:
             mime="text/markdown",
             key="waveform_diff_download_report",
         )
+
+    render_page_footer()
 
 
 __all__ = ["render"]

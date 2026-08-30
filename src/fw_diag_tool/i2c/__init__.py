@@ -2,6 +2,7 @@
 
 from fw_diag_tool.i2c.anomaly import I2CAnomalyDetector
 from fw_diag_tool.i2c.chip_db import CHIP_DATABASE, get_all_matching_devices, lookup_device
+from fw_diag_tool.i2c.diff import I2CDiffEngine, I2CDiffResult
 from fw_diag_tool.i2c.eeprom import decode_eeprom_read, decode_eeprom_write
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.input import I2CInputFormat, dispatch_i2c_input, normalize_i2c_input_format
@@ -56,6 +57,8 @@ __all__ = [
     "I2CBytePacket",
     "I2CDiagnosticEngine",
     "I2CDiagnosticIssue",
+    "I2CDiffEngine",
+    "I2CDiffResult",
     "I2CDirection",
     "I2CInputFormat",
     "I2CParser",

@@ -6,7 +6,7 @@
 
 > 💡 **建議閱讀順序**：先讀第一章（I2C 波形分析），這是所有韌體工程師的入門起點。之後根據你目前遇到的問題類型，跳轉到對應章節即可。
 
-> 🧭 **不知道頁面或圖表在說什麼？** 先看[16 個 GUI 頁面的閱讀地圖](chapters/appendix_gui_reading_guide.md)，它用「輸入 → 先看什麼 → 不能證明什麼 → 下一步」帶你逐頁定位；再進入該頁的詳細章節。
+> 🧭 **不知道頁面或圖表在說什麼？** 先看[20 個 GUI 頁面的閱讀地圖](chapters/appendix_gui_reading_guide.md)，它用「輸入 → 先看什麼 → 不能證明什麼 → 下一步」帶你逐頁定位；再進入該頁的詳細章節。
 
 ---
 
@@ -19,7 +19,7 @@ uv sync --all-extras
 uv run fw-diag gui
 ```
 
-瀏覽器將自動開啟 `http://127.0.0.1:8501`，左側側邊欄可切換 16 大功能模組。
+瀏覽器將自動開啟 `http://127.0.0.1:8501`，左側側邊欄可切換 20 大功能模組。
 
 > 若你的環境沒有 `uv`，可依公司規範建立 virtualenv 後安裝專案；重點是使用專案鎖定的依賴，
 > 不要把套件裝進系統 Python。首次啟動遇到問題，先看根目錄 README 的環境需求與 `uv lock --check`。
@@ -41,14 +41,23 @@ uv run fw-diag gui
 | 9 | 🎛 晶片暫存器 Bitfield 解碼器 | [ch09_register_codegen.md](chapters/ch09_register_codegen.md) | 內建 YAML |
 | 10 | 🛠 C 語言 Register 巨集產生器 | [ch09_register_codegen.md](chapters/ch09_register_codegen.md)（同第9章） | 內建 YAML |
 | 11 | 🏆 初階 Firmware 實戰除錯實驗室（Fault Arena） | [ch10_fault_arena.md](chapters/ch10_fault_arena.md) | 內建案例 |
-| 12 | 📚 韌體除錯指南與 SOP | [ch12_sop.md](chapters/ch12_sop.md) + [GUI 閱讀地圖](chapters/appendix_gui_reading_guide.md) + GUI L1~L7 分層模型 | 無需檔案 |
-| 13 🆕 | 🔍 I2C 晶片資料庫瀏覽器 | [ch13_chip_db.md](chapters/ch13_chip_db.md) | 內建資料庫 |
-| 14 🆕 | 🧪 虛擬設備模擬器實驗室（Emulator Playground） | [ch14_emulator.md](chapters/ch14_emulator.md) | 無需檔案（互動式模擬） |
-| 15 🆕 | 🎲 協定解析器 Fuzz 測試（Fuzz Lab） | [ch15_fuzz_lab.md](chapters/ch15_fuzz_lab.md) | 內建 Fuzz 產生器 |
-| 16 🆕 | 🏠 功能總覽與快速入門（Dashboard） | [ch16_dashboard.md](chapters/ch16_dashboard.md) | 無需檔案 |
-| 17 🆕 | 🔗 跨協定時間線關聯分析 | [ch17_correlation.md](chapters/ch17_correlation.md) | `i2c_golden.csv`、`spi_w25q128_sample.csv`、`kernel_panic_nvme.log` |
+| 12 | 📋 Board Profile 板級拓撲編輯器 | [ch11_board_profile.md](chapters/ch11_board_profile.md) | 內建 YAML (`board_yv4.yaml`) |
+| 13 | 📚 韌體除錯指南與 SOP | [ch12_sop.md](chapters/ch12_sop.md) + [GUI 閱讀地圖](chapters/appendix_gui_reading_guide.md) + GUI L1~L7 分層模型 | 無需檔案 |
+| 14 | 🔍 I2C 晶片資料庫瀏覽器 | [ch13_chip_db.md](chapters/ch13_chip_db.md) | 內建資料庫 |
+| 15 | 🧪 虛擬設備模擬器實驗室（Emulator Playground） | [ch14_emulator.md](chapters/ch14_emulator.md) | 無需檔案（互動式模擬） |
+| 16 | 🎲 協定解析器 Fuzz 測試（Fuzz Lab） | [ch15_fuzz_lab.md](chapters/ch15_fuzz_lab.md) | 內建 Fuzz 產生器 |
+| 17 | 🏠 功能總覽與快速入門（Dashboard） | [ch16_dashboard.md](chapters/ch16_dashboard.md) | 無需檔案 |
+| 18 | 🔗 跨協定時間線關聯分析 | [ch17_correlation.md](chapters/ch17_correlation.md) | `i2c_golden.csv`、`spi_w25q128_sample.csv`、`kernel_panic_nvme.log` |
+| 19 | 🎓 互動式教學導覽（Interactive Tutorial） | [ch16_dashboard.md](chapters/ch16_dashboard.md) | 內建引導步驟 |
+| 20 | 📈 附錄 A 圖表與證據判讀指南（Chart Guide） | [appendix_chart_guide.md](chapters/appendix_chart_guide.md) | 無需檔案 |
+| — | 📈 多工作階段趨勢分析（Session Analytics） | [ch18_session_analytics.md](chapters/ch18_session_analytics.md) | `.fwsession.json` |
+| — | 📄 PDF 報告匯出（PDF Export） | [ch19_pdf_export.md](chapters/ch19_pdf_export.md) | 需安裝 `fpdf2` |
 
 > 📂 **測試資料路徑**：`examples/data/` 目錄下有所有演練用的 CSV / Log / Hex 檔案。第 3 頁也提供套件內建的 Golden/Failing pair 載入與下載按鈕；PCIe dmesg 範例則可直接貼上 `examples/data/pcie_aer_dmesg.log` 的內容。
+
+### 延伸章節
+
+這兩章是跨頁面的工作流程教學，不另占 GUI 頁面編號；上表以「—」標示其延伸章節性質。
 
 ---
 
@@ -68,13 +77,16 @@ docs/
 │   ├── ch08_spi_flash.md        ← SPI NOR Flash 協定診斷
 │   ├── ch09_register_codegen.md ← Bitfield 解碼 + C Header RMW 巨集
 │   ├── ch10_fault_arena.md      ← 20 大故障案例分類總覽
+│   ├── ch11_board_profile.md    ← Board Profile 拓撲定義與視覺化編輯
 │   ├── ch12_sop.md               ← L1~L7 分層除錯 SOP 與證據詞彙
 │   ├── ch13_chip_db.md          ← I2C 晶片資料庫與 0x00~0x7F 地圖
 │   ├── ch14_emulator.md         ← LM75 / W25Q128 / 24C64 虛擬模擬
 │   ├── ch15_fuzz_lab.md         ← 協定解析器 Fuzzing 穩健性測試
 │   ├── ch16_dashboard.md        ← 功能總覽與 3 步快速上手
 │   ├── ch17_correlation.md      ← 跨協定時間線對齊與異常叢集分析
+│   ├── ch18_session_analytics.md ← 多工作階段異常與交易趨勢
+│   ├── ch19_pdf_export.md       ← CLI／GUI PDF 報告匯出與 CJK 字型
 │   ├── appendix_chart_guide.md  ← I2C 圖表與 evidence level 判讀
-│   └── appendix_gui_reading_guide.md ← 17 個 GUI 頁面的第一輪閱讀地圖
+│   └── appendix_gui_reading_guide.md ← 20 個 GUI 頁面的第一輪閱讀地圖
 └── ...
 ```

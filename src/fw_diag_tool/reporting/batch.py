@@ -7,6 +7,7 @@ from typing import Any
 
 from fw_diag_tool import __version__
 from fw_diag_tool.reporting.html_report import write_html_report
+from fw_diag_tool.reporting.pdf_report import is_fpdf_available, write_pdf_report
 from fw_diag_tool.reporting.sarif import build_sarif_report
 
 
@@ -192,8 +193,8 @@ def batch_analyze_directory(
                     status = "warning"
 
             elif protocol == "spi":
-                report = SPIDiagnosticEngine().analyze_csv_file(file_path)
-                md_text = SPIReporter.to_markdown(report)
+                spi_report = SPIDiagnosticEngine().analyze_csv_file(file_path)
+                md_text = SPIReporter.to_markdown(spi_report)
                 findings = [
                     {
                         "code": i.code,
@@ -204,33 +205,33 @@ def batch_analyze_directory(
                         "message": i.description,
                         "file": str(file_path),
                     }
-                    for i in report.anomalies
+                    for i in spi_report.anomalies
                 ]
                 if any(
                     getattr(i.severity, "value", str(i.severity)) in ("CRITICAL", "ERROR")
-                    for i in report.anomalies
+                    for i in spi_report.anomalies
                 ):
                     status = "error"
-                elif report.anomalies or report.data_quality_issues:
+                elif spi_report.anomalies or spi_report.data_quality_issues:
                     status = "warning"
 
             elif protocol == "uart":
                 content = file_path.read_text(encoding="utf-8", errors="replace")
-                report = UARTCrashParser.parse_log_text(content)
-                md_text = UARTReporter.to_markdown(report)
-                if report.kernel_panic:
+                uart_report = UARTCrashParser.parse_log_text(content)
+                md_text = UARTReporter.to_markdown(uart_report)
+                if uart_report.kernel_panic:
                     findings.append(
                         {
                             "code": "KERNEL_PANIC",
                             "title": "Linux Kernel Panic",
                             "severity": "CRITICAL",
-                            "message": report.kernel_panic.panic_reason,
+                            "message": uart_report.kernel_panic.panic_reason,
                             "file": str(file_path),
                         }
                     )
                     status = "error"
-                if report.arm_hardfault:
-                    for flag in report.arm_hardfault.fault_flags:
+                if uart_report.arm_hardfault:
+                    for flag in uart_report.arm_hardfault.fault_flags:
                         findings.append(
                             {
                                 "code": "ARM_HARDFAULT",
@@ -241,7 +242,7 @@ def batch_analyze_directory(
                             }
                         )
                     status = "error"
-                if report.crash_type.value == "Hardware Watchdog Timeout Reset":
+                if uart_report.crash_type.value == "Hardware Watchdog Timeout Reset":
                     findings.append(
                         {
                             "code": "WATCHDOG_RESET",
@@ -300,15 +301,15 @@ def batch_analyze_directory(
                                         "file": str(file_path),
                                     }
                                 )
-                            for err in cfg.aer_analysis.corr_errors:
-                                if not err.is_active:
+                            for corr_err in cfg.aer_analysis.corr_errors:
+                                if not corr_err.is_active:
                                     continue
                                 findings.append(
                                     {
                                         "code": "AER_CORRECTABLE",
-                                        "title": err.name,
+                                        "title": corr_err.name,
                                         "severity": "WARNING",
-                                        "message": err.root_cause_guide or err.name,
+                                        "message": corr_err.root_cause_guide or corr_err.name,
                                         "file": str(file_path),
                                     }
                                 )
@@ -329,8 +330,8 @@ def batch_analyze_directory(
 
             elif protocol == "mctp":
                 content = file_path.read_text(encoding="utf-8", errors="replace")
-                report = ServerMgmtParser.parse_text_dump(content)
-                md_text = ServerMgmtReporter.to_markdown(report)
+                mctp_report = ServerMgmtParser.parse_text_dump(content)
+                md_text = ServerMgmtReporter.to_markdown(mctp_report)
                 findings = [
                     {
                         "code": "SOURCE_ERROR",
@@ -339,9 +340,9 @@ def batch_analyze_directory(
                         "message": err,
                         "file": str(file_path),
                     }
-                    for err in report.source_errors
+                    for err in mctp_report.source_errors
                 ]
-                if report.source_errors:
+                if mctp_report.source_errors:
                     status = "warning"
 
         except Exception as exc:
@@ -364,6 +365,14 @@ def batch_analyze_directory(
                     title=f"韌體診斷報告（{protocol.upper()} Diagnostic Report）: {file_path.name}",
                 )
                 entry_output_paths.append(str(html_file))
+            if "pdf" in export_formats and is_fpdf_available():
+                pdf_file = out_p / f"{stem}_report.pdf"
+                write_pdf_report(
+                    md_text,
+                    pdf_file,
+                    title=f"韌體診斷報告（{protocol.upper()} Diagnostic Report）: {file_path.name}",
+                )
+                entry_output_paths.append(str(pdf_file))
             if "sarif" in export_formats:
                 sarif_file = out_p / f"{stem}.sarif.json"
                 sarif_json = build_sarif_report(

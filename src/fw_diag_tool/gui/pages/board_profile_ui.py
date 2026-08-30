@@ -17,7 +17,7 @@ from fw_diag_tool.board_profile import (
     SchemaError,
     load_board_profile,
 )
-from fw_diag_tool.gui.shared import render_guide_expander
+from fw_diag_tool.gui.shared import render_guide_expander, render_page_footer
 from fw_diag_tool.gui.uploads import MAX_TEXT_BYTES, decode_uploaded_text, validate_pasted_text
 from fw_diag_tool.i2c.chip_db import CHIP_DATABASE, ChipProfile
 
@@ -1325,6 +1325,8 @@ def render() -> None:
                         st.rerun()
                     except (SchemaError, ValueError, yaml.YAMLError) as exc:
                         st.error(f"YAML 解析失敗：{exc}")
+
+    render_page_footer()
 
 
 __all__ = ["render"]

@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2026-08-30
+
+### Added
+- Protocol A/B Diff page (protocol_diff_ui) -- I2C/SPI/UART dual-file upload, diff engine comparison, Markdown report download
+- Session A/B Compare page (session_compare_ui) -- dual .fwsession.json upload, metric delta cards, verdict badge, report export
+- Dashboard health check panel -- runtime environment, dependency versions, Python/Streamlit status overview
+- Toast notification integration -- show_success_toast/show_error_toast feedback on I2C/SPI/PCIe/UART/MCTP analysis pages
+- HTML report enhancements -- light theme CSS, metadata header grid, print-friendly styles (partial)
+- Global search index entries for Protocol Diff and Session Compare pages
+- i18n translation keys for protocol_diff/session_compare
+
+### Fixed
+- batch.py undefined variable bug -- I2C used stale `report`, SPI/UART variable shadowing resolved
+
+### Changed
+- Navigation pages expanded from 22 to 24 (Protocol Diff, Session Compare)
+- pyproject.toml version bumped to 1.3.0
+- Test suite grown to 900+ tests
+
 ## [1.2.0] - 2026-08-30
 
 ### Added

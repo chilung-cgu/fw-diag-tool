@@ -14,10 +14,12 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from fw_diag_tool.gui.shared import (
+    _localize_gui_error,
     analyze_i2c_input,
     analyze_spi_input,
     render_guide_expander,
     render_page_footer,
+    render_session_controls,
 )
 from fw_diag_tool.resources import load_i2c_sample, load_spi_sample, load_uart_sample
 from fw_diag_tool.uart.parser import parse_uart_log
@@ -338,7 +340,7 @@ def render() -> None:
                 i2c_report, _ = analyze_i2c_input(i2c_input, "decoded_csv", 25.0)
                 st.success(f"I2C: 解析完成 ({len(getattr(i2c_report, 'transactions', []))} 筆交易)")
             except Exception as exc:
-                st.error(f"I2C 解析失敗: {exc}")
+                st.error(f"無法解析 I2C 輸入：{exc}")
 
     with col_spi:
         st.markdown("**SPI Flash CSV**")
@@ -360,7 +362,7 @@ def render() -> None:
                 spi_report = analyze_spi_input(spi_input)
                 st.success(f"SPI: 解析完成 ({len(getattr(spi_report, 'transactions', []))} 筆操作)")
             except Exception as exc:
-                st.error(f"SPI 解析失敗: {exc}")
+                st.error(f"無法解析 SPI 追蹤記錄（trace）：{_localize_gui_error(exc, domain='spi')}")
 
     with col_uart:
         st.markdown("**UART Crash Log**")
@@ -386,13 +388,15 @@ def render() -> None:
                 crash_type = getattr(getattr(uart_report, "crash_type", None), "value", "Unknown")
                 st.success(f"UART: 解析完成 (類型: {crash_type})")
             except Exception as exc:
-                st.error(f"UART 解析失敗: {exc}")
+                st.error(f"UART 輸入錯誤：{_localize_gui_error(exc, domain='uart')}")
 
     # --- Analysis ---
     has_any = i2c_report is not None or spi_report is not None or uart_report is not None
 
     if not has_any:
         st.info("👆 請至少上傳一組協定追蹤資料以啟動關聯分析。")
+        render_session_controls(protocol="correlation", report_data=None)
+        render_page_footer()
         return
 
     st.divider()
@@ -406,6 +410,8 @@ def render() -> None:
 
     if not events:
         st.warning("未偵測到有效的時間戳事件。請確認上傳的追蹤資料包含時間欄位。")
+        render_session_controls(protocol="correlation", report_data=None)
+        render_page_footer()
         return
 
     fig = _build_timeline_chart(events)
@@ -468,5 +474,18 @@ def render() -> None:
             }
         )
         st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    corr_payload = {
+        "total_events": total_events,
+        "anomaly_count": anomaly_count,
+        "protocols_seen": protocols_seen,
+        "clusters": clusters,
+        "events": events,
+    }
+    render_session_controls(
+        protocol="correlation",
+        report_data=corr_payload,
+        config_data={"window_ms": window_ms},
+    )
 
     render_page_footer()

@@ -11,6 +11,7 @@ from fw_diag_tool.gui.shared import (
     _localize_register_description,
     _localize_register_meaning,
     render_guide_expander,
+    render_page_footer,
 )
 from fw_diag_tool.gui.uploads import decode_uploaded_text
 
@@ -104,6 +105,8 @@ def render() -> None:
                     )
                 else:
                     st.caption("未對應位元（Unmapped bits）：0x00000000")
+
+    render_page_footer()
 
 
 __all__ = ["render"]
