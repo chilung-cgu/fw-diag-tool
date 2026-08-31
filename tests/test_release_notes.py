@@ -1,6 +1,7 @@
 import copy
 from dataclasses import FrozenInstanceError
 from importlib.resources import files
+from pathlib import Path
 
 import pytest
 
@@ -11,6 +12,8 @@ from fw_diag_tool.release_notes import (
     localized_text,
     parse_release_notes,
 )
+
+ROOT = Path(__file__).parents[1]
 
 
 def valid_payload() -> dict[str, object]:
@@ -169,6 +172,15 @@ def test_shipped_highlights_are_bilingual_and_safe():
             assert highlight.summary.keys() >= {"zh-TW", "en-US"}
             assert highlight.page is None or ".." not in highlight.page
             assert highlight.doc is None or not highlight.doc.startswith("/")
+
+
+def test_shipped_documentation_paths_resolve_under_docs():
+    docs_root = ROOT / "docs"
+    for note in load_release_notes():
+        for highlight in note.highlights:
+            if highlight.doc is not None:
+                assert highlight.doc.startswith("chapters/")
+                assert (docs_root / highlight.doc).is_file()
 
 
 def test_duplicate_json_keys_are_rejected(monkeypatch):
