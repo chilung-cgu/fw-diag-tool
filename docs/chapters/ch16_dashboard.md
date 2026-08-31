@@ -71,6 +71,8 @@ Dashboard 的「Release history」區塊讀取套件內建的 release-notes mani
 
 Manifest 是隨套件封裝的本地 release metadata，不是會連線抓取新版本的 live update service。要確認最新版本或目標板卡的實際更新狀態，仍須查核正式發布紀錄、部署流程與板端證據。
 
+若 manifest 遺失、格式驗證失敗，或有效歷史中沒有目前執行版本，Release history 會顯示在地化的 unavailable 警告並停止該區塊渲染；Dashboard 其餘導覽、場景推薦與功能卡片仍可繼續使用。這個 fallback 表示版本資料不可用，不代表目標板卡更新失敗。
+
 頁面將整個套件的 16 大頁面劃分為四大核心模組群組，呈現完整的資訊架構：
 
 ### 16 大 GUI 頁面全功能對照總表
