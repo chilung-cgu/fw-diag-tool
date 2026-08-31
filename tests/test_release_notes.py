@@ -1,5 +1,6 @@
 import copy
 from dataclasses import FrozenInstanceError
+from importlib.resources import files
 
 import pytest
 
@@ -113,6 +114,12 @@ def test_packaged_history_is_descending_and_starts_at_current_version():
     assert [note.version for note in notes] == [
         "1.7.0", "1.6.0", "1.5.0", "1.4.0", "1.3.0", "1.2.0", "1.1.1", "1.1.0", "1.0.0"
     ]
+
+
+def test_manifest_is_available_as_a_package_resource():
+    resource = files("fw_diag_tool.resources").joinpath("release_notes.json")
+    assert resource.is_file()
+    assert load_release_notes()[0].version == __version__
 
 
 def test_models_are_frozen():
