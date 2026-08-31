@@ -102,7 +102,7 @@ def _parse_highlight(value: object, index: int) -> ReleaseHighlight:
     if page is not None and (not isinstance(page, str) or not _SLUG_RE.fullmatch(page)):
         raise ReleaseNotesError("invalid page slug")
     doc = item["doc"]
-    if doc is not None and (not isinstance(doc, str) or not _DOC_RE.fullmatch(doc) or ".." in doc.split("/") or doc.startswith("/")):
+    if doc is not None and (not isinstance(doc, str) or not _DOC_RE.fullmatch(doc) or _URL_RE.search(doc) or ".." in doc.split("/") or doc.startswith("/")):
         raise ReleaseNotesError("invalid doc path")
     return ReleaseHighlight(ident, category, tuple(protocols), _require_text_map(item["title"], "title"), _require_text_map(item["summary"], "summary"), page, doc)
 
