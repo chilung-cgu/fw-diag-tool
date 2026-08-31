@@ -24,7 +24,7 @@ def valid_payload() -> dict[str, object]:
                 "highlights": [
                     {
                         "id": "i2c-engine",
-                        "category": "I2C",
+                        "category": "field_rca",
                         "protocols": ["I2C"],
                         "title": {"zh-TW": "I2C 引擎", "en-US": "I2C engine"},
                         "summary": {"zh-TW": "波形分析", "en-US": "Waveform analysis"},
