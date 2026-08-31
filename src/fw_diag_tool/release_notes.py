@@ -95,7 +95,8 @@ def _parse_highlight(value: object, index: int) -> ReleaseHighlight:
     if not isinstance(category, str) or category not in _CATEGORIES:
         raise ReleaseNotesError(f"invalid category: {category!r}")
     protocols = item["protocols"]
-    if not isinstance(protocols, list) or any(p not in _PROTOCOLS for p in protocols) or len(set(protocols)) != len(protocols):
+    if (not isinstance(protocols, list) or any(not isinstance(p, str) or p not in _PROTOCOLS for p in protocols)
+            or len(set(protocols)) != len(protocols)):
         raise ReleaseNotesError("protocols must be unique allowed entries")
     page = item["page"]
     if page is not None and (not isinstance(page, str) or not _SLUG_RE.fullmatch(page)):
