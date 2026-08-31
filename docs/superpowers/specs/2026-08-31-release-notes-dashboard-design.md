@@ -42,7 +42,7 @@
 
 ### 方案 B：套件內結構化 Release Notes manifest（採用）
 
-在 `src/fw_diag_tool/resources/release_notes.json` 保存雙語、版本排序、摘要、分類、協定與可選 page/doc route；`release_notes.py` 只做 schema 驗證與 typed loading；Dashboard 是薄呈現層。CHANGELOG 仍是人類可讀的公開文件，測試驗證兩者的版本集合與最新版本一致。
+在 `src/fw_diag_tool/resources/release_notes.json` 保存雙語、版本排序、摘要、分類、協定與可選 page/doc route；`release_notes.py` 只做 schema 驗證與 typed loading；Dashboard 是薄呈現層。CHANGELOG 仍是人類可讀的公開文件，測試驗證兩者的版本集合與最新版本一致。未來新增版本只能 prepend 新 entry，既有 entry 的 version、date、source_ref、highlight ID 與內容不可改寫。
 
 這個方案能離線工作、可被 wheel 打包、可由測試精確驗證，並把未來新增版本限制為 append-only 的新 entry。
 
@@ -80,7 +80,7 @@
             "en-US": "Shows bridge hierarchy and AER markers to narrow the failing path."
           },
           "page": "pcie",
-          "doc": "docs/chapters/ch07_pcie_aer.md"
+          "doc": "chapters/ch07_pcie_aer.md"
         }
       ]
     }
@@ -88,7 +88,7 @@
 }
 ```
 
-`releases` 必須由新到舊排列。每個版本只能出現一次；每個 highlight 的 `id` 也只能出現一次。`summary` 與每個雙語欄位都必須同時包含 `zh-TW` 和 `en-US`。`category` 只接受 `field_rca`、`evidence_replay`、`teaching`、`team`、`quality`、`ux`。`page` 只能是小寫英數與連字號組成的 route slug；Dashboard 會再以 `PAGE_INDEX` 過濾未註冊 route。`doc` 是不含 `..` 或絕對路徑的 repository-relative Markdown path。
+`releases` 必須由新到舊排列，且目前只接受穩定的 `x.y.z` 版本字串；最多 100 個 release。每個版本只能出現一次；每個 highlight 的 `id` 也只能出現一次。`summary` 與每個雙語欄位都必須同時包含 `zh-TW` 和 `en-US`，且每個純文字欄位長度為 1 至 500 個字元，不得含 HTML tag、外部 URL scheme 或單獨的 `$` LaTeX 分隔符。`category` 只接受 `field_rca`、`evidence_replay`、`teaching`、`team`、`quality`、`ux`。`protocols` 只能包含 `I2C`、`SPI`、`UART`、`PCIe`、`MCTP` 且不得重複（可為空陣列）；每個版本最多 12 個 highlights。`page` 只能是小寫英數與連字號組成的 route slug；Dashboard 會再以 `PAGE_INDEX` 過濾未註冊 route。`doc` 是相對於 `docs/` 的 Markdown path（例如 `chapters/ch07_pcie_aer.md`），不含 `..`、絕對路徑或反斜線。`source_ref` 必須是相對的 `CHANGELOG.md#...` 參照。
 
 ### 5.2 Python API
 
@@ -106,9 +106,11 @@ class ReleaseNotesError(ValueError): ...
 def parse_release_notes(payload: Mapping[str, object]) -> tuple[ReleaseNote, ...]: ...
 
 def load_release_notes() -> tuple[ReleaseNote, ...]: ...
+
+def localized_text(mapping: Mapping[str, str], locale: str) -> str: ...
 ```
 
-Loader 使用 `importlib.resources.files("fw_diag_tool.resources")`，因此 source checkout 與 wheel/zip import 都走同一個資源邊界。所有 schema/長度/排序/路徑錯誤轉成 `ReleaseNotesError`；不把 malformed data 靜默當成空歷史。
+Loader 使用 `importlib.resources.files("fw_diag_tool.resources")`，因此 source checkout 與 wheel/zip import 都走同一個資源邊界。`schema_version` 嚴格要求為 `1`；未知版本直接轉成 `ReleaseNotesError`，由 GUI 顯示 localized warning。日期以 `date.fromisoformat()` 驗證為有效的 `YYYY-MM-DD`。讀取 JSON 時拒絕 duplicate object keys；所有 schema/長度/排序/路徑/資源讀取錯誤轉成 `ReleaseNotesError`；不把 malformed data 靜默當成空歷史。GUI 每次 render 先快照一個 locale，再用純函式依 `locale` -> `zh-TW` -> `en-US` fallback 取 manifest 文字，不能因未知 locale 產生 `KeyError`。
 
 ## 6. Dashboard UX 與資料流
 
@@ -128,7 +130,7 @@ Dashboard 的 What's New 區塊：
 3. 以單一、不巢狀的 expander 提供完整歷史 selectbox；選擇任一版本可看到同一份摘要與 highlights。
 4. 若目前 `__version__` 不在 manifest，仍顯示可用歷史，但以 warning 明確指出 release metadata 不完整。
 5. manifest 缺失或無法解析時，不回退到 v1.5.0 等硬編內容；顯示 localized unavailable 訊息並保留其餘 Dashboard 功能。
-6. 顯示文字用 `st.write`/安全的 Markdown；manifest 不提供任意 HTML 或外部 URL。page/doc route 只接受 loader 驗證過的本地值。
+6. 顯示文字用純文字或 `unsafe_allow_html=False` 的安全 Markdown；manifest 不提供任意 HTML 或外部 URL。page/doc route 只接受 loader 驗證過的本地值。動態 manifest 文字不得交給 `unsafe_allow_html=True`；doc 在 history expander 內只顯示驗證過的本地 path caption，不建立巢狀 expander。
 
 分類標籤、狀態、錯誤與 CTA 全部走 `gui` domain 的 zh-TW/en-US keys；版本號、日期與內容由 manifest 提供，不再把版本寫入 i18n template。
 
@@ -137,6 +139,8 @@ Dashboard 的 What's New 區塊：
 - `CHANGELOG.md` 新增經 commit/tag 證據核對的 `[1.7.0] - 2026-08-30` 區塊。
 - `README.md` 的目前版本與 highlights 改成 v1.7.0；不在本次順手重寫整份功能矩陣。
 - consistency tests 讀取 `pyproject.toml` 的 version、manifest 第一筆與 CHANGELOG 第一個 heading，確認三者相同；同時確認每個 manifest release 都有對應 CHANGELOG heading。
+- consistency tests 同時確認 `uv.lock` 的 `fw-diag-tool` package version 與 `pyproject.toml` 一致，並在 release checklist 執行 `uv lock --check`，避免 `uv run --locked` 因升版後 lock drift 失敗。
+- consistency tests 確認每筆 `source_ref` 的版本片段與該筆 manifest version 相同，且對應的 CHANGELOG heading 唯一存在；新增版本只能放在 manifest/CHANGELOG 的 head。
 - packaging tests 確認 wheel 包含 `fw_diag_tool/resources/release_notes.json`，並在無 source checkout 的 isolated environment 載入 manifest。
 - release checklist 增加「先寫 CHANGELOG/manifest，再建立 tag」的順序；既有 tag 不做 destructive rewrite。
 
