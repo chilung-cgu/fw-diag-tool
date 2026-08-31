@@ -1,7 +1,7 @@
 # Firmware Diagnostic Suite (`fw_diag_tool`)
 
 專為 **Junior 韌體 / 嵌入式 / 硬體工程師** 設計的本機診斷與學習工具，目標平台為 macOS 與 Linux。
-目前版本 **v1.4.0**，提供 I2C/PMBus、PCIe AER、SPI Flash、UART Crash Dump、MCTP/IPMB 五大協定分析，以及協定示意圖、全協定差分引擎（Diff Engine）、目錄級批次分析（Batch Analysis）、偏好設定（Settings）、無障礙輔助與 26 個 synthetic 練習情境。各模組的輸入能力與限制請先閱讀 [能力與限制](docs/LIMITATIONS.md)。
+目前版本 **v1.7.0**，提供 I2C/PMBus、PCIe AER、SPI Flash、UART Crash Dump、MCTP/IPMB 五大協定分析，以及協定示意圖、全協定差分引擎（Diff Engine）、目錄級批次分析（Batch Analysis）、偏好設定（Settings）、無障礙輔助與 26 個 synthetic 練習情境。各模組的輸入能力與限制請先閱讀 [能力與限制](docs/LIMITATIONS.md)。
 
 👉 **完整新人圖文教學指南**：請參閱 [docs/index.md](docs/index.md)；若不知道某個 GUI 頁面或圖表怎麼讀，先看 [26+ 個 GUI 頁面的閱讀地圖](docs/chapters/appendix_gui_reading_guide.md)。
 > 📂 **各章節詳細文件**：[ch01 I2C波形](docs/chapters/ch01_i2c_pmbus.md) | [ch02 封包/驅動產生](docs/chapters/ch02_packet_builder.md) | [ch03 Waveform Diff](docs/chapters/ch03_waveform_diff.md) | [ch04 UART Crash](docs/chapters/ch04_uart_crash.md) | [ch05 MCTP/IPMB](docs/chapters/ch05_mctp_ipmb.md) | [ch06 Device Tree](docs/chapters/ch06_dts_generator.md) | [ch07 PCIe AER](docs/chapters/ch07_pcie_aer.md) | [ch08 SPI Flash](docs/chapters/ch08_spi_flash.md) | [ch09 Register/Codegen](docs/chapters/ch09_register_codegen.md) | [ch10 Fault Arena](docs/chapters/ch10_fault_arena.md) | [ch11 Board Profile](docs/chapters/ch11_board_profile.md) | [ch12 SOP](docs/chapters/ch12_sop.md) | [ch13 晶片資料庫](docs/chapters/ch13_chip_db.md) | [ch14 模擬器](docs/chapters/ch14_emulator.md) | [ch15 Fuzz Lab](docs/chapters/ch15_fuzz_lab.md) | [ch16 Dashboard](docs/chapters/ch16_dashboard.md) | [ch17 關聯分析](docs/chapters/ch17_correlation.md) | [ch18 Session 趨勢](docs/chapters/ch18_session_analytics.md) | [ch19 PDF 匯出](docs/chapters/ch19_pdf_export.md) | [ch20 協定 Diff](docs/chapters/ch20_protocol_diff.md) | [ch21 Session 比對](docs/chapters/ch21_session_compare.md) | [ch22 批次分析](docs/chapters/ch22_batch_analysis.md) | [ch23 偏好設定](docs/chapters/ch23_settings.md) | [附錄A 圖表判讀](docs/chapters/appendix_chart_guide.md)
@@ -10,13 +10,13 @@
 
 ---
 
-## ✨ v1.4.0 版本亮點（Highlights）
+## ✨ v1.7.0 版本亮點（Highlights）
 
-- **五大協定 Diff 引擎全面就緒**：擴展 PCIe Diff（AER 錯誤差分、Link 降級偵測、Vendor/Device 異動）與 MCTP/IPMB Diff（訊框計數 Delta、錯誤分類比對），與既有 I2C、SPI、UART 構成涵蓋 5 大核心協定的 A/B Trace 差分比對能力。
-- **目錄級多檔案批次分析（Batch Analysis）**：支援一次上傳多個檔案或指定目錄，自動識別協定類型並平行診斷，產出匯總統計與一鍵下載 ZIP 報告包（含 Markdown、HTML、SARIF）。
-- **視覺化偏好設定（Settings & Preferences GUI）**：提供 I2C Timeout、UI 語系（繁體中文 / 英文）、主題切換、表格資料列數上限、SPI Page Size 等全域即時配置。
-- **無障礙體驗與導覽優化（Accessibility & Navigation）**：新增鍵盤無障礙 Skip-to-content 快速跳轉連結、全域搜尋（Ctrl+K / Cmd+K）、麵包屑導航與 26 大頁面流暢切換。
-- **HTML/PDF 報告強化**：HTML 報告新增目錄錨點（TOC Anchor Slugs）、折疊式詳細區塊（Collapsible Details）與列印友善 CSS；支援全流程中英雙語 i18n。
+- **PCIe / MCTP 拓撲與統計**：提供拓撲分析及協定統計資訊。
+- **SPI Flash 晶片資料庫**：擴充 JEDEC 晶片資料，協助辨識常見 Flash 元件。
+- **UART 症狀資料庫**：提供 UART 症狀對照與排查指引。
+- **互動式統計圖表**：以 Plotly 呈現可互動的統計視覺化。
+- **整合與覆蓋率強化**：補強 Session 與各協定 Reporter 的整合測試覆蓋。
 
 ---
 

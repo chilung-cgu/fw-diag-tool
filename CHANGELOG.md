@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0] - 2026-08-30
+
+### Added
+- PCIe and MCTP topology analysis with protocol statistics.
+- SPI Flash JEDEC chip database support.
+- UART symptom database and guidance.
+- Interactive Plotly statistics charts.
+- Integration coverage for sessions and protocol reporters.
+
 ## [1.6.0] - 2026-08-30
 
 ### Added
