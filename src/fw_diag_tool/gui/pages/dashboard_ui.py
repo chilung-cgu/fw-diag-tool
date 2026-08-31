@@ -9,10 +9,17 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from fw_diag_tool import __version__
+from fw_diag_tool.gui.page_index import PAGE_INDEX
 from fw_diag_tool.gui.shared import _FAULT_ARENA_CASES_ZH, render_page_footer
 from fw_diag_tool.gui.theme import get_plotly_template
-from fw_diag_tool.i18n import t
+from fw_diag_tool.i18n import get_global_registry, t
 from fw_diag_tool.metrics import get_metrics_collector
+from fw_diag_tool.release_notes import (
+    ReleaseNote,
+    ReleaseNotesError,
+    load_release_notes,
+    localized_text,
+)
 from fw_diag_tool.session.session_manager import SessionManager
 
 
@@ -31,11 +38,57 @@ def _get_example_data_count() -> int:
 
 
 def _render_quick_link(url_path: str, label: str) -> None:
-    """嘗試使用 st.page_link 呈現快速啟動按鈕，若不支援則降級至 markdown 連結。"""
+    """嘗試使用 st.page_link 呈現快速啟動按鈕，若不支援則降級至純文字。"""
     try:
         st.page_link(url_path, label=label, use_container_width=True)
     except Exception:
-        st.markdown(f"[{label}]({url_path})")
+        st.caption(label)
+
+
+def _render_release_card(note: ReleaseNote, locale: str) -> None:
+    st.write(f"**v{note.version} ({note.date})** — {localized_text(note.summary, locale)}")
+    for highlight in note.highlights:
+        category = t(f"whats_new_category_{highlight.category}", locale=locale, domain="gui")
+        protocols = ", ".join(highlight.protocols) or "—"
+        st.write(f"**{localized_text(highlight.title, locale)}**")
+        st.caption(
+            f"{category} · {t('whats_new_protocols', locale=locale, domain='gui')}: {protocols}"
+        )
+        st.write(localized_text(highlight.summary, locale))
+        page = next((entry for entry in PAGE_INDEX if entry.get("url") == highlight.page), None)
+        if page is not None:
+            _render_quick_link(
+                page["url"], t("whats_new_open_page", locale=locale, domain="gui")
+            )
+        elif highlight.doc is not None:
+            st.caption(
+                f"{t('whats_new_read_doc', locale=locale, domain='gui')}: {highlight.doc}"
+            )
+
+
+def _render_release_notes() -> None:
+    locale = get_global_registry().get_locale()
+    try:
+        notes = load_release_notes()
+    except ReleaseNotesError:
+        st.warning(t("whats_new_unavailable", locale=locale, domain="gui"))
+        return
+    st.subheader(t("whats_new_title", locale=locale, domain="gui"))
+    st.caption(
+        t("whats_new_current_version", locale=locale, domain="gui", version=__version__)
+    )
+    if not any(note.version == __version__ for note in notes):
+        st.warning(t("whats_new_unavailable", locale=locale, domain="gui"))
+    columns = st.columns(3)
+    for column, note in zip(columns, notes[:3]):
+        with column:
+            _render_release_card(note, locale)
+    with st.expander(t("whats_new_history_label", locale=locale, domain="gui")):
+        selected = st.selectbox(
+            t("whats_new_history_select", locale=locale, domain="gui"),
+            [note.version for note in notes],
+        )
+        _render_release_card(next(note for note in notes if note.version == selected), locale)
 
 
 def _render_quick_actions() -> None:
@@ -530,17 +583,7 @@ def render() -> None:
         )
 
     st.markdown("---")
-    st.subheader(t("whats_new_title", domain="gui"))
-    with st.expander(t("whats_new_expander", domain="gui"), expanded=True):
-        st.markdown(
-            "- **📟 CLI 差分對稱完善**：新增 `pcie diff` 與 `mctp diff` 子命令，五大協定均支援 CLI 差分對比。\n"
-            "- **🔗 跨協定時間線擴展**：Correlation UI 從 3 協定擴展至 5 協定 (I2C/SPI/UART/PCIe/MCTP)。\n"
-            "- **💾 Session 儲存對稱補齊**：SPI、UART、PCIe、MCTP 頁面新增「儲存分析 Session」功能。\n"
-            "- **📄 Diff JSON 匯出**：五大協定 Diff 結果支援 JSON 結構化報告下載。\n"
-            "- **🌍 i18n 完整性稽核**：補齊 40+ 缺少的翻譯詞條，新增 AST 自動化檢查測試。\n"
-            "- **📊 Dashboard 強化**：環境健康看板、分析歷史統計圖表、快速 Session 匯入。\n"
-            "- **📖 README 全面更新**：26 頁 GUI 功能矩陣表、完整 CLI 指令速查。"
-        )
+    _render_release_notes()
 
     _render_analysis_history()
     _render_recent_sessions()

@@ -4,11 +4,74 @@ from __future__ import annotations
 
 import platform
 
+import pytest
 import streamlit as st
 
 from fw_diag_tool.gui.pages import dashboard_ui
 from fw_diag_tool.metrics import get_metrics_collector
 from fw_diag_tool.session.session_manager import SessionDocument
+
+
+def test_render_release_notes_shows_current_cards_and_history() -> None:
+    captured: list[str] = []
+    options: list[str] = []
+
+    class Expander:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return None
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(dashboard_ui.st, "subheader", captured.append)
+    monkeypatch.setattr(dashboard_ui.st, "caption", captured.append)
+    monkeypatch.setattr(dashboard_ui.st, "write", captured.append)
+    monkeypatch.setattr(dashboard_ui.st, "expander", lambda *args, **kwargs: Expander())
+    monkeypatch.setattr(
+        dashboard_ui.st,
+        "selectbox",
+        lambda label, values: options.extend(values) or values[0],
+    )
+    dashboard_ui._render_release_notes()
+    monkeypatch.undo()
+    text = "\n".join(captured)
+    assert all(version in text for version in ("1.7.0", "1.6.0", "1.5.0"))
+    assert options == [note.version for note in dashboard_ui.load_release_notes()]
+
+
+def test_render_release_notes_locale_changes_labels(monkeypatch) -> None:
+    registry = dashboard_ui.get_global_registry()
+    registry.set_locale("en-US")
+    try:
+        captured: list[str] = []
+
+        class Expander:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return None
+        monkeypatch.setattr(dashboard_ui.st, "subheader", captured.append)
+        monkeypatch.setattr(dashboard_ui.st, "caption", captured.append)
+        monkeypatch.setattr(dashboard_ui.st, "write", captured.append)
+        monkeypatch.setattr(dashboard_ui.st, "expander", lambda *args, **kwargs: Expander())
+        monkeypatch.setattr(dashboard_ui.st, "selectbox", lambda label, values: values[0])
+        monkeypatch.setattr(dashboard_ui, "_render_quick_link", lambda _url, label: captured.append(label))
+        dashboard_ui._render_release_notes()
+        english = "\n".join(captured)
+        assert "What's New" in english
+        assert "Open" in english or "Documentation" in english
+    finally:
+        registry.set_locale("zh-TW")
+
+
+def test_render_release_notes_warns_on_malformed_manifest(monkeypatch) -> None:
+    monkeypatch.setattr(dashboard_ui, "load_release_notes", lambda: (_ for _ in ()).throw(dashboard_ui.ReleaseNotesError("bad")))
+    warnings: list[str] = []
+    monkeypatch.setattr(dashboard_ui.st, "warning", warnings.append)
+    dashboard_ui._render_release_notes()
+    assert warnings
 
 
 def test_check_dependency_key_packages():
