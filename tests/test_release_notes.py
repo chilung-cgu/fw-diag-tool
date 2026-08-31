@@ -29,7 +29,7 @@ def valid_payload() -> dict[str, object]:
                         "title": {"zh-TW": "I2C 引擎", "en-US": "I2C engine"},
                         "summary": {"zh-TW": "波形分析", "en-US": "Waveform analysis"},
                         "page": "i2c-diagnosis",
-                        "doc": "docs/chapters/ch01_i2c.md",
+                        "doc": "chapters/ch01_i2c.md",
                     }
                 ],
             }
@@ -69,6 +69,15 @@ def duplicate_highlight():
     payload = copy.deepcopy(valid_payload())
     release = payload["releases"][0]
     release["highlights"].append(copy.deepcopy(release["highlights"][0]))
+    return payload
+
+
+def duplicate_global_highlight():
+    payload = copy.deepcopy(valid_payload())
+    second = copy.deepcopy(payload["releases"][0])
+    second["version"] = "0.9.0"
+    second["source_ref"] = "CHANGELOG.md#0.9.0"
+    payload["releases"].append(second)
     return payload
 
 
@@ -114,7 +123,7 @@ def test_models_are_frozen():
 
 @pytest.mark.parametrize(
     "payload_factory",
-    [missing_schema, wrong_schema, duplicate_version, duplicate_highlight, ascending_versions,
+    [missing_schema, wrong_schema, duplicate_version, duplicate_highlight, duplicate_global_highlight, ascending_versions,
      missing_english, unsafe_doc, unsafe_page, invalid_category, overlong_text],
 )
 def test_invalid_manifest_is_rejected(payload_factory):
@@ -152,7 +161,7 @@ def test_shipped_highlights_are_bilingual_and_safe():
             assert highlight.title.keys() >= {"zh-TW", "en-US"}
             assert highlight.summary.keys() >= {"zh-TW", "en-US"}
             assert highlight.page is None or ".." not in highlight.page
-            assert highlight.doc is None or highlight.doc.startswith("docs/")
+            assert highlight.doc is None or not highlight.doc.startswith("/")
 
 
 def test_duplicate_json_keys_are_rejected(monkeypatch):

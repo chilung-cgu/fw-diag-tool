@@ -39,7 +39,7 @@ _VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _SOURCE_RE = re.compile(r"^CHANGELOG\.md#([0-9]+\.[0-9]+\.[0-9]+)$")
-_DOC_RE = re.compile(r"^docs/[^\\]*\.md$")
+_DOC_RE = re.compile(r"^(?!/)(?!.*(?:^|/)\.\.(?:/|$))[^\\]+\.md$")
 _PROTOCOLS = {"I2C", "SPI", "UART", "PCIe", "MCTP"}
 _CATEGORIES = {"field_rca", "evidence_replay", "teaching", "team", "quality", "ux"}
 _HTML_RE = re.compile(r"<[^>]+>")
@@ -115,6 +115,7 @@ def parse_release_notes(payload: Mapping[str, object]) -> tuple[ReleaseNote, ...
         raise ReleaseNotesError("releases must contain 1-100 entries")
     notes: list[ReleaseNote] = []
     seen_versions: set[str] = set()
+    seen_highlight_ids: set[str] = set()
     previous: tuple[int, int, int] | None = None
     for idx, value in enumerate(releases):
         item = _require_mapping(value, f"releases[{idx}]")
@@ -144,6 +145,9 @@ def parse_release_notes(payload: Mapping[str, object]) -> tuple[ReleaseNote, ...
         ids = [h.id for h in highlights]
         if len(set(ids)) != len(ids):
             raise ReleaseNotesError("duplicate highlight id")
+        if seen_highlight_ids.intersection(ids):
+            raise ReleaseNotesError("duplicate highlight id")
+        seen_highlight_ids.update(ids)
         notes.append(ReleaseNote(version, datestr, source_ref, _require_text_map(item["summary"], "summary"), highlights))
     return tuple(notes)
 
