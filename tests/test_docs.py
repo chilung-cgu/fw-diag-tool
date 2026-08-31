@@ -4,6 +4,8 @@ import re
 from pathlib import Path
 from urllib.parse import unquote
 
+import yaml
+
 ROOT = Path(__file__).parents[1]
 MARKDOWN_LINK = re.compile(r"!?\[[^]]*]\(([^)]+)\)")
 
@@ -50,6 +52,30 @@ def test_sop_teaches_evidence_boundaries() -> None:
     for layer in ("L1", "L2", "L3", "L4", "L5", "L6", "L7"):
         assert layer in sop
     assert "不能量類比電壓" in sop
+
+
+def test_dashboard_documents_cumulative_release_history_and_nav() -> None:
+    chapter_path = ROOT / "docs" / "chapters" / "ch16_dashboard.md"
+    chapter = chapter_path.read_text(encoding="utf-8")
+    assert "release-history" in chapter.lower() or "release history" in chapter.lower()
+    assert "v1.7.0" in chapter
+    assert "累積歷史" in chapter
+    assert "cumulative history" in chapter
+    assert "證據邊界" in chapter
+    assert "evidence boundary" in chapter
+
+    config = yaml.safe_load((ROOT / "mkdocs.yml").read_text(encoding="utf-8"))
+
+    def nav_contains_path(node: object) -> bool:
+        if isinstance(node, str):
+            return node == "chapters/ch16_dashboard.md"
+        if isinstance(node, dict):
+            return any(nav_contains_path(value) for value in node.values())
+        if isinstance(node, list):
+            return any(nav_contains_path(value) for value in node)
+        return False
+
+    assert nav_contains_path(config.get("nav", []))
 
 
 def test_mctp_tutorial_matches_gui_sample_and_uses_valid_ipmb_checksum() -> None:
