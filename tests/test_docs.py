@@ -8,6 +8,8 @@ import yaml
 
 ROOT = Path(__file__).parents[1]
 MARKDOWN_LINK = re.compile(r"!?\[[^]]*]\(([^)]+)\)")
+FENCED_BLOCK = re.compile(r"```.*?```", re.DOTALL)
+INLINE_CODE = re.compile(r"`[^`]*`")
 
 
 def markdown_files() -> list[Path]:
@@ -17,7 +19,9 @@ def markdown_files() -> list[Path]:
 def test_local_markdown_links_resolve() -> None:
     broken: list[str] = []
     for source in markdown_files():
-        for target in MARKDOWN_LINK.findall(source.read_text(encoding="utf-8")):
+        content = FENCED_BLOCK.sub("", source.read_text(encoding="utf-8"))
+        content = INLINE_CODE.sub("", content)
+        for target in MARKDOWN_LINK.findall(content):
             raw_target = target.split(maxsplit=1)[0].strip("<>")
             if raw_target.startswith(("http://", "https://", "mailto:", "#")):
                 continue
