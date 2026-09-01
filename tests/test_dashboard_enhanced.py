@@ -8,6 +8,20 @@ from fw_diag_tool.gui.pages import correlation_ui, dashboard_ui
 from fw_diag_tool.gui.shared import render_page_footer
 
 
+def _page_links(app):
+    links = []
+
+    def visit(node):
+        if getattr(node, "type", None) == "page_link":
+            links.append(node)
+        children = getattr(node, "children", {})
+        for child in children.values() if hasattr(children, "values") else ():
+            visit(child)
+
+    visit(app._tree)
+    return links
+
+
 def test_render_page_footer_exists_and_importable():
     assert callable(render_page_footer)
     assert "render_page_footer" in shared_module.__all__
@@ -70,6 +84,113 @@ st.navigation(pages).run()
     assert page_link.proto.label == "📊 I2C 診斷"
     assert page_link.proto.page_script_hash == route_registry.resolve_page("i2c-diagnosis")._script_hash
     assert app.caption[0].value == "🔗 Unknown"
+
+
+def test_dashboard_runtime_quick_launch_matrix_uses_real_page_metadata():
+    app = AppTest.from_string(
+        """
+import streamlit as st
+from fw_diag_tool.gui.pages import dashboard_ui
+from fw_diag_tool.gui.route_registry import register_pages
+
+def placeholder():
+    st.write("placeholder")
+
+pages = {"": [
+    st.Page(dashboard_ui.render, title="Dashboard", url_path="dashboard"),
+    st.Page(placeholder, title="I2C", url_path="i2c-diagnosis"),
+    st.Page(placeholder, title="Diff", url_path="waveform-diff"),
+    st.Page(placeholder, title="PCIe", url_path="pcie"),
+    st.Page(placeholder, title="UART", url_path="uart"),
+    st.Page(placeholder, title="SPI", url_path="spi"),
+    st.Page(placeholder, title="Fault Arena", url_path="fault-arena"),
+    st.Page(placeholder, title="Session Compare", url_path="session-compare"),
+    st.Page(placeholder, title="Session Analytics", url_path="session-analytics"),
+]}
+register_pages(pages)
+st.navigation(pages, position="hidden").run()
+"""
+    ).run()
+
+    assert not app.exception
+    links = _page_links(app)
+    labels = {link.proto.label for link in links}
+    assert labels >= {
+        "📊 I2C 診斷",
+        "⚖️ 雙波形差分",
+        "🚀 PCIe AER",
+        "📟 UART Crash",
+        "⚡ SPI Flash",
+        "🏆 Fault Arena",
+    }
+    route_labels = {
+        "📊 I2C 診斷": "i2c-diagnosis",
+        "⚖️ 雙波形差分": "waveform-diff",
+        "🚀 PCIe AER": "pcie",
+        "📟 UART Crash": "uart",
+        "⚡ SPI Flash": "spi",
+        "🏆 Fault Arena": "fault-arena",
+    }
+    for label, url_path in route_labels.items():
+        link = next(item for item in links if item.proto.label == label)
+        assert link.proto.page_script_hash == route_registry.resolve_page(url_path)._script_hash
+
+
+def test_release_card_and_quick_import_links_resolve_registered_routes():
+    app = AppTest.from_string(
+        '''
+import streamlit as st
+from types import SimpleNamespace
+from fw_diag_tool.gui.pages import dashboard_ui
+from fw_diag_tool.gui.route_registry import register_pages
+from fw_diag_tool.release_notes import ReleaseHighlight, ReleaseNote
+
+def placeholder():
+    st.write("placeholder")
+
+class Manager:
+    def list_sessions(self):
+        return [{"name": "Demo", "filename": "demo.json", "path": "/tmp/demo", "created_at": "today"}]
+    def load_document(self, _path):
+        return SimpleNamespace(name="Demo", tool_version="1.0", created_at="today", report={}, notes="")
+
+dashboard_ui.SessionManager = Manager
+pages = {"": [
+    st.Page(placeholder, title="Diff", url_path="waveform-diff"),
+    st.Page(placeholder, title="Session Compare", url_path="session-compare"),
+    st.Page(placeholder, title="Session Analytics", url_path="session-analytics"),
+    st.Page(placeholder, title="I2C", url_path="i2c-diagnosis"),
+]}
+register_pages(pages)
+dashboard_ui._render_release_card(ReleaseNote(
+    version="9.9.9", date="2026-09-01", source_ref="CHANGELOG.md#9.9.9",
+    summary={"zh-TW": "摘要", "en-US": "Summary"},
+    highlights=(ReleaseHighlight(
+        id="demo", category="ux", protocols=("I2C",),
+        title={"zh-TW": "標題", "en-US": "Title"},
+        summary={"zh-TW": "說明", "en-US": "Details"},
+        page="waveform-diff", doc=None,
+    ),),
+), "zh-TW")
+dashboard_ui._render_quick_import()
+'''
+    ).run()
+    assert not app.exception
+    app.button[0].click().run()
+    assert not app.exception
+    links = _page_links(app)
+    labels = {link.proto.label for link in links}
+    assert "開啟功能頁面" in labels
+    assert {"⚖️ 前往 Session 比對", "📈 前往 Session 趨勢分析", "📊 前往 I2C 診斷"} <= labels
+    route_labels = {
+        "開啟功能頁面": "waveform-diff",
+        "⚖️ 前往 Session 比對": "session-compare",
+        "📈 前往 Session 趨勢分析": "session-analytics",
+        "📊 前往 I2C 診斷": "i2c-diagnosis",
+    }
+    for label, url_path in route_labels.items():
+        link = next(item for item in links if item.proto.label == label)
+        assert link.proto.page_script_hash == route_registry.resolve_page(url_path)._script_hash
 
 
 def test_correlation_ui_render_executes_without_error():
