@@ -21,11 +21,16 @@ from fw_diag_tool.board_profile import SchemaError, load_board_profile
 from fw_diag_tool.cli_extra import register_extra_commands
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
+from fw_diag_tool.em.validator import EMValidator
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
+from fw_diag_tool.i2c.models import Severity
 from fw_diag_tool.i2c.raw_adapter import raw_decode_to_events
 from fw_diag_tool.i2c.raw_capture import analyze_raw_i2c_csv
 from fw_diag_tool.i2c.reporter import I2CReporter
 from fw_diag_tool.limits import DEFAULT_ANALYSIS_LIMITS, AnalysisLimits
+from fw_diag_tool.log.diff import LogDiffEngine
+from fw_diag_tool.log.models import LogReport
+from fw_diag_tool.log.parser import LogParser
 from fw_diag_tool.mctp.diff import MCTPDiffEngine
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.mctp.reporter import ServerMgmtReporter
@@ -56,6 +61,14 @@ uart_app = typer.Typer(name="uart", help="UART Serial Crash Dump & ARM HardFault
 mctp_app = typer.Typer(name="mctp", help="MCTP & IPMB Server Management Protocol Tools")
 reg_app = typer.Typer(name="reg", help="Hardware & Chip Register Bitfield Decoder")
 gen_app = typer.Typer(name="gen", help="Firmware C Header, Device Tree & Driver Code Generator")
+log_app = typer.Typer(
+    name="log",
+    help="Linux kernel (dmesg) and BMC (journalctl) log diagnostics and correlation.",
+    add_completion=False,
+)
+em_app = typer.Typer(
+    name="em", help="OpenBMC Entity-Manager JSON configuration tools.", add_completion=False
+)
 
 app.add_typer(i2c_app)
 app.add_typer(pcie_app)
@@ -64,6 +77,8 @@ app.add_typer(uart_app)
 app.add_typer(mctp_app)
 app.add_typer(reg_app)
 app.add_typer(gen_app)
+app.add_typer(log_app)
+app.add_typer(em_app)
 
 console = Console()
 register_extra_commands(app, i2c_app, console)
@@ -1678,6 +1693,305 @@ def check() -> None:
         console.print(
             Panel("[bold red]✖ 部分環境或依賴檢查未通過，請檢查上述錯誤。[/]", border_style="red")
         )
+        raise typer.Exit(code=1)
+
+
+def _generate_log_markdown(report: LogReport, file_path: Path) -> str:
+    lines = [
+        "# System Log Diagnostic Report",
+        "",
+        f"- **File**: `{file_path}`",
+        f"- **Source Type**: `{report.source_type.value}`",
+        f"- **Total Lines**: {report.summary.total_lines}",
+        f"- **Detected Events**: {report.summary.total_events}",
+        f"- **Correlated Incidents**: {report.summary.total_incidents}",
+    ]
+    if report.summary.time_span_seconds is not None:
+        lines.append(f"- **Time Span**: {report.summary.time_span_seconds:.3f} s")
+    else:
+        lines.append("- **Time Span**: N/A")
+
+    lines.extend(["", "## Summary Breakdown", ""])
+    if report.summary.subsystem_counts:
+        lines.append("### Subsystems")
+        for sub, count in report.summary.subsystem_counts.items():
+            lines.append(f"- **{sub}**: {count}")
+        lines.append("")
+
+    if report.summary.severity_counts:
+        lines.append("### Severities")
+        for sev, count in report.summary.severity_counts.items():
+            lines.append(f"- **{sev}**: {count}")
+        lines.append("")
+
+    lines.extend(["## Incidents", ""])
+    if not report.incidents:
+        lines.append("No incidents detected.")
+    else:
+        for inc in report.incidents:
+            lines.append(f"### [{inc.severity.value}] {inc.id}: {inc.title}")
+            lines.append(f"- **Subsystem**: {inc.subsystem.value}")
+            lines.append(f"- **Events Count**: {len(inc.events)}")
+            if inc.root_cause_hypothesis:
+                lines.append(f"- **Root Cause Hypothesis**: {inc.root_cause_hypothesis}")
+            if inc.board_context:
+                lines.append(f"- **Board Context**: {inc.board_context}")
+            if inc.recommended_actions:
+                lines.append("- **Recommended Actions**:")
+                for act in inc.recommended_actions:
+                    lines.append(f"  - {act}")
+            lines.append("")
+    return "\n".join(lines).strip() + "\n"
+
+
+@log_app.command("analyze")
+def analyze_log(
+    file_path: Path = typer.Argument(
+        ..., help="Path to dmesg, journalctl, or mixed log file"
+    ),
+    board_profile: Path | None = typer.Option(
+        None, "--board-profile", "-b", help="Board Profile YAML for topology enrichment"
+    ),
+    markdown_out: Path | None = typer.Option(
+        None, "--md", "-m", help="Export incident report to Markdown file"
+    ),
+    json_out: Path | None = typer.Option(
+        None, "--json", "-j", help="Export report to JSON file"
+    ),
+    fail_on: str | None = typer.Option(
+        None,
+        "--fail-on",
+        help="Exit with non-zero code if issues at or above severity are found (error|critical)",
+    ),
+) -> None:
+    """Analyze Linux kernel (dmesg) and BMC (journalctl) logs for faults and correlate incidents."""
+    if not file_path.exists():
+        console.print(f"[bold red]Error: File {file_path} not found![/]")
+        raise typer.Exit(code=1)
+
+    try:
+        profile = load_board_profile(board_profile) if board_profile else None
+        content = file_path.read_text(encoding="utf-8")
+        report = LogParser.parse_log_text(content, board_profile=profile)
+    except (OSError, UnicodeError, TypeError, ValueError, SchemaError) as exc:
+        console.print(f"[bold red]Error: Log analysis failed: {exc}[/]")
+        raise typer.Exit(code=2) from exc
+
+    time_span_str = (
+        f"{report.summary.time_span_seconds:.3f} s"
+        if report.summary.time_span_seconds is not None
+        else "N/A"
+    )
+    panel_text = (
+        f"[bold cyan]Source Type:[/] {report.source_type.value}\n"
+        f"[bold]Total Lines:[/] {report.summary.total_lines} | "
+        f"[bold]Detected Events:[/] {report.summary.total_events} | "
+        f"[bold]Incidents:[/] {report.summary.total_incidents}\n"
+        f"[bold]Time Span:[/] {time_span_str}"
+    )
+    console.print(Panel(panel_text, title="[bold cyan]System Log Diagnostic Summary[/]"))
+
+    if report.incidents:
+        table = Table(title="Correlated Diagnostic Incidents", show_header=True)
+        table.add_column("ID", style="bold cyan")
+        table.add_column("Severity")
+        table.add_column("Subsystem", style="magenta")
+        table.add_column("Title")
+        table.add_column("Events Count", justify="right")
+        table.add_column("Triage Hint", style="dim")
+
+        for inc in report.incidents:
+            sev_style = {
+                Severity.CRITICAL: "[bold red]CRITICAL[/]",
+                Severity.ERROR: "[red]ERROR[/]",
+                Severity.WARNING: "[yellow]WARNING[/]",
+                Severity.INFO: "[blue]INFO[/]",
+            }.get(inc.severity, str(inc.severity.value if hasattr(inc.severity, "value") else inc.severity))
+            triage_hint = inc.recommended_actions[0] if inc.recommended_actions else "-"
+            table.add_row(
+                inc.id,
+                sev_style,
+                inc.subsystem.value,
+                inc.title,
+                str(len(inc.events)),
+                triage_hint,
+            )
+        console.print(table)
+
+        board_contexts = [inc for inc in report.incidents if inc.board_context]
+        if board_contexts:
+            bc_table = Table(title="Board Profile Topology Context", show_header=True)
+            bc_table.add_column("Incident ID", style="bold cyan")
+            bc_table.add_column("Topology Enrichment Details", style="green")
+            for inc in board_contexts:
+                bc_table.add_row(inc.id, str(inc.board_context))
+            console.print(bc_table)
+    else:
+        console.print("[green]✔ No diagnostic incidents or anomalies detected in log.[/]")
+
+    if markdown_out:
+        try:
+            md_text = _generate_log_markdown(report, file_path)
+            markdown_out.write_text(md_text, encoding="utf-8")
+            console.print(f"[green]✔ Markdown report exported to {markdown_out}[/]")
+        except OSError as exc:
+            console.print(f"[bold red]Error: Failed to write markdown report: {exc}[/]")
+            raise typer.Exit(code=2) from exc
+
+    if json_out:
+        try:
+            json_out.write_text(report.to_json(indent=2) + "\n", encoding="utf-8")
+            console.print(f"[green]✔ JSON report exported to {json_out}[/]")
+        except OSError as exc:
+            console.print(f"[bold red]Error: Failed to write JSON report: {exc}[/]")
+            raise typer.Exit(code=2) from exc
+
+    if fail_on:
+        thresholds: dict[str, list[Severity]] = {
+            "warning": [Severity.WARNING, Severity.ERROR, Severity.CRITICAL],
+            "error": [Severity.ERROR, Severity.CRITICAL],
+            "critical": [Severity.CRITICAL],
+        }
+        allowed = thresholds.get(fail_on.lower())
+        if not allowed:
+            console.print(
+                f"[bold red]Error: invalid --fail-on level {fail_on!r}; choose: error, critical[/]"
+            )
+            raise typer.Exit(code=2)
+        if any(inc.severity in allowed for inc in report.incidents):
+            raise typer.Exit(code=1)
+
+
+@log_app.command("diff")
+def diff_logs(
+    baseline_path: Path = typer.Argument(..., help="Path to baseline log file"),
+    candidate_path: Path = typer.Argument(..., help="Path to candidate log file"),
+    json_out: Path | None = typer.Option(
+        None, "--json", "-j", help="Export diff result to JSON file"
+    ),
+) -> None:
+    """Compare baseline and candidate system logs to identify new and resolved incidents."""
+    if not baseline_path.exists():
+        console.print(f"[bold red]Error: File {baseline_path} not found![/]")
+        raise typer.Exit(code=1)
+    if not candidate_path.exists():
+        console.print(f"[bold red]Error: File {candidate_path} not found![/]")
+        raise typer.Exit(code=1)
+
+    try:
+        base_content = baseline_path.read_text(encoding="utf-8")
+        cand_content = candidate_path.read_text(encoding="utf-8")
+        base_report = LogParser.parse_log_text(base_content)
+        cand_report = LogParser.parse_log_text(cand_content)
+        diff_result = LogDiffEngine.compare(base_report, cand_report)
+    except (OSError, UnicodeError, TypeError, ValueError) as exc:
+        console.print(f"[bold red]Error: Log diff comparison failed: {exc}[/]")
+        raise typer.Exit(code=2) from exc
+
+    delta_str = (
+        f"+{diff_result.event_count_delta}"
+        if diff_result.event_count_delta > 0
+        else f"{diff_result.event_count_delta}"
+    )
+    summary_lines = [
+        f"[bold]Summary:[/] {diff_result.summary}",
+        (
+            f"[bold]Baseline Events:[/] {diff_result.baseline_event_count} | "
+            f"[bold]Candidate Events:[/] {diff_result.candidate_event_count} | "
+            f"[bold]Delta:[/] {delta_str}"
+        ),
+    ]
+    if diff_result.new_incidents:
+        summary_lines.append("\n[bold red]New Incidents:[/]")
+        for inc_title in diff_result.new_incidents:
+            summary_lines.append(f"  • [red]{inc_title}[/]")
+    if diff_result.resolved_incidents:
+        summary_lines.append("\n[bold green]Resolved Incidents:[/]")
+        for inc_title in diff_result.resolved_incidents:
+            summary_lines.append(f"  • [green]{inc_title}[/]")
+    if diff_result.common_incidents:
+        summary_lines.append("\n[bold blue]Common Incidents:[/]")
+        for inc_title in diff_result.common_incidents:
+            summary_lines.append(f"  • [blue]{inc_title}[/]")
+
+    console.print(Panel("\n".join(summary_lines), title="[bold cyan]System Log Diff Comparison[/]"))
+
+    if json_out:
+        try:
+            json_out.write_text(diff_result.to_json(indent=2) + "\n", encoding="utf-8")
+            console.print(f"[green]✔ JSON result exported to {json_out}[/]")
+        except OSError as exc:
+            console.print(f"[bold red]Error: Failed to write JSON result: {exc}[/]")
+            raise typer.Exit(code=2) from exc
+
+
+@em_app.command("validate")
+def validate_em(
+    file_path: Path = typer.Argument(..., help="Path to Entity-Manager JSON file"),
+    board_profile: Path | None = typer.Option(
+        None, "--board-profile", "-b", help="Board Profile YAML for cross-reference validation"
+    ),
+    json_out: Path | None = typer.Option(
+        None, "--json", "-j", help="Export validation issues to JSON file"
+    ),
+) -> None:
+    """Validate OpenBMC Entity-Manager JSON configuration syntax, schemas, and topology."""
+    if not file_path.exists():
+        console.print(f"[bold red]Error: File {file_path} not found![/]")
+        raise typer.Exit(code=1)
+
+    try:
+        profile = load_board_profile(board_profile) if board_profile else None
+        content = file_path.read_text(encoding="utf-8")
+        issues = EMValidator.validate(content, board_profile=profile)
+    except (OSError, UnicodeError, TypeError, ValueError, SchemaError) as exc:
+        console.print(f"[bold red]Error: Entity-Manager validation failed: {exc}[/]")
+        raise typer.Exit(code=2) from exc
+
+    if not issues:
+        console.print(
+            Panel(
+                "[bold green]✔ Entity-Manager configuration is valid (0 issues found).[/]",
+                title="[bold green]Entity-Manager Validation[/]",
+            )
+        )
+    else:
+        table = Table(
+            title=f"Entity-Manager Validation Issues ({len(issues)} found)", show_header=True
+        )
+        table.add_column("Severity", style="bold")
+        table.add_column("Field Path", style="cyan")
+        table.add_column("Message")
+        table.add_column("Suggestion", style="dim")
+
+        for issue in issues:
+            sev_style = {
+                Severity.CRITICAL: "[bold red]CRITICAL[/]",
+                Severity.ERROR: "[red]ERROR[/]",
+                Severity.WARNING: "[yellow]WARNING[/]",
+                Severity.INFO: "[blue]INFO[/]",
+            }.get(issue.severity, str(issue.severity.value if hasattr(issue.severity, "value") else issue.severity))
+            table.add_row(
+                sev_style,
+                issue.field_path,
+                issue.message,
+                issue.suggestion or "-",
+            )
+        console.print(table)
+
+    if json_out:
+        try:
+            issues_data = [issue.to_dict() for issue in issues]
+            json_out.write_text(
+                json.dumps(issues_data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+            console.print(f"[green]✔ JSON result exported to {json_out}[/]")
+        except OSError as exc:
+            console.print(f"[bold red]Error: Failed to write JSON result: {exc}[/]")
+            raise typer.Exit(code=2) from exc
+
+    # If any ERROR or CRITICAL issues exist, exits with code 1
+    if any(issue.severity in (Severity.ERROR, Severity.CRITICAL) for issue in issues):
         raise typer.Exit(code=1)
 
 
