@@ -63,6 +63,118 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-TW": "多工作階段趨勢分析",
         "en-US": "Multi-Session Trend Analysis",
     },
+    "session_analytics_desc": {
+        "zh-TW": "上傳多個診斷工作階段（.fwsession.json）檔案以比對關鍵指標、視覺化異常趨勢，並追蹤隨時間變化的除錯進度。",
+        "en-US": "Upload multiple session files to compare key metrics, visualize anomaly trends, and track debugging progress over time.",
+    },
+    "session_analytics_load_demo": {
+        "zh-TW": "🚀 載入示範趨勢 Session",
+        "en-US": "🚀 Load Demo Trend Sessions",
+    },
+    "session_analytics_clear_demo": {
+        "zh-TW": "🔄 清除示範資料",
+        "en-US": "🔄 Clear Demo Data",
+    },
+    "session_analytics_upload_label": {
+        "zh-TW": "上傳 Session 檔案",
+        "en-US": "Upload Session Files",
+    },
+    "session_analytics_upload_help": {
+        "zh-TW": "選取 2 個以上 .fwsession.json 檔案進行趨勢分析。",
+        "en-US": "Select 2+ .fwsession.json files for trend analysis.",
+    },
+    "session_analytics_empty_info": {
+        "zh-TW": "請拖放或選取 .fwsession.json 檔案，或點擊上方按鈕載入示範資料。",
+        "en-US": "Drag and drop your .fwsession.json files here, or click the button above to load demo data.",
+    },
+    "session_analytics_no_valid": {
+        "zh-TW": "未找到有效的 Session 檔案。",
+        "en-US": "No valid session files found.",
+    },
+    "session_analytics_filter_proto": {
+        "zh-TW": "依協定篩選",
+        "en-US": "Filter by Protocol",
+    },
+    "session_analytics_metric_sessions": {
+        "zh-TW": "工作階段總數",
+        "en-US": "Sessions",
+    },
+    "session_analytics_metric_anomalies": {
+        "zh-TW": "最新異常數",
+        "en-US": "Latest Anomalies",
+    },
+    "session_analytics_metric_trend": {
+        "zh-TW": "趨勢判定",
+        "en-US": "Trend",
+    },
+    "session_analytics_metric_health": {
+        "zh-TW": "健康度評分",
+        "en-US": "Health Score",
+    },
+    "session_analytics_trend_improving": {
+        "zh-TW": "改善中 (Improving)",
+        "en-US": "Improving",
+    },
+    "session_analytics_trend_stable": {
+        "zh-TW": "持平 (Stable)",
+        "en-US": "Stable",
+    },
+    "session_analytics_trend_degrading": {
+        "zh-TW": "退化中 (Degrading)",
+        "en-US": "Degrading",
+    },
+    "session_analytics_chart_title": {
+        "zh-TW": "Session 趨勢圖表",
+        "en-US": "Session Trend",
+    },
+    "session_analytics_chart_xaxis": {
+        "zh-TW": "工作階段",
+        "en-US": "Session",
+    },
+    "session_analytics_chart_yaxis_anomalies": {
+        "zh-TW": "異常數量",
+        "en-US": "Anomaly Count",
+    },
+    "session_analytics_chart_yaxis_tx": {
+        "zh-TW": "交易數量",
+        "en-US": "Transaction Count",
+    },
+    "session_analytics_chart_trace_anomalies": {
+        "zh-TW": "異常數",
+        "en-US": "Anomalies",
+    },
+    "session_analytics_chart_trace_tx": {
+        "zh-TW": "交易數",
+        "en-US": "Transactions",
+    },
+    "session_analytics_chart_trace_health": {
+        "zh-TW": "健康度分數",
+        "en-US": "Health Score",
+    },
+    "session_analytics_chart_min_sessions": {
+        "zh-TW": "上傳至少 2 個工作階段以檢視趨勢圖表。",
+        "en-US": "Upload at least 2 sessions to see trend charts.",
+    },
+    "session_analytics_sub_comparison": {
+        "zh-TW": "工作階段指標對比",
+        "en-US": "Session Comparison",
+    },
+    "session_analytics_sub_summary": {
+        "zh-TW": "趨勢分析摘要",
+        "en-US": "Analysis Summary",
+    },
+    "session_analytics_sub_export": {
+        "zh-TW": "匯出報告",
+        "en-US": "Export",
+    },
+    "session_analytics_btn_download_csv": {
+        "zh-TW": "📥 下載對比 CSV",
+        "en-US": "📥 Download Comparison CSV",
+    },
+    "session_analytics_btn_download_md": {
+        "zh-TW": "⬇️ 下載趨勢摘要 Markdown",
+        "en-US": "⬇️ Download Trend Summary Markdown",
+    },
     "title_overview": {
         "zh-TW": "功能總覽與快速入門",
         "en-US": "Feature Overview & Quick Start",
@@ -395,14 +507,20 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-TW": "📢 最近更新紀錄",
         "en-US": "📢 What's New",
     },
-    "whats_new_current_version": {"zh-TW": "目前安裝版本：v{version}", "en-US": "Installed version: v{version}"},
+    "whats_new_current_version": {
+        "zh-TW": "目前安裝版本：v{version}",
+        "en-US": "Installed version: v{version}",
+    },
     "whats_new_history_label": {"zh-TW": "歷史版本", "en-US": "Release history"},
     "whats_new_history_select": {"zh-TW": "選擇版本", "en-US": "Select release"},
     "whats_new_category": {"zh-TW": "分類", "en-US": "Category"},
     "whats_new_protocols": {"zh-TW": "協定", "en-US": "Protocols"},
     "whats_new_open_page": {"zh-TW": "開啟功能頁面", "en-US": "Open page"},
     "whats_new_read_doc": {"zh-TW": "文件路徑", "en-US": "Documentation"},
-    "whats_new_unavailable": {"zh-TW": "更新紀錄目前無法載入。", "en-US": "Release notes are currently unavailable."},
+    "whats_new_unavailable": {
+        "zh-TW": "更新紀錄目前無法載入。",
+        "en-US": "Release notes are currently unavailable.",
+    },
     "whats_new_category_field_rca": {"zh-TW": "現場 RCA", "en-US": "Field RCA"},
     "whats_new_category_evidence_replay": {"zh-TW": "證據重播", "en-US": "Evidence replay"},
     "whats_new_category_teaching": {"zh-TW": "教學", "en-US": "Teaching"},

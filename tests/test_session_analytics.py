@@ -173,3 +173,33 @@ class TestHealthScore:
     def test_score_is_clamped_at_zero(self) -> None:
         point = SessionTrendPoint("bad", "2026-01-01", "i2c", 10, 3, "error")
         assert compute_health_score(point) == 0.0
+
+
+def test_session_analytics_sample_sessions_generator() -> None:
+    from fw_diag_tool.gui.pages.session_analytics_ui import _get_sample_trend_sessions
+
+    samples = _get_sample_trend_sessions()
+    assert len(samples) >= 3
+    assert all("report" in s and "config" in s for s in samples)
+
+
+def test_session_analytics_sample_trend_analysis() -> None:
+    from fw_diag_tool.gui.pages.session_analytics_ui import (
+        _build_trend_summary_markdown,
+        _comparison_dataframe,
+        _get_sample_trend_sessions,
+    )
+
+    samples = _get_sample_trend_sessions()
+    report = analyze_session_trends(samples)
+    assert report.anomaly_trend == "improving"
+    assert len(report.points) == 3
+
+    df = _comparison_dataframe(report)
+    assert len(df) == 3
+    assert list(df["Anomalies"]) == [8, 3, 0]
+
+    md = _build_trend_summary_markdown(report)
+    assert "# Session Trend Summary" in md
+    assert "Stage 1 - Initial Bringup" in md
+    assert "Stage 3 - Final Sign-off" in md
