@@ -16,6 +16,7 @@ from fw_diag_tool.gui.theme import get_plotly_template
 from fw_diag_tool.i18n import get_global_registry, t
 from fw_diag_tool.metrics import get_metrics_collector
 from fw_diag_tool.release_notes import (
+    ReleaseHighlight,
     ReleaseNote,
     ReleaseNotesError,
     load_release_notes,
@@ -50,25 +51,36 @@ def _render_quick_link(url_path: str, label: str) -> None:
         st.caption(label)
 
 
+def _get_highlight_button_label(highlight: ReleaseHighlight, locale: str) -> str:
+    title = localized_text(highlight.title, locale)
+    if locale == "zh-TW":
+        return f"前往 {title}"
+    return f"Go to {title}"
+
+
 def _render_release_card(note: ReleaseNote, locale: str) -> None:
     st.write(f"**v{note.version} ({note.date})** — {localized_text(note.summary, locale)}")
     for highlight in note.highlights:
-        category = t(f"whats_new_category_{highlight.category}", locale=locale, domain="gui")
-        protocols = ", ".join(highlight.protocols) or "—"
-        st.write(f"**{localized_text(highlight.title, locale)}**")
-        st.caption(
-            f"{category} · {t('whats_new_protocols', locale=locale, domain='gui')}: {protocols}"
-        )
-        st.write(localized_text(highlight.summary, locale))
-        page = next((entry for entry in PAGE_INDEX if entry.get("url") == highlight.page), None)
-        if page is not None:
-            _render_quick_link(
-                page["url"], t("whats_new_open_page", locale=locale, domain="gui")
-            )
-        elif highlight.doc is not None:
+        with st.container(border=True):
+            category = t(f"whats_new_category_{highlight.category}", locale=locale, domain="gui")
+            protocols = ", ".join(highlight.protocols) or "—"
+            st.write(f"**{localized_text(highlight.title, locale)}**")
             st.caption(
-                f"{t('whats_new_read_doc', locale=locale, domain='gui')}: {highlight.doc}"
+                f"{category} · {t('whats_new_protocols', locale=locale, domain='gui')}: {protocols}"
             )
+            st.write(localized_text(highlight.summary, locale))
+            if highlight.page == "dashboard":
+                st.caption(f"📌 {localized_text(highlight.title, locale)}")
+            else:
+                page = next(
+                    (entry for entry in PAGE_INDEX if entry.get("url") == highlight.page), None
+                )
+                if page is not None:
+                    _render_quick_link(page["url"], _get_highlight_button_label(highlight, locale))
+                elif highlight.doc is not None:
+                    st.caption(
+                        f"{t('whats_new_read_doc', locale=locale, domain='gui')}: {highlight.doc}"
+                    )
 
 
 def _render_release_notes() -> None:
@@ -79,9 +91,7 @@ def _render_release_notes() -> None:
         st.warning(t("whats_new_unavailable", locale=locale, domain="gui"))
         return
     st.subheader(t("whats_new_title", locale=locale, domain="gui"))
-    st.caption(
-        t("whats_new_current_version", locale=locale, domain="gui", version=__version__)
-    )
+    st.caption(t("whats_new_current_version", locale=locale, domain="gui", version=__version__))
     if not any(note.version == __version__ for note in notes):
         st.warning(t("whats_new_unavailable", locale=locale, domain="gui"))
     columns = st.columns(3)

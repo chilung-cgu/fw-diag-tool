@@ -61,7 +61,7 @@ def test_render_release_notes_locale_changes_labels(monkeypatch) -> None:
         dashboard_ui._render_release_notes()
         english = "\n".join(captured)
         assert "What's New" in english
-        assert "Open" in english or "Documentation" in english
+        assert "Go to" in english or "Open" in english or "Documentation" in english
     finally:
         registry.set_locale("zh-TW")
 

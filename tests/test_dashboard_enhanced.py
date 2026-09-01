@@ -142,7 +142,7 @@ st.navigation(pages, position="hidden").run()
 
 def test_release_card_and_quick_import_links_resolve_registered_routes():
     app = AppTest.from_string(
-        '''
+        """
 import streamlit as st
 from types import SimpleNamespace
 from fw_diag_tool.gui.pages import dashboard_ui
@@ -177,17 +177,17 @@ dashboard_ui._render_release_card(ReleaseNote(
     ),),
 ), "zh-TW")
 dashboard_ui._render_quick_import()
-'''
+"""
     ).run()
     assert not app.exception
     app.button[0].click().run()
     assert not app.exception
     links = _page_links(app)
     labels = {link.proto.label for link in links}
-    assert "開啟功能頁面" in labels
+    assert "前往 標題" in labels
     assert {"前往 Session 比對", "前往 Session 趨勢分析", "前往 I2C 診斷"} <= labels
     route_labels = {
-        "開啟功能頁面": "waveform-diff",
+        "前往 標題": "waveform-diff",
         "前往 Session 比對": "session-compare",
         "前往 Session 趨勢分析": "session-analytics",
         "前往 I2C 診斷": "i2c-diagnosis",
@@ -225,3 +225,55 @@ def test_dashboard_ui_render_recent_sessions_with_items(monkeypatch):
 
     monkeypatch.setattr(dashboard_ui, "SessionManager", DummyManager)
     dashboard_ui._render_recent_sessions()
+
+
+def test_release_card_button_label_customization():
+    from fw_diag_tool.gui.pages.dashboard_ui import _get_highlight_button_label
+    from fw_diag_tool.release_notes import ReleaseHighlight
+
+    hl_spi = ReleaseHighlight(
+        id="v17-spi",
+        category="field_rca",
+        protocols=("SPI",),
+        title={"zh-TW": "SPI 資料庫", "en-US": "SPI DB"},
+        summary={"zh-TW": "說明", "en-US": "Summary"},
+        page="spi-chip-db",
+        doc=None,
+    )
+    label_zh = _get_highlight_button_label(hl_spi, "zh-TW")
+    assert "SPI" in label_zh and ("前往" in label_zh or "開啟" in label_zh)
+    label_en = _get_highlight_button_label(hl_spi, "en-US")
+    assert "SPI" in label_en and ("Go to" in label_en or "Open" in label_en)
+
+
+def test_release_card_dashboard_page_avoids_self_link():
+    app = AppTest.from_string(
+        """
+import streamlit as st
+from fw_diag_tool.gui.pages import dashboard_ui
+from fw_diag_tool.gui.route_registry import register_pages
+from fw_diag_tool.release_notes import ReleaseHighlight, ReleaseNote
+
+def placeholder():
+    st.write("placeholder")
+
+pages = {"": [
+    st.Page(placeholder, title="Dashboard", url_path="dashboard"),
+]}
+register_pages(pages)
+dashboard_ui._render_release_card(ReleaseNote(
+    version="9.9.9", date="2026-09-01", source_ref="CHANGELOG.md#9.9.9",
+    summary={"zh-TW": "摘要", "en-US": "Summary"},
+    highlights=(ReleaseHighlight(
+        id="dash-feature", category="ux", protocols=(),
+        title={"zh-TW": "儀表板統計", "en-US": "Dashboard Stats"},
+        summary={"zh-TW": "說明", "en-US": "Details"},
+        page="dashboard", doc=None,
+    ),),
+), "zh-TW")
+"""
+    ).run()
+    assert not app.exception
+    links = _page_links(app)
+    assert len(links) == 0
+    assert any("儀表板統計" in c.value for c in app.caption)
