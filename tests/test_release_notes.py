@@ -183,6 +183,20 @@ def test_shipped_documentation_paths_resolve_under_docs():
                 assert (docs_root / highlight.doc).is_file()
 
 
+def test_shipped_highlights_target_valid_registered_pages():
+    from fw_diag_tool.gui.page_index import PAGE_INDEX
+    from fw_diag_tool.release_notes import load_release_notes
+
+    valid_urls = {p["url"] for p in PAGE_INDEX}
+    for note in load_release_notes():
+        for highlight in note.highlights:
+            if highlight.page is not None:
+                assert highlight.page in valid_urls, f"Page '{highlight.page}' not found in PAGE_INDEX"
+                if highlight.id in {"v17-spi-chip-db", "v16-unified-report"}:
+                    assert highlight.page != "dashboard"
+                    assert highlight.page != "spi"
+
+
 def test_duplicate_json_keys_are_rejected(monkeypatch):
     import fw_diag_tool.release_notes as module
 
