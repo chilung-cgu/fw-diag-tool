@@ -59,6 +59,40 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-TW": "跨協定時間線關聯分析",
         "en-US": "Cross-Protocol Timeline Correlation",
     },
+    "title_log_analyzer": {
+        "zh-TW": "系統日誌關聯分析",
+        "en-US": "System Log Correlation Analyzer",
+    },
+    "log_analyzer_title": {
+        "zh-TW": "系統日誌關聯分析",
+        "en-US": "System Log Correlation Analyzer",
+    },
+    "log_sample_i2c": {
+        "zh-TW": "🚀 載入 I2C 仲裁遺失與逾時範例",
+        "en-US": "🚀 Load I2C Arbitration Loss & Timeout Sample",
+    },
+    "log_sample_pcie": {
+        "zh-TW": "🚀 載入 PCIe AER 錯誤範例",
+        "en-US": "🚀 Load PCIe AER Error Sample",
+    },
+    "log_sample_bmc": {
+        "zh-TW": "🚀 載入 OpenBMC 感測器遺失範例",
+        "en-US": "🚀 Load OpenBMC Sensor Missing Sample",
+    },
+    "log_uploader_label": {
+        "zh-TW": "上傳日誌檔案（.log, .txt, .dmesg, .journal）",
+        "en-US": "Upload Log File (.log, .txt, .dmesg, .journal)",
+    },
+    "log_text_label": {
+        "zh-TW": "或直接貼上日誌內容（dmesg / journalctl）：",
+        "en-US": "Or paste log content directly (dmesg / journalctl):",
+    },
+    "log_tab_incidents": {"zh-TW": "🚨 異常事件群組 (Incidents)", "en-US": "🚨 Incidents"},
+    "log_tab_timeline": {"zh-TW": "⏱️ 事件時間軸 (Timeline)", "en-US": "⏱️ Event Timeline"},
+    "log_tab_distribution": {
+        "zh-TW": "📊 子系統分佈 (Distribution)",
+        "en-US": "📊 Subsystem Distribution",
+    },
     "title_session_analytics": {
         "zh-TW": "多工作階段趨勢分析",
         "en-US": "Multi-Session Trend Analysis",
@@ -437,6 +471,7 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
     "nav_category_overview": {"zh-TW": "總覽", "en-US": "Overview"},
     "nav_category_system": {"zh-TW": "系統協定診斷", "en-US": "System Protocol Diagnosis"},
     "nav_category_tools": {"zh-TW": "產生器與硬體工具", "en-US": "Generators & Hardware Tools"},
+    "nav_category_system_log": {"zh-TW": "系統日誌", "en-US": "System Logs"},
     "nav_category_labs": {"zh-TW": "實驗室與學習", "en-US": "Labs & Learning"},
     "sidebar_navigation": {"zh-TW": "導覽與模式選擇", "en-US": "Navigation & Mode Selection"},
     "tab_transactions": {"zh-TW": "📜 封包交易列表", "en-US": "📜 Transactions"},

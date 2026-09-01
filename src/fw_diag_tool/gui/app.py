@@ -23,6 +23,7 @@ from fw_diag_tool.gui.pages import (
     fuzz_lab_ui,
     i2c_builder_ui,
     i2c_diagnosis,
+    log_analyzer_ui,
     mctp_ui,
     pcie_ui,
     protocol_diff_ui,
@@ -147,6 +148,14 @@ pages = {
             title=t("title_spi", domain="gui"),
             icon="⚡",
             url_path="spi",
+        ),
+    ],
+    t("nav_category_system_log", domain="gui"): [
+        st.Page(
+            log_analyzer_ui.render,
+            title=t("title_log_analyzer", domain="gui"),
+            icon="📋",
+            url_path="log-analyzer",
         ),
     ],
     t("nav_category_tools", domain="gui"): [

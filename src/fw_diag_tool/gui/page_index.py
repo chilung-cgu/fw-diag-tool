@@ -71,6 +71,12 @@ PAGE_INDEX: list[dict[str, str]] = [
         "keywords": "uart crash kernel panic hardfault arm cortex dump",
     },
     {
+        "title": "System Log Analyzer",
+        "url": "log-analyzer",
+        "category": "System Logs",
+        "keywords": "log dmesg journalctl kernel bmc incident triage correlation",
+    },
+    {
         "title": "MCTP / IPMB Protocol",
         "url": "mctp",
         "category": "System Protocol",
