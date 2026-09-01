@@ -8,6 +8,9 @@ from __future__ import annotations
 import importlib
 
 import pytest
+import streamlit as st
+
+from fw_diag_tool.gui import route_registry
 
 PAGE_MODULES = [
     "fw_diag_tool.gui.pages.board_profile_ui",
@@ -43,3 +46,9 @@ def test_app_entry_importable() -> None:
     """The main app module must import without errors."""
     mod = importlib.import_module("fw_diag_tool.gui.app")
     assert mod is not None
+
+
+def test_register_pages_tolerates_bare_streamlit_page_metadata() -> None:
+    """Import-time registration must not require Streamlit runtime metadata."""
+    page = st.Page(lambda: None, title="Bare", url_path="bare")
+    route_registry.register_pages({"": [page]})

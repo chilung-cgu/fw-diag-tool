@@ -10,7 +10,15 @@ _PAGES_BY_URL: dict[str, Any] = {}
 
 def register_page(page: Any) -> Any:
     """Register a Streamlit page by its internal URL path."""
-    _PAGES_BY_URL[page.url_path] = page
+    # Streamlit's ``Page.url_path`` is populated lazily by a running
+    # navigation context.  During plain module imports (for example tests
+    # importing ``gui.app``), bare Page objects may not have ``_url_path``
+    # yet; defer registration until the runtime context supplies metadata.
+    try:
+        url_path = page.url_path
+    except AttributeError:
+        return page
+    _PAGES_BY_URL[url_path] = page
     return page
 
 
