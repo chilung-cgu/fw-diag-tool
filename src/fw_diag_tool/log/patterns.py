@@ -288,4 +288,3 @@ PATTERN_LIBRARY: list[LogPattern] = [
         description="Hardware memory ECC or MCE error event reported by EDAC.",
     ),
 ]
-

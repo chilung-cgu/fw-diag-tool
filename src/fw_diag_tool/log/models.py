@@ -145,4 +145,3 @@ class LogReport:
     def to_json(self, indent: int = 2) -> str:
         """Serialize report as formatted JSON string."""
         return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
-
