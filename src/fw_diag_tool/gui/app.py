@@ -18,6 +18,7 @@ from fw_diag_tool.gui.pages import (
     correlation_ui,
     dashboard_ui,
     dts_ui,
+    em_builder_ui,
     emulator_ui,
     fault_arena_ui,
     fuzz_lab_ui,
@@ -156,6 +157,12 @@ pages = {
             title=t("title_log_analyzer", domain="gui"),
             icon="📋",
             url_path="log-analyzer",
+        ),
+        st.Page(
+            em_builder_ui.render,
+            title=t("title_em_builder", domain="gui"),
+            icon="🧩",
+            url_path="em-builder",
         ),
     ],
     t("nav_category_tools", domain="gui"): [

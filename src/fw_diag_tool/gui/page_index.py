@@ -77,6 +77,12 @@ PAGE_INDEX: list[dict[str, str]] = [
         "keywords": "log dmesg journalctl kernel bmc incident triage correlation",
     },
     {
+        "title": "Entity-Manager Generator",
+        "url": "em-builder",
+        "category": "System Logs",
+        "keywords": "entity manager openbmc json config generate validate sensor threshold",
+    },
+    {
         "title": "MCTP / IPMB Protocol",
         "url": "mctp",
         "category": "System Protocol",

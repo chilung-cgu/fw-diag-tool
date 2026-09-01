@@ -865,6 +865,98 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-TW": "分析摘要",
         "en-US": "Analysis Summary",
     },
+    "title_em_builder": {
+        "zh-TW": "Entity-Manager 產生器",
+        "en-US": "Entity-Manager Generator",
+    },
+    "em_builder_title": {
+        "zh-TW": "OpenBMC Entity-Manager 組態視覺化產生器與校驗工具",
+        "en-US": "OpenBMC Entity-Manager Configuration Builder & Validator",
+    },
+    "em_work_mode": {
+        "zh-TW": "工作模式",
+        "en-US": "Work Mode",
+    },
+    "em_mode_build": {
+        "zh-TW": "🛠️ 視覺化建置模式 (Build Mode)",
+        "en-US": "🛠️ Visual Build Mode (Build Mode)",
+    },
+    "em_mode_validate": {
+        "zh-TW": "🔍 JSON 語法與拓撲校驗模式 (Validate Mode)",
+        "en-US": "🔍 JSON Syntax & Topology Validation Mode (Validate Mode)",
+    },
+    "em_board_name": {
+        "zh-TW": "板卡名稱 (Board Name)",
+        "en-US": "Board Name",
+    },
+    "em_probe_expr": {
+        "zh-TW": "Probe 匹配條件 (Probe Expression)",
+        "en-US": "Probe Expression",
+    },
+    "em_category": {
+        "zh-TW": "裝置類別 (Category)",
+        "en-US": "Device Category",
+    },
+    "em_chip_model": {
+        "zh-TW": "晶片型號 (Chip Model)",
+        "en-US": "Chip Model",
+    },
+    "em_bus_num": {
+        "zh-TW": "I2C 匯流排編號 (Bus)",
+        "en-US": "I2C Bus Number",
+    },
+    "em_i2c_addr": {
+        "zh-TW": "7-bit I2C 位址 (Hex: 0x08..0x77)",
+        "en-US": "7-bit I2C Address (Hex: 0x08..0x77)",
+    },
+    "em_device_name": {
+        "zh-TW": "裝置名稱 (Sensor / Device Name)",
+        "en-US": "Device Name",
+    },
+    "em_power_state": {
+        "zh-TW": "電源狀態要求 (PowerState)",
+        "en-US": "Power State",
+    },
+    "em_add_device": {
+        "zh-TW": "➕ 新增裝置至板卡 (Add Device)",
+        "en-US": "➕ Add Device to Board",
+    },
+    "em_load_sample_devices": {
+        "zh-TW": "🚀 載入標準伺服器主機板感測器範本 (4 裝置)",
+        "en-US": "🚀 Load Standard Mainboard Template (4 Devices)",
+    },
+    "em_clear_devices": {
+        "zh-TW": "🗑️ 清空裝置清單 (Clear All)",
+        "en-US": "🗑️ Clear All Devices",
+    },
+    "em_generate_json": {
+        "zh-TW": "✨ 產生 Entity-Manager JSON",
+        "en-US": "✨ Generate Entity-Manager JSON",
+    },
+    "em_download_json": {
+        "zh-TW": "下載 Entity-Manager JSON",
+        "en-US": "Download Entity-Manager JSON",
+    },
+    "em_validate_json": {
+        "zh-TW": "🔍 執行 Entity-Manager 規格校驗",
+        "en-US": "🔍 Run Entity-Manager Validation",
+    },
+    "em_val_uploader_label": {
+        "zh-TW": "上傳 Entity-Manager JSON 檔案",
+        "en-US": "Upload Entity-Manager JSON file",
+    },
+    "em_val_text_label": {
+        "zh-TW": "或貼上 Entity-Manager JSON 內容",
+        "en-US": "Or paste Entity-Manager JSON content",
+    },
+    "em_load_sample_conflict": {
+        "zh-TW": "🚀 載入待校驗 JSON 範例 (含 Address 衝突)",
+        "en-US": "🚀 Load Sample JSON (with Address Conflict)",
+    },
+    "em_val_success": {
+        "zh-TW": "✅ Entity-Manager 組態校驗通過！結構與硬體位址無任何異常。",
+        "en-US": "✅ Entity-Manager configuration passed validation! No structural or address anomalies detected.",
+    },
 }
 
 
