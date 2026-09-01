@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import streamlit as st
+from streamlit.testing.v1 import AppTest
 
 import fw_diag_tool.gui.shared as shared_module
 from fw_diag_tool.gui import route_registry
@@ -41,26 +41,35 @@ def test_dashboard_ui_quick_link_renderer():
     dashboard_ui._render_quick_link("nonexistent-page", "🔗 測試連結")
 
 
-def test_quick_link_uses_registered_page_in_runtime_context(monkeypatch):
-    def render_page():
-        return None
+def test_quick_link_uses_registered_page_in_runtime_context():
+    app = AppTest.from_string(
+        """
+import streamlit as st
+from fw_diag_tool.gui.pages.dashboard_ui import _render_quick_link
+from fw_diag_tool.gui.route_registry import register_pages, resolve_page
 
-    page = object.__new__(st.Page)
-    page._default = False
-    page._url_path = "i2c-diagnosis"
-    route_registry.register_page(page)
-    calls = []
+def dashboard():
+    _render_quick_link("i2c-diagnosis", "📊 I2C 診斷")
+    _render_quick_link("unknown-page", "🔗 Unknown")
 
-    def page_link(target, **kwargs):
-        if isinstance(target, str):
-            raise TypeError("string slug is treated as a script path")
-        calls.append((target, kwargs))
+def diagnosis():
+    st.write("diagnosis")
 
-    monkeypatch.setattr(dashboard_ui.st, "page_link", page_link)
-    dashboard_ui._render_quick_link("i2c-diagnosis", "📊 I2C 診斷")
+pages = {"": [
+    st.Page(dashboard, title="Dashboard", url_path="dashboard"),
+    st.Page(diagnosis, title="I2C 診斷", url_path="i2c-diagnosis"),
+]}
+register_pages(pages)
+st.navigation(pages).run()
+"""
+    ).run()
 
-    assert route_registry.resolve_page("i2c-diagnosis") is page
-    assert calls == [(page, {"label": "📊 I2C 診斷", "use_container_width": True})]
+    assert not app.exception
+    page_link = app._tree.children[0].children[0]
+    assert page_link.type == "page_link"
+    assert page_link.proto.label == "📊 I2C 診斷"
+    assert page_link.proto.page_script_hash == route_registry.resolve_page("i2c-diagnosis")._script_hash
+    assert app.caption[0].value == "🔗 Unknown"
 
 
 def test_correlation_ui_render_executes_without_error():
