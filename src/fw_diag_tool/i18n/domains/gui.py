@@ -414,12 +414,12 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "en-US": "🌐 Language / 語言",
     },
     # Quick Launch Buttons
-    "quick_link_i2c": {"zh-TW": "📊 I2C 診斷", "en-US": "📊 I2C Diagnosis"},
-    "quick_link_diff": {"zh-TW": "⚖️ 雙波形差分", "en-US": "⚖️ Waveform Diff"},
-    "quick_link_pcie": {"zh-TW": "🚀 PCIe AER", "en-US": "🚀 PCIe AER"},
-    "quick_link_uart": {"zh-TW": "📟 UART Crash", "en-US": "📟 UART Crash"},
-    "quick_link_spi": {"zh-TW": "⚡ SPI Flash", "en-US": "⚡ SPI Flash"},
-    "quick_link_fault_arena": {"zh-TW": "🏆 Fault Arena", "en-US": "🏆 Fault Arena"},
+    "quick_link_i2c": {"zh-TW": "I2C 診斷", "en-US": "I2C Diagnosis"},
+    "quick_link_diff": {"zh-TW": "雙波形差分", "en-US": "Waveform Diff"},
+    "quick_link_pcie": {"zh-TW": "PCIe AER", "en-US": "PCIe AER"},
+    "quick_link_uart": {"zh-TW": "UART Crash", "en-US": "UART Crash"},
+    "quick_link_spi": {"zh-TW": "SPI Flash", "en-US": "SPI Flash"},
+    "quick_link_fault_arena": {"zh-TW": "Fault Arena", "en-US": "Fault Arena"},
     # Error Messages
     "error_file_empty": {
         "zh-TW": "輸入檔案內容為空，無法進行分析。",

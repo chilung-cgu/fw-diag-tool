@@ -51,7 +51,7 @@ def test_dashboard_ui_example_counter():
 
 
 def test_dashboard_ui_quick_link_renderer():
-    dashboard_ui._render_quick_link("i2c-diagnosis", "📊 I2C 診斷")
+    dashboard_ui._render_quick_link("i2c-diagnosis", "I2C 診斷")
     dashboard_ui._render_quick_link("nonexistent-page", "🔗 測試連結")
 
 
@@ -63,7 +63,7 @@ from fw_diag_tool.gui.pages.dashboard_ui import _render_quick_link
 from fw_diag_tool.gui.route_registry import register_pages, resolve_page
 
 def dashboard():
-    _render_quick_link("i2c-diagnosis", "📊 I2C 診斷")
+    _render_quick_link("i2c-diagnosis", "I2C 診斷")
     _render_quick_link("unknown-page", "🔗 Unknown")
 
 def diagnosis():
@@ -81,8 +81,10 @@ st.navigation(pages).run()
     assert not app.exception
     page_link = app._tree.children[0].children[0]
     assert page_link.type == "page_link"
-    assert page_link.proto.label == "📊 I2C 診斷"
-    assert page_link.proto.page_script_hash == route_registry.resolve_page("i2c-diagnosis")._script_hash
+    assert page_link.proto.label == "I2C 診斷"
+    target_page = route_registry.resolve_page("i2c-diagnosis")
+    assert target_page is not None
+    assert page_link.proto.page_script_hash == target_page._script_hash
     assert app.caption[0].value == "🔗 Unknown"
 
 
@@ -116,24 +118,26 @@ st.navigation(pages, position="hidden").run()
     links = _page_links(app)
     labels = {link.proto.label for link in links}
     assert labels >= {
-        "📊 I2C 診斷",
-        "⚖️ 雙波形差分",
-        "🚀 PCIe AER",
-        "📟 UART Crash",
-        "⚡ SPI Flash",
-        "🏆 Fault Arena",
+        "I2C 診斷",
+        "雙波形差分",
+        "PCIe AER",
+        "UART Crash",
+        "SPI Flash",
+        "Fault Arena",
     }
     route_labels = {
-        "📊 I2C 診斷": "i2c-diagnosis",
-        "⚖️ 雙波形差分": "waveform-diff",
-        "🚀 PCIe AER": "pcie",
-        "📟 UART Crash": "uart",
-        "⚡ SPI Flash": "spi",
-        "🏆 Fault Arena": "fault-arena",
+        "I2C 診斷": "i2c-diagnosis",
+        "雙波形差分": "waveform-diff",
+        "PCIe AER": "pcie",
+        "UART Crash": "uart",
+        "SPI Flash": "spi",
+        "Fault Arena": "fault-arena",
     }
     for label, url_path in route_labels.items():
         link = next(item for item in links if item.proto.label == label)
-        assert link.proto.page_script_hash == route_registry.resolve_page(url_path)._script_hash
+        page = route_registry.resolve_page(url_path)
+        assert page is not None
+        assert link.proto.page_script_hash == page._script_hash
 
 
 def test_release_card_and_quick_import_links_resolve_registered_routes():
@@ -181,16 +185,18 @@ dashboard_ui._render_quick_import()
     links = _page_links(app)
     labels = {link.proto.label for link in links}
     assert "開啟功能頁面" in labels
-    assert {"⚖️ 前往 Session 比對", "📈 前往 Session 趨勢分析", "📊 前往 I2C 診斷"} <= labels
+    assert {"前往 Session 比對", "前往 Session 趨勢分析", "前往 I2C 診斷"} <= labels
     route_labels = {
         "開啟功能頁面": "waveform-diff",
-        "⚖️ 前往 Session 比對": "session-compare",
-        "📈 前往 Session 趨勢分析": "session-analytics",
-        "📊 前往 I2C 診斷": "i2c-diagnosis",
+        "前往 Session 比對": "session-compare",
+        "前往 Session 趨勢分析": "session-analytics",
+        "前往 I2C 診斷": "i2c-diagnosis",
     }
     for label, url_path in route_labels.items():
         link = next(item for item in links if item.proto.label == label)
-        assert link.proto.page_script_hash == route_registry.resolve_page(url_path)._script_hash
+        page = route_registry.resolve_page(url_path)
+        assert page is not None
+        assert link.proto.page_script_hash == page._script_hash
 
 
 def test_correlation_ui_render_executes_without_error():

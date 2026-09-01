@@ -99,10 +99,10 @@ def _render_release_notes() -> None:
 def _render_quick_actions() -> None:
     with st.expander("⚡ 快速操作", expanded=False):
         actions = (
-            ("i2c-diagnosis", "📊 I2C 診斷"),
-            ("spi", "⚡ SPI Flash"),
-            ("pcie", "🚀 PCIe AER"),
-            ("fault-arena", "🏆 Fault Arena"),
+            ("i2c-diagnosis", "I2C 診斷"),
+            ("spi", "SPI Flash"),
+            ("pcie", "PCIe AER"),
+            ("fault-arena", "Fault Arena"),
         )
         columns = st.columns(4)
         for column, (url_path, label) in zip(columns, actions):
@@ -262,11 +262,11 @@ def _render_quick_import() -> None:
                     st.markdown("**可進行的下一步操作**：")
                     nav_c1, nav_c2, nav_c3 = st.columns(3)
                     with nav_c1:
-                        _render_quick_link("session-compare", "⚖️ 前往 Session 比對")
+                        _render_quick_link("session-compare", "前往 Session 比對")
                     with nav_c2:
-                        _render_quick_link("session-analytics", "📈 前往 Session 趨勢分析")
+                        _render_quick_link("session-analytics", "前往 Session 趨勢分析")
                     with nav_c3:
-                        _render_quick_link("i2c-diagnosis", "📊 前往 I2C 診斷")
+                        _render_quick_link("i2c-diagnosis", "前往 I2C 診斷")
             except Exception as exc:
                 st.error(f"❌ 載入 Session 失敗：{exc}")
 
