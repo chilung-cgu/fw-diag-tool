@@ -32,7 +32,11 @@ def _bdf_parts(config: Any) -> tuple[int, int, int] | None:
         match = _BDF_RE.search(bdf.strip())
         if match:
             return tuple(int(match.group(name), 16) for name in ("bus", "device", "function"))  # type: ignore[return-value]
-    values = (getattr(config, "bus", None), getattr(config, "device", None), getattr(config, "function", None))
+    values = (
+        getattr(config, "bus", None),
+        getattr(config, "device", None),
+        getattr(config, "function", None),
+    )
     if all(isinstance(value, int) for value in values):
         return values  # type: ignore[return-value]
     return None
@@ -171,13 +175,17 @@ def topology_to_text_tree(roots: list[PCIeNode], indent: int = 0) -> str:
 
     def visit(node: PCIeNode, prefix: str, connector: str) -> None:
         lines.append(f"{prefix}{connector}{_node_label(node)}")
-        child_prefix = prefix + ("    " if not connector else ("    " if connector == "└── " else "│   "))
+        child_prefix = prefix + (
+            "    " if not connector else ("    " if connector == "└── " else "│   ")
+        )
         for index, child in enumerate(node.children):
             visit(child, child_prefix, "└── " if index == len(node.children) - 1 else "├── ")
 
     base = " " * max(0, indent)
     for index, root in enumerate(roots):
-        visit(root, base, "" if len(roots) == 1 else ("└── " if index == len(roots) - 1 else "├── "))
+        visit(
+            root, base, "" if len(roots) == 1 else ("└── " if index == len(roots) - 1 else "├── ")
+        )
     return "\n".join(lines)
 
 

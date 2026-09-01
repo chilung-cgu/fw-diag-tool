@@ -65,19 +65,38 @@
       notes = load_release_notes()
       assert notes[0].version == __version__ == "1.7.0"
       assert [note.version for note in notes] == [
-          "1.7.0", "1.6.0", "1.5.0", "1.4.0", "1.3.0", "1.2.0", "1.1.1", "1.1.0", "1.0.0"
+          "1.7.0",
+          "1.6.0",
+          "1.5.0",
+          "1.4.0",
+          "1.3.0",
+          "1.2.0",
+          "1.1.1",
+          "1.1.0",
+          "1.0.0",
       ]
+
 
   def test_models_are_frozen():
       note = load_release_notes()[0]
       with pytest.raises(FrozenInstanceError):
           note.version = "9.9.9"
 
+
   @pytest.mark.parametrize(
       "payload_factory",
-      [missing_schema, wrong_schema, duplicate_version, duplicate_highlight,
-       ascending_versions, missing_english, unsafe_doc, unsafe_page,
-       invalid_category, overlong_text],
+      [
+          missing_schema,
+          wrong_schema,
+          duplicate_version,
+          duplicate_highlight,
+          ascending_versions,
+          missing_english,
+          unsafe_doc,
+          unsafe_page,
+          invalid_category,
+          overlong_text,
+      ],
   )
   def test_invalid_manifest_is_rejected(payload_factory):
       with pytest.raises(ReleaseNotesError):

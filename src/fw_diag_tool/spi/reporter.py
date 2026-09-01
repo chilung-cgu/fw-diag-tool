@@ -477,9 +477,7 @@ class SPIReporter:
             lines.append("### 指令頻率分佈（Command Distribution）")
             lines.append("| 指令名稱（Command Name） | 次數（Count） |")
             lines.append("|---|---|")
-            for cmd_name, count in sorted(
-                stats.command_distribution.items(), key=lambda x: -x[1]
-            ):
+            for cmd_name, count in sorted(stats.command_distribution.items(), key=lambda x: -x[1]):
                 lines.append(f"| {_localize_opcode_name(cmd_name)} | `{count}` |")
             lines.append("")
 

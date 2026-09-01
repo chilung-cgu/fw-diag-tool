@@ -68,16 +68,12 @@ def compute_pcie_statistics(
                     gen_name = cfg.link_info.current_speed_str
 
             if gen_name:
-                link_speed_distribution[gen_name] = (
-                    link_speed_distribution.get(gen_name, 0) + 1
-                )
+                link_speed_distribution[gen_name] = link_speed_distribution.get(gen_name, 0) + 1
 
         # AER from config space
         if cfg.aer_analysis:
             if cfg.aer_analysis.uncorr_errors:
-                uncorrectable_count += sum(
-                    1 for e in cfg.aer_analysis.uncorr_errors if e.is_active
-                )
+                uncorrectable_count += sum(1 for e in cfg.aer_analysis.uncorr_errors if e.is_active)
             else:
                 uncorrectable_count += (
                     cfg.aer_analysis.active_uncorr_fatal_count
@@ -85,9 +81,7 @@ def compute_pcie_statistics(
                 )
 
             if cfg.aer_analysis.corr_errors:
-                correctable_count += sum(
-                    1 for e in cfg.aer_analysis.corr_errors if e.is_active
-                )
+                correctable_count += sum(1 for e in cfg.aer_analysis.corr_errors if e.is_active)
             else:
                 correctable_count += cfg.aer_analysis.active_corr_count
 

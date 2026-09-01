@@ -200,9 +200,7 @@ def test_to_markdown_structure() -> None:
 def test_signoff_checklist_pass_and_fail() -> None:
     """Verify sign-off checklist logic."""
     # Passing report
-    rep_pass = build_unified_report([
-        ProtocolResult("I2C", "All OK", 0, 50, "success", "md")
-    ])
+    rep_pass = build_unified_report([ProtocolResult("I2C", "All OK", 0, 50, "success", "md")])
     md_pass = rep_pass.to_markdown()
     assert "[x] **協定分析完整性" in md_pass
     assert "[x] **無嚴重致命錯誤" in md_pass
@@ -211,9 +209,7 @@ def test_signoff_checklist_pass_and_fail() -> None:
     assert "PASS (核准簽核 / APPROVED)" in md_pass
 
     # Failing report
-    rep_fail = build_unified_report([
-        ProtocolResult("UART", "Panic", 3, 10, "error", "md")
-    ])
+    rep_fail = build_unified_report([ProtocolResult("UART", "Panic", 3, 10, "error", "md")])
     md_fail = rep_fail.to_markdown()
     assert "[ ] **無嚴重致命錯誤" in md_fail
     assert "FAIL (未通過 / REJECTED)" in md_fail
@@ -241,7 +237,9 @@ def test_to_html_formatting() -> None:
 def test_detect_file_protocol(tmp_path: Path) -> None:
     """Test auto-detection of protocols from file names and contents."""
     i2c_file = tmp_path / "trace.csv"
-    i2c_file.write_text("Time,Packet ID,Address,Data,Read/Write,ACK/NAK\n0.001,1,0x50,0x00,Write,ACK\n")
+    i2c_file.write_text(
+        "Time,Packet ID,Address,Data,Read/Write,ACK/NAK\n0.001,1,0x50,0x00,Write,ACK\n"
+    )
     assert detect_file_protocol(i2c_file) == "I2C"
 
     spi_file = tmp_path / "spi.csv"
@@ -264,7 +262,9 @@ def test_detect_file_protocol(tmp_path: Path) -> None:
 def test_analyze_file_for_unified_report(tmp_path: Path) -> None:
     """Test analyzing files into ProtocolResult objects."""
     i2c_f = tmp_path / "i2c_test.csv"
-    i2c_f.write_text("Time,Packet ID,Address,Data,Read/Write,ACK/NAK\n0.001,1,0x50,0x00,Write,ACK\n")
+    i2c_f.write_text(
+        "Time,Packet ID,Address,Data,Read/Write,ACK/NAK\n0.001,1,0x50,0x00,Write,ACK\n"
+    )
     res_i2c = analyze_file_for_unified_report(i2c_f, protocol="I2C")
     assert res_i2c.protocol == "I2C"
     assert res_i2c.total_items >= 1
@@ -278,7 +278,9 @@ def test_analyze_file_for_unified_report(tmp_path: Path) -> None:
 def test_generate_unified_report_from_files(tmp_path: Path) -> None:
     """Test generating unified report across multiple files."""
     i2c_f = tmp_path / "i2c.csv"
-    i2c_f.write_text("Time,Packet ID,Address,Data,Read/Write,ACK/NAK\n0.001,1,0x50,0x00,Write,ACK\n")
+    i2c_f.write_text(
+        "Time,Packet ID,Address,Data,Read/Write,ACK/NAK\n0.001,1,0x50,0x00,Write,ACK\n"
+    )
     uart_f = tmp_path / "uart.log"
     uart_f.write_text("Kernel panic - not syncing\nCall Trace:\n")
 
@@ -291,7 +293,9 @@ def test_generate_unified_report_from_files(tmp_path: Path) -> None:
 def test_cli_report_command(tmp_path: Path) -> None:
     """Test fw-diag report CLI command."""
     i2c_f = tmp_path / "trace.csv"
-    i2c_f.write_text("Time,Packet ID,Address,Data,Read/Write,ACK/NAK\n0.001,1,0x50,0x00,Write,ACK\n")
+    i2c_f.write_text(
+        "Time,Packet ID,Address,Data,Read/Write,ACK/NAK\n0.001,1,0x50,0x00,Write,ACK\n"
+    )
     out_md = tmp_path / "report.md"
     out_html = tmp_path / "report.html"
 

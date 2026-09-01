@@ -85,8 +85,12 @@ def test_multi_device_topology() -> None:
         _create_config_space(bdf="0000:00:01.0", base_class=0x06, class_name="Bridge Device"),
         _create_config_space(bdf="0000:00:02.0", base_class=0x06, class_name="Bridge Device"),
         _create_config_space(bdf="0000:01:00.0", base_class=0x02, class_name="Network Controller"),
-        _create_config_space(bdf="0000:02:00.0", base_class=0x01, class_name="Mass Storage Controller"),
-        _create_config_space(bdf="0000:03:00.0", base_class=0x12, class_name="Processing Accelerator"),
+        _create_config_space(
+            bdf="0000:02:00.0", base_class=0x01, class_name="Mass Storage Controller"
+        ),
+        _create_config_space(
+            bdf="0000:03:00.0", base_class=0x12, class_name="Processing Accelerator"
+        ),
     ]
     stats = compute_pcie_statistics(devices)
     assert stats.device_count == 5
@@ -109,14 +113,45 @@ def test_aer_error_counting_from_config_space() -> None:
         cap_control_raw=0,
         header_log_raw=[0, 0, 0, 0],
         uncorr_errors=[
-            AERUncorrectableError(bit_pos=18, name="Malformed TLP", short_code="MalformedTLP", is_active=True, is_masked=False, severity="Fatal"),
-            AERUncorrectableError(bit_pos=5, name="Surprise Down", short_code="SurpriseDown", is_active=True, is_masked=False, severity="Non-Fatal"),
-            AERUncorrectableError(bit_pos=4, name="Data Link Protocol", short_code="DLP", is_active=False, is_masked=False, severity="Fatal"),
+            AERUncorrectableError(
+                bit_pos=18,
+                name="Malformed TLP",
+                short_code="MalformedTLP",
+                is_active=True,
+                is_masked=False,
+                severity="Fatal",
+            ),
+            AERUncorrectableError(
+                bit_pos=5,
+                name="Surprise Down",
+                short_code="SurpriseDown",
+                is_active=True,
+                is_masked=False,
+                severity="Non-Fatal",
+            ),
+            AERUncorrectableError(
+                bit_pos=4,
+                name="Data Link Protocol",
+                short_code="DLP",
+                is_active=False,
+                is_masked=False,
+                severity="Fatal",
+            ),
         ],
         corr_errors=[
-            AERCorrectableError(bit_pos=0, name="Receiver Error", short_code="RxErr", is_active=True, is_masked=False),
-            AERCorrectableError(bit_pos=6, name="Bad TLP", short_code="BadTLP", is_active=True, is_masked=False),
-            AERCorrectableError(bit_pos=7, name="Bad DLLP", short_code="BadDLLP", is_active=False, is_masked=False),
+            AERCorrectableError(
+                bit_pos=0,
+                name="Receiver Error",
+                short_code="RxErr",
+                is_active=True,
+                is_masked=False,
+            ),
+            AERCorrectableError(
+                bit_pos=6, name="Bad TLP", short_code="BadTLP", is_active=True, is_masked=False
+            ),
+            AERCorrectableError(
+                bit_pos=7, name="Bad DLLP", short_code="BadDLLP", is_active=False, is_masked=False
+            ),
         ],
     )
     cfg = _create_config_space(aer_analysis=aer)
@@ -165,10 +200,42 @@ def test_dmesg_aer_counting() -> None:
 
 def test_dmesg_error_rate_calculation() -> None:
     events = [
-        DmesgAEREvent(timestamp="10.000000", bdf="0000:01:00.0", severity="Correctable", error_name="BadTLP", tlp_header=None, raw_line="line 1", root_cause_guide=""),
-        DmesgAEREvent(timestamp="15.000000", bdf="0000:01:00.0", severity="Correctable", error_name="BadTLP", tlp_header=None, raw_line="line 2", root_cause_guide=""),
-        DmesgAEREvent(timestamp="20.000000", bdf="0000:01:00.0", severity="Correctable", error_name="BadTLP", tlp_header=None, raw_line="line 3", root_cause_guide=""),
-        DmesgAEREvent(timestamp="30.000000", bdf="0000:01:00.0", severity="Correctable", error_name="BadTLP", tlp_header=None, raw_line="line 4", root_cause_guide=""),
+        DmesgAEREvent(
+            timestamp="10.000000",
+            bdf="0000:01:00.0",
+            severity="Correctable",
+            error_name="BadTLP",
+            tlp_header=None,
+            raw_line="line 1",
+            root_cause_guide="",
+        ),
+        DmesgAEREvent(
+            timestamp="15.000000",
+            bdf="0000:01:00.0",
+            severity="Correctable",
+            error_name="BadTLP",
+            tlp_header=None,
+            raw_line="line 2",
+            root_cause_guide="",
+        ),
+        DmesgAEREvent(
+            timestamp="20.000000",
+            bdf="0000:01:00.0",
+            severity="Correctable",
+            error_name="BadTLP",
+            tlp_header=None,
+            raw_line="line 3",
+            root_cause_guide="",
+        ),
+        DmesgAEREvent(
+            timestamp="30.000000",
+            bdf="0000:01:00.0",
+            severity="Correctable",
+            error_name="BadTLP",
+            tlp_header=None,
+            raw_line="line 4",
+            root_cause_guide="",
+        ),
     ]
     # duration = 30.0 - 10.0 = 20.0 seconds, 4 events => 4 / 20.0 = 0.2 errors/sec
     stats = compute_pcie_statistics([], dmesg_events=events)
@@ -177,14 +244,38 @@ def test_dmesg_error_rate_calculation() -> None:
 
 def test_dmesg_error_rate_single_event_or_same_timestamp() -> None:
     single_event = [
-        DmesgAEREvent(timestamp="124.582910", bdf="0000:01:00.0", severity="Fatal", error_name="MalformedTLP", tlp_header=None, raw_line="", root_cause_guide=""),
+        DmesgAEREvent(
+            timestamp="124.582910",
+            bdf="0000:01:00.0",
+            severity="Fatal",
+            error_name="MalformedTLP",
+            tlp_header=None,
+            raw_line="",
+            root_cause_guide="",
+        ),
     ]
     stats_single = compute_pcie_statistics([], dmesg_events=single_event)
     assert stats_single.error_rate_per_sec is None
 
     same_ts_events = [
-        DmesgAEREvent(timestamp="124.582910", bdf="0000:01:00.0", severity="Fatal", error_name="MalformedTLP", tlp_header=None, raw_line="", root_cause_guide=""),
-        DmesgAEREvent(timestamp="124.582910", bdf="0000:01:00.0", severity="Fatal", error_name="CompTimeout", tlp_header=None, raw_line="", root_cause_guide=""),
+        DmesgAEREvent(
+            timestamp="124.582910",
+            bdf="0000:01:00.0",
+            severity="Fatal",
+            error_name="MalformedTLP",
+            tlp_header=None,
+            raw_line="",
+            root_cause_guide="",
+        ),
+        DmesgAEREvent(
+            timestamp="124.582910",
+            bdf="0000:01:00.0",
+            severity="Fatal",
+            error_name="CompTimeout",
+            tlp_header=None,
+            raw_line="",
+            root_cause_guide="",
+        ),
     ]
     stats_same = compute_pcie_statistics([], dmesg_events=same_ts_events)
     assert stats_same.error_rate_per_sec is None
@@ -192,8 +283,24 @@ def test_dmesg_error_rate_single_event_or_same_timestamp() -> None:
 
 def test_dmesg_error_rate_missing_or_invalid_timestamps() -> None:
     events = [
-        DmesgAEREvent(timestamp=None, bdf="0000:01:00.0", severity="Fatal", error_name="MalformedTLP", tlp_header=None, raw_line="", root_cause_guide=""),
-        DmesgAEREvent(timestamp="invalid_ts", bdf="0000:01:00.0", severity="Fatal", error_name="MalformedTLP", tlp_header=None, raw_line="", root_cause_guide=""),
+        DmesgAEREvent(
+            timestamp=None,
+            bdf="0000:01:00.0",
+            severity="Fatal",
+            error_name="MalformedTLP",
+            tlp_header=None,
+            raw_line="",
+            root_cause_guide="",
+        ),
+        DmesgAEREvent(
+            timestamp="invalid_ts",
+            bdf="0000:01:00.0",
+            severity="Fatal",
+            error_name="MalformedTLP",
+            tlp_header=None,
+            raw_line="",
+            root_cause_guide="",
+        ),
     ]
     stats = compute_pcie_statistics([], dmesg_events=events)
     assert stats.error_rate_per_sec is None
@@ -204,19 +311,31 @@ def test_link_degradation_counting() -> None:
         _create_config_space(
             bdf="0000:01:00.0",
             link_info=PCIeLinkInfo(
-                max_speed_code=4, max_width=16, current_speed_code=3, current_width=8, is_degraded=True
+                max_speed_code=4,
+                max_width=16,
+                current_speed_code=3,
+                current_width=8,
+                is_degraded=True,
             ),
         ),
         _create_config_space(
             bdf="0000:02:00.0",
             link_info=PCIeLinkInfo(
-                max_speed_code=4, max_width=16, current_speed_code=4, current_width=16, is_degraded=False
+                max_speed_code=4,
+                max_width=16,
+                current_speed_code=4,
+                current_width=16,
+                is_degraded=False,
             ),
         ),
         _create_config_space(
             bdf="0000:03:00.0",
             link_info=PCIeLinkInfo(
-                max_speed_code=5, max_width=16, current_speed_code=5, current_width=8, is_degraded=True
+                max_speed_code=5,
+                max_width=16,
+                current_speed_code=5,
+                current_width=8,
+                is_degraded=True,
             ),
         ),
         _create_config_space(bdf="0000:04:00.0", link_info=None),
@@ -235,7 +354,9 @@ def test_link_speed_distribution() -> None:
         _create_config_space(link_info=PCIeLinkInfo(current_speed_code=4)),
         _create_config_space(link_info=PCIeLinkInfo(current_speed_code=5)),
         _create_config_space(link_info=PCIeLinkInfo(current_speed_code=6)),
-        _create_config_space(link_info=PCIeLinkInfo(current_speed_code=0, current_speed_str="8.0 GT/s (Gen3)")),
+        _create_config_space(
+            link_info=PCIeLinkInfo(current_speed_code=0, current_speed_str="8.0 GT/s (Gen3)")
+        ),
     ]
     stats = compute_pcie_statistics(devices)
     assert stats.link_speed_distribution == {
@@ -259,21 +380,50 @@ def test_combined_configs_and_dmesg_events() -> None:
         cap_control_raw=0,
         header_log_raw=[0, 0, 0, 0],
         uncorr_errors=[
-            AERUncorrectableError(bit_pos=18, name="Malformed TLP", short_code="MalformedTLP", is_active=True, is_masked=False, severity="Fatal"),
+            AERUncorrectableError(
+                bit_pos=18,
+                name="Malformed TLP",
+                short_code="MalformedTLP",
+                is_active=True,
+                is_masked=False,
+                severity="Fatal",
+            ),
         ],
         corr_errors=[
-            AERCorrectableError(bit_pos=0, name="Receiver Error", short_code="RxErr", is_active=True, is_masked=False),
+            AERCorrectableError(
+                bit_pos=0,
+                name="Receiver Error",
+                short_code="RxErr",
+                is_active=True,
+                is_masked=False,
+            ),
         ],
     )
     cfg = _create_config_space(aer_analysis=aer)
     events = [
-        DmesgAEREvent(timestamp="10.0", bdf="0000:01:00.0", severity="Fatal", error_name="CompTimeout", tlp_header=None, raw_line="", root_cause_guide=""),
-        DmesgAEREvent(timestamp="20.0", bdf="0000:01:00.0", severity="Correctable", error_name="BadTLP", tlp_header=None, raw_line="", root_cause_guide=""),
+        DmesgAEREvent(
+            timestamp="10.0",
+            bdf="0000:01:00.0",
+            severity="Fatal",
+            error_name="CompTimeout",
+            tlp_header=None,
+            raw_line="",
+            root_cause_guide="",
+        ),
+        DmesgAEREvent(
+            timestamp="20.0",
+            bdf="0000:01:00.0",
+            severity="Correctable",
+            error_name="BadTLP",
+            tlp_header=None,
+            raw_line="",
+            root_cause_guide="",
+        ),
     ]
     stats = compute_pcie_statistics([cfg], dmesg_events=events)
     assert stats.device_count == 1
     assert stats.uncorrectable_count == 2  # 1 from config + 1 from dmesg
-    assert stats.correctable_count == 2    # 1 from config + 1 from dmesg
+    assert stats.correctable_count == 2  # 1 from config + 1 from dmesg
     assert stats.total_aer_errors == 4
     assert stats.error_rate_per_sec == pytest.approx(0.2, rel=1e-3)
 

@@ -49,10 +49,7 @@ def render() -> None:
     filtered = [
         chip
         for chip in SPI_FLASH_DB
-        if (
-            selected_manufacturer == manufacturers[0]
-            or chip.manufacturer == selected_manufacturer
-        )
+        if (selected_manufacturer == manufacturers[0] or chip.manufacturer == selected_manufacturer)
         and query.casefold() in chip.part_number.casefold()
     ]
     st.subheader(t("spi_chip_db_table_heading", domain="gui"))
@@ -67,12 +64,17 @@ def render() -> None:
         t("spi_chip_db_mem_type_byte", domain="gui"), value="40", max_chars=2, key="spi_jedec_type"
     )
     capacity = capacity_col.text_input(
-        t("spi_chip_db_capacity_byte", domain="gui"), value="18", max_chars=2, key="spi_jedec_capacity"
+        t("spi_chip_db_capacity_byte", domain="gui"),
+        value="18",
+        max_chars=2,
+        key="spi_jedec_capacity",
     )
 
     if st.button(t("spi_chip_db_lookup_button", domain="gui"), key="spi_jedec_lookup"):
         try:
-            ids = [int(value.strip().removeprefix("0x"), 16) for value in (mfr_id, mem_type, capacity)]
+            ids = [
+                int(value.strip().removeprefix("0x"), 16) for value in (mfr_id, mem_type, capacity)
+            ]
             if any(value < 0 or value > 0xFF for value in ids):
                 raise ValueError
         except ValueError:

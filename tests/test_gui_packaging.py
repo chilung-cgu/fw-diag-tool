@@ -110,7 +110,7 @@ def test_version_is_exposed_by_package_and_cli():
     result = CliRunner().invoke(app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.output.strip() == __version__ == "1.7.0"
+    assert result.output.strip() == __version__ == "2.0.0"
 
 
 def test_launch_gui_propagates_streamlit_exit_code(monkeypatch):

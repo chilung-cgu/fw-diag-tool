@@ -113,9 +113,18 @@ def overlong_text():
 
 def test_packaged_history_is_descending_and_starts_at_current_version():
     notes = load_release_notes()
-    assert notes[0].version == __version__ == "1.7.0"
+    assert notes[0].version == __version__ == "2.0.0"
     assert [note.version for note in notes] == [
-        "1.7.0", "1.6.0", "1.5.0", "1.4.0", "1.3.0", "1.2.0", "1.1.1", "1.1.0", "1.0.0"
+        "2.0.0",
+        "1.7.0",
+        "1.6.0",
+        "1.5.0",
+        "1.4.0",
+        "1.3.0",
+        "1.2.0",
+        "1.1.1",
+        "1.1.0",
+        "1.0.0",
     ]
 
 
@@ -133,8 +142,19 @@ def test_models_are_frozen():
 
 @pytest.mark.parametrize(
     "payload_factory",
-    [missing_schema, wrong_schema, duplicate_version, duplicate_highlight, duplicate_global_highlight, ascending_versions,
-     missing_english, unsafe_doc, unsafe_page, invalid_category, overlong_text],
+    [
+        missing_schema,
+        wrong_schema,
+        duplicate_version,
+        duplicate_highlight,
+        duplicate_global_highlight,
+        ascending_versions,
+        missing_english,
+        unsafe_doc,
+        unsafe_page,
+        invalid_category,
+        overlong_text,
+    ],
 )
 def test_invalid_manifest_is_rejected(payload_factory):
     with pytest.raises(ReleaseNotesError):
@@ -191,7 +211,9 @@ def test_shipped_highlights_target_valid_registered_pages():
     for note in load_release_notes():
         for highlight in note.highlights:
             if highlight.page is not None:
-                assert highlight.page in valid_urls, f"Page '{highlight.page}' not found in PAGE_INDEX"
+                assert highlight.page in valid_urls, (
+                    f"Page '{highlight.page}' not found in PAGE_INDEX"
+                )
                 if highlight.id in {"v17-spi-chip-db", "v16-unified-report"}:
                     assert highlight.page != "dashboard"
                     assert highlight.page != "spi"
@@ -200,7 +222,9 @@ def test_shipped_highlights_target_valid_registered_pages():
 def test_duplicate_json_keys_are_rejected(monkeypatch):
     import fw_diag_tool.release_notes as module
 
-    monkeypatch.setattr(module, "files", lambda package: _Resource("{\"schema_version\":1,\"schema_version\":1}"))
+    monkeypatch.setattr(
+        module, "files", lambda package: _Resource('{"schema_version":1,"schema_version":1}')
+    )
     with pytest.raises(ReleaseNotesError):
         module.load_release_notes()
 

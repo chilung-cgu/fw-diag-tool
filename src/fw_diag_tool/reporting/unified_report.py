@@ -74,10 +74,14 @@ class UnifiedReport:
         )
 
         total_anomalies = sum(r.anomaly_count for r in self.results)
-        affected_protocols = [r for r in self.results if r.anomaly_count > 0 or r.status != "success"]
+        affected_protocols = [
+            r for r in self.results if r.anomaly_count > 0 or r.status != "success"
+        ]
 
         if total_anomalies == 0 and not affected_protocols:
-            lines.append("✔ **無跨協定異常檢出**：所有已分析協定均處於正常狀態，未發現故障或異常指標。\n")
+            lines.append(
+                "✔ **無跨協定異常檢出**：所有已分析協定均處於正常狀態，未發現故障或異常指標。\n"
+            )
         else:
             lines.extend(
                 [
@@ -91,7 +95,9 @@ class UnifiedReport:
             for r in affected_protocols:
                 status_str = self._format_status_badge(r.status)
                 escaped_summary = r.summary.replace("|", "\\|")
-                lines.append(f"| **{r.protocol}** | {status_str} | {r.anomaly_count} | {escaped_summary} |")
+                lines.append(
+                    f"| **{r.protocol}** | {status_str} | {r.anomaly_count} | {escaped_summary} |"
+                )
             lines.append("")
 
         lines.extend(
@@ -109,7 +115,9 @@ class UnifiedReport:
         anomaly_controlled = total_anomalies == 0
         health_passed = self.overall_health_score >= 80.0
 
-        all_passed = has_results and no_fatal and health_passed and (self.overall_status == "success")
+        all_passed = (
+            has_results and no_fatal and health_passed and (self.overall_status == "success")
+        )
 
         check_icon = lambda ok: "x" if ok else " "
 
@@ -248,7 +256,7 @@ def detect_file_protocol(file_path: Path | str, content: str = "") -> str:
     normalized = content.lower()
 
     if suffix == ".csv":
-        first_line = normalized.splitlines()[0] if normalized.splitlines() else ''
+        first_line = normalized.splitlines()[0] if normalized.splitlines() else ""
         if any(col in first_line for col in ["scl", "sda", "packet id", "address", "pmbus"]):
             return "I2C"
         if any(col in first_line for col in ["mosi", "miso", "cs", "enable"]):
@@ -441,7 +449,9 @@ def analyze_file_for_unified_report(
                 anomaly_count = uncorr_count + corr_count
                 if uncorr_count > 0:
                     status = "error"
-                elif corr_count > 0 or any(d.link_info and d.link_info.is_degraded for d in devices):
+                elif corr_count > 0 or any(
+                    d.link_info and d.link_info.is_degraded for d in devices
+                ):
                     status = "warning"
                 else:
                     status = "success"

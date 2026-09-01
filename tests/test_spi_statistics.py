@@ -67,7 +67,9 @@ def test_single_read_command() -> None:
         mosi_bytes=[0x03, 0x00, 0x00, 0x00, 0x00],
         miso_bytes=[0x00, 0x00, 0x00, 0x00, 0xAA],
     )
-    report = SPIReport(summary=SPIReportSummary(total_transactions=1, read_count=1), transactions=[tx])
+    report = SPIReport(
+        summary=SPIReportSummary(total_transactions=1, read_count=1), transactions=[tx]
+    )
     stats = compute_spi_statistics(report)
 
     assert stats.command_distribution == {"Read Data (0x03)": 1}
@@ -80,11 +82,49 @@ def test_single_read_command() -> None:
 
 def test_mixed_commands_frequency() -> None:
     txs = [
-        _make_tx(1, SPIOpcode.WRITE_ENABLE, "Write Enable / WREN (0x06)", start_time=0.0, end_time=0.0001, duration_us=100.0),
-        _make_tx(2, SPIOpcode.PAGE_PROGRAM, "Page Program (0x02)", start_time=0.0002, end_time=0.0012, duration_us=1000.0, mosi_bytes=[0x02, 0x00, 0x00, 0x00, 0x11, 0x22]),
-        _make_tx(3, SPIOpcode.READ_STATUS_REG_1, "Read Status Register-1 (0x05)", start_time=0.0013, end_time=0.0014, duration_us=100.0, details={"busy": True}),
-        _make_tx(4, SPIOpcode.READ_STATUS_REG_1, "Read Status Register-1 (0x05)", start_time=0.0015, end_time=0.0016, duration_us=100.0, details={"busy": False}),
-        _make_tx(5, SPIOpcode.READ_DATA, "Read Data (0x03)", start_time=0.0017, end_time=0.0027, duration_us=1000.0),
+        _make_tx(
+            1,
+            SPIOpcode.WRITE_ENABLE,
+            "Write Enable / WREN (0x06)",
+            start_time=0.0,
+            end_time=0.0001,
+            duration_us=100.0,
+        ),
+        _make_tx(
+            2,
+            SPIOpcode.PAGE_PROGRAM,
+            "Page Program (0x02)",
+            start_time=0.0002,
+            end_time=0.0012,
+            duration_us=1000.0,
+            mosi_bytes=[0x02, 0x00, 0x00, 0x00, 0x11, 0x22],
+        ),
+        _make_tx(
+            3,
+            SPIOpcode.READ_STATUS_REG_1,
+            "Read Status Register-1 (0x05)",
+            start_time=0.0013,
+            end_time=0.0014,
+            duration_us=100.0,
+            details={"busy": True},
+        ),
+        _make_tx(
+            4,
+            SPIOpcode.READ_STATUS_REG_1,
+            "Read Status Register-1 (0x05)",
+            start_time=0.0015,
+            end_time=0.0016,
+            duration_us=100.0,
+            details={"busy": False},
+        ),
+        _make_tx(
+            5,
+            SPIOpcode.READ_DATA,
+            "Read Data (0x03)",
+            start_time=0.0017,
+            end_time=0.0027,
+            duration_us=1000.0,
+        ),
     ]
     report = SPIReport(summary=SPIReportSummary(total_transactions=5), transactions=txs)
     stats = compute_spi_statistics(report)
@@ -98,8 +138,24 @@ def test_mixed_commands_frequency() -> None:
 
 def test_throughput_with_timestamps() -> None:
     # Total duration = 0.010 s, total bytes = 100
-    tx1 = _make_tx(1, SPIOpcode.READ_DATA, "Read Data (0x03)", start_time=0.000, end_time=0.005, duration_us=5000.0, mosi_bytes=[0] * 50)
-    tx2 = _make_tx(2, SPIOpcode.READ_DATA, "Read Data (0x03)", start_time=0.005, end_time=0.010, duration_us=5000.0, mosi_bytes=[0] * 50)
+    tx1 = _make_tx(
+        1,
+        SPIOpcode.READ_DATA,
+        "Read Data (0x03)",
+        start_time=0.000,
+        end_time=0.005,
+        duration_us=5000.0,
+        mosi_bytes=[0] * 50,
+    )
+    tx2 = _make_tx(
+        2,
+        SPIOpcode.READ_DATA,
+        "Read Data (0x03)",
+        start_time=0.005,
+        end_time=0.010,
+        duration_us=5000.0,
+        mosi_bytes=[0] * 50,
+    )
     report = SPIReport(summary=SPIReportSummary(total_transactions=2), transactions=[tx1, tx2])
     stats = compute_spi_statistics(report)
 
@@ -108,8 +164,24 @@ def test_throughput_with_timestamps() -> None:
 
 
 def test_throughput_without_timestamps() -> None:
-    tx1 = _make_tx(1, SPIOpcode.READ_DATA, "Read Data (0x03)", start_time=0.0, end_time=0.0, duration_us=0.0, mosi_bytes=[0x03, 0x00])
-    tx2 = _make_tx(2, SPIOpcode.READ_DATA, "Read Data (0x03)", start_time=0.0, end_time=0.0, duration_us=0.0, mosi_bytes=[0x03, 0x00])
+    tx1 = _make_tx(
+        1,
+        SPIOpcode.READ_DATA,
+        "Read Data (0x03)",
+        start_time=0.0,
+        end_time=0.0,
+        duration_us=0.0,
+        mosi_bytes=[0x03, 0x00],
+    )
+    tx2 = _make_tx(
+        2,
+        SPIOpcode.READ_DATA,
+        "Read Data (0x03)",
+        start_time=0.0,
+        end_time=0.0,
+        duration_us=0.0,
+        mosi_bytes=[0x03, 0x00],
+    )
     report = SPIReport(summary=SPIReportSummary(total_transactions=2), transactions=[tx1, tx2])
     stats = compute_spi_statistics(report)
 
@@ -120,9 +192,15 @@ def test_throughput_without_timestamps() -> None:
 
 def test_busy_poll_count() -> None:
     txs = [
-        _make_tx(1, SPIOpcode.READ_STATUS_REG_1, "Read Status Register-1 (0x05)", details={"busy": True}),
-        _make_tx(2, SPIOpcode.READ_STATUS_REG_1, "Read Status Register-1 (0x05)", details={"busy": True}),
-        _make_tx(3, SPIOpcode.READ_STATUS_REG_1, "Read Status Register-1 (0x05)", details={"busy": False}),
+        _make_tx(
+            1, SPIOpcode.READ_STATUS_REG_1, "Read Status Register-1 (0x05)", details={"busy": True}
+        ),
+        _make_tx(
+            2, SPIOpcode.READ_STATUS_REG_1, "Read Status Register-1 (0x05)", details={"busy": True}
+        ),
+        _make_tx(
+            3, SPIOpcode.READ_STATUS_REG_1, "Read Status Register-1 (0x05)", details={"busy": False}
+        ),
         _make_tx(4, SPIOpcode.READ_STATUS_REG_2, "Read Status Register-2 (0x35)"),
         _make_tx(5, SPIOpcode.READ_DATA, "Read Data (0x03)"),
     ]
@@ -138,9 +216,32 @@ def test_avg_busy_wait_with_program() -> None:
     # RDSR 2 (busy=0) at t=0.001300 .. 0.001400 s
     # Wait time = (0.001400 - 0.001000) * 1e6 = 400.0 µs
     txs = [
-        _make_tx(1, SPIOpcode.PAGE_PROGRAM, "Page Program (0x02)", start_time=0.0005, end_time=0.0010, duration_us=500.0),
-        _make_tx(2, SPIOpcode.READ_STATUS_REG_1, "Read Status Register-1 (0x05)", start_time=0.0011, end_time=0.0012, duration_us=100.0, details={"busy": True}),
-        _make_tx(3, SPIOpcode.READ_STATUS_REG_1, "Read Status Register-1 (0x05)", start_time=0.0013, end_time=0.0014, duration_us=100.0, details={"busy": False}),
+        _make_tx(
+            1,
+            SPIOpcode.PAGE_PROGRAM,
+            "Page Program (0x02)",
+            start_time=0.0005,
+            end_time=0.0010,
+            duration_us=500.0,
+        ),
+        _make_tx(
+            2,
+            SPIOpcode.READ_STATUS_REG_1,
+            "Read Status Register-1 (0x05)",
+            start_time=0.0011,
+            end_time=0.0012,
+            duration_us=100.0,
+            details={"busy": True},
+        ),
+        _make_tx(
+            3,
+            SPIOpcode.READ_STATUS_REG_1,
+            "Read Status Register-1 (0x05)",
+            start_time=0.0013,
+            end_time=0.0014,
+            duration_us=100.0,
+            details={"busy": False},
+        ),
     ]
     report = SPIReport(summary=SPIReportSummary(total_transactions=3), transactions=txs)
     stats = compute_spi_statistics(report)
@@ -176,7 +277,15 @@ def test_page_program_stats() -> None:
 
 def test_edge_case_all_same_command() -> None:
     txs = [
-        _make_tx(i, SPIOpcode.READ_DATA, "Read Data (0x03)", start_time=i * 0.001, end_time=i * 0.001 + 0.0005, duration_us=500.0, mosi_bytes=[0x03, 0x00, 0x00, 0x00])
+        _make_tx(
+            i,
+            SPIOpcode.READ_DATA,
+            "Read Data (0x03)",
+            start_time=i * 0.001,
+            end_time=i * 0.001 + 0.0005,
+            duration_us=500.0,
+            mosi_bytes=[0x03, 0x00, 0x00, 0x00],
+        )
         for i in range(1, 11)
     ]
     report = SPIReport(summary=SPIReportSummary(total_transactions=10), transactions=txs)
@@ -190,7 +299,15 @@ def test_edge_case_all_same_command() -> None:
 
 
 def test_edge_case_single_command_no_duration() -> None:
-    tx = _make_tx(1, SPIOpcode.CHIP_ERASE, "Chip Erase (0xC7)", start_time=0.0, end_time=0.0, duration_us=0.0, mosi_bytes=[0xC7])
+    tx = _make_tx(
+        1,
+        SPIOpcode.CHIP_ERASE,
+        "Chip Erase (0xC7)",
+        start_time=0.0,
+        end_time=0.0,
+        duration_us=0.0,
+        mosi_bytes=[0xC7],
+    )
     report = SPIReport(summary=SPIReportSummary(total_transactions=1), transactions=[tx])
     stats = compute_spi_statistics(report)
 

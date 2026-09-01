@@ -91,9 +91,7 @@ def build_eid_topology(report: ServerMgmtReport) -> MCTPTopology:
             src_eid=src_eid,
             dst_eid=dst_eid,
             message_count=count,
-            avg_payload_size=link_payload_totals[(src_eid, dst_eid)] / count
-            if count
-            else None,
+            avg_payload_size=link_payload_totals[(src_eid, dst_eid)] / count if count else None,
         )
         for (src_eid, dst_eid), count in sorted(link_counts.items())
     )
@@ -124,9 +122,7 @@ def topology_to_mermaid(topo: MCTPTopology) -> str:
         src = endpoint_ids.get(link.src_eid, f"EID_{link.src_eid}")
         dst = endpoint_ids.get(link.dst_eid, f"EID_{link.dst_eid}")
         average = (
-            f"; avg {link.avg_payload_size:.1f} B"
-            if link.avg_payload_size is not None
-            else ""
+            f"; avg {link.avg_payload_size:.1f} B" if link.avg_payload_size is not None else ""
         )
         lines.append(f"    {src} -->|{link.message_count} message(s){average}| {dst}")
     return "\n".join(lines)

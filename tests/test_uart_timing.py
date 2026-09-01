@@ -84,8 +84,8 @@ def test_boot_phase_detection_full():
 
     durations = timing.boot_phase_durations
     assert durations["bootloader"] == pytest.approx(0.9, abs=1e-4)  # 1.0 - 0.1
-    assert durations["kernel"] == pytest.approx(3.0, abs=1e-4)      # 4.0 - 1.0
-    assert durations["userspace"] == pytest.approx(2.5, abs=1e-4)   # 6.5 - 4.0
+    assert durations["kernel"] == pytest.approx(3.0, abs=1e-4)  # 4.0 - 1.0
+    assert durations["userspace"] == pytest.approx(2.5, abs=1e-4)  # 6.5 - 4.0
 
 
 def test_boot_phase_detection_kernel_only():

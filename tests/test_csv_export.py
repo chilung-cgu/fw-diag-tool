@@ -373,12 +373,8 @@ def test_export_pcie_csv_config_space_normal() -> None:
         corr_mask_raw=0,
         cap_control_raw=0,
         header_log_raw=[],
-        uncorr_errors=[
-            AERUncorrectableError(18, "Malformed TLP", "MTLP", True, False, "Fatal")
-        ],
-        corr_errors=[
-            AERCorrectableError(0, "Receiver Error", "RxErr", True, False)
-        ],
+        uncorr_errors=[AERUncorrectableError(18, "Malformed TLP", "MTLP", True, False, "Fatal")],
+        corr_errors=[AERCorrectableError(0, "Receiver Error", "RxErr", True, False)],
     )
     cfg = PCIeConfigSpace(
         raw_data=b"",

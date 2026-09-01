@@ -125,7 +125,7 @@ def _render_system_info() -> None:
     metrics = (
         ("Python 版本", platform.python_version()),
         ("工具版本", f"v{__version__}"),
-        ("頁面數", "26"),
+        ("頁面數", str(len(PAGE_INDEX))),
         ("協定數", "5"),
     )
     columns = st.columns(4)

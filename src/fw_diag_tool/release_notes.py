@@ -95,16 +95,33 @@ def _parse_highlight(value: object, index: int) -> ReleaseHighlight:
     if not isinstance(category, str) or category not in _CATEGORIES:
         raise ReleaseNotesError(f"invalid category: {category!r}")
     protocols = item["protocols"]
-    if (not isinstance(protocols, list) or any(not isinstance(p, str) or p not in _PROTOCOLS for p in protocols)
-            or len(set(protocols)) != len(protocols)):
+    if (
+        not isinstance(protocols, list)
+        or any(not isinstance(p, str) or p not in _PROTOCOLS for p in protocols)
+        or len(set(protocols)) != len(protocols)
+    ):
         raise ReleaseNotesError("protocols must be unique allowed entries")
     page = item["page"]
     if page is not None and (not isinstance(page, str) or not _SLUG_RE.fullmatch(page)):
         raise ReleaseNotesError("invalid page slug")
     doc = item["doc"]
-    if doc is not None and (not isinstance(doc, str) or not _DOC_RE.fullmatch(doc) or _URL_RE.search(doc) or ".." in doc.split("/") or doc.startswith("/")):
+    if doc is not None and (
+        not isinstance(doc, str)
+        or not _DOC_RE.fullmatch(doc)
+        or _URL_RE.search(doc)
+        or ".." in doc.split("/")
+        or doc.startswith("/")
+    ):
         raise ReleaseNotesError("invalid doc path")
-    return ReleaseHighlight(ident, category, tuple(protocols), _require_text_map(item["title"], "title"), _require_text_map(item["summary"], "summary"), page, doc)
+    return ReleaseHighlight(
+        ident,
+        category,
+        tuple(protocols),
+        _require_text_map(item["title"], "title"),
+        _require_text_map(item["summary"], "summary"),
+        page,
+        doc,
+    )
 
 
 def parse_release_notes(payload: Mapping[str, object]) -> tuple[ReleaseNote, ...]:
@@ -125,7 +142,11 @@ def parse_release_notes(payload: Mapping[str, object]) -> tuple[ReleaseNote, ...
             raise ReleaseNotesError(f"releases[{idx}] fields mismatch")
         version = item["version"]
         parsed = _parse_version(version, f"releases[{idx}].version")
-        if not isinstance(version, str) or version in seen_versions or (previous is not None and parsed >= previous):
+        if (
+            not isinstance(version, str)
+            or version in seen_versions
+            or (previous is not None and parsed >= previous)
+        ):
             raise ReleaseNotesError("versions must be unique and descending")
         seen_versions.add(version)
         previous = parsed
@@ -137,10 +158,18 @@ def parse_release_notes(payload: Mapping[str, object]) -> tuple[ReleaseNote, ...
         except ValueError as exc:
             raise ReleaseNotesError("invalid date") from exc
         source_ref = item["source_ref"]
-        if not isinstance(source_ref, str) or _SOURCE_RE.fullmatch(source_ref) is None or source_ref.rsplit("#", 1)[1] != version:
+        if (
+            not isinstance(source_ref, str)
+            or _SOURCE_RE.fullmatch(source_ref) is None
+            or source_ref.rsplit("#", 1)[1] != version
+        ):
             raise ReleaseNotesError("invalid source_ref")
         highlights_value = item["highlights"]
-        if not isinstance(highlights_value, list) or not highlights_value or len(highlights_value) > 12:
+        if (
+            not isinstance(highlights_value, list)
+            or not highlights_value
+            or len(highlights_value) > 12
+        ):
             raise ReleaseNotesError("highlights must contain 1-12 entries")
         highlights = tuple(_parse_highlight(v, i) for i, v in enumerate(highlights_value))
         ids = [h.id for h in highlights]
@@ -149,13 +178,25 @@ def parse_release_notes(payload: Mapping[str, object]) -> tuple[ReleaseNote, ...
         if seen_highlight_ids.intersection(ids):
             raise ReleaseNotesError("duplicate highlight id")
         seen_highlight_ids.update(ids)
-        notes.append(ReleaseNote(version, datestr, source_ref, _require_text_map(item["summary"], "summary"), highlights))
+        notes.append(
+            ReleaseNote(
+                version,
+                datestr,
+                source_ref,
+                _require_text_map(item["summary"], "summary"),
+                highlights,
+            )
+        )
     return tuple(notes)
 
 
 def load_release_notes() -> tuple[ReleaseNote, ...]:
     try:
-        text = files("fw_diag_tool.resources").joinpath("release_notes.json").read_text(encoding="utf-8")
+        text = (
+            files("fw_diag_tool.resources")
+            .joinpath("release_notes.json")
+            .read_text(encoding="utf-8")
+        )
         payload = json.loads(text, object_pairs_hook=_reject_duplicate_keys)
         return parse_release_notes(payload)
     except (OSError, UnicodeError, json.JSONDecodeError, ReleaseNotesError) as exc:

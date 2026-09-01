@@ -95,7 +95,9 @@ class LogDiffEngine:
             if resolved_event_patterns:
                 parts.append(f"{len(resolved_event_patterns)} resolved pattern(s)")
 
-            delta_sign = f"+{event_count_delta}" if event_count_delta > 0 else f"{event_count_delta}"
+            delta_sign = (
+                f"+{event_count_delta}" if event_count_delta > 0 else f"{event_count_delta}"
+            )
             parts.append(f"event count delta: {delta_sign}")
             summary = "; ".join(parts)
 

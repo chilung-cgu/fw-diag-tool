@@ -432,9 +432,7 @@ class UARTReporter:
             lines.append(
                 f"- **總記錄時間（Total Log Duration）**: `{f'{effective_timing.total_log_duration_s:.3f} 秒' if effective_timing.total_log_duration_s is not None else 'N/A'}`"
             )
-            lines.append(
-                f"- **原始日誌行數（Line Count）**: `{effective_timing.line_count} 行`"
-            )
+            lines.append(f"- **原始日誌行數（Line Count）**: `{effective_timing.line_count} 行`")
             lines.append(
                 f"- **時間戳覆蓋率（Timestamp Coverage）**: `{effective_timing.timestamp_coverage * 100:.1f}%`"
             )
@@ -445,9 +443,7 @@ class UARTReporter:
             lines.append(
                 f"  - **Bootloader**: `{f'{bl_dur:.3f} 秒' if bl_dur is not None else 'N/A'}`"
             )
-            lines.append(
-                f"  - **Kernel**: `{f'{k_dur:.3f} 秒' if k_dur is not None else 'N/A'}`"
-            )
+            lines.append(f"  - **Kernel**: `{f'{k_dur:.3f} 秒' if k_dur is not None else 'N/A'}`")
             lines.append(
                 f"  - **Userspace**: `{f'{us_dur:.3f} 秒' if us_dur is not None else 'N/A'}`"
             )

@@ -118,4 +118,6 @@ def test_all_pages_use_standard_render_function():
         waveform_diff_ui,
     ]
     for page_mod in pages:
-        assert callable(getattr(page_mod, "render", None)), f"{page_mod.__name__} has no callable render()"
+        assert callable(getattr(page_mod, "render", None)), (
+            f"{page_mod.__name__} has no callable render()"
+        )

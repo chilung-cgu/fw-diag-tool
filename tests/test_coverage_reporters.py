@@ -139,23 +139,45 @@ def test_spi_localize_issue_title_and_description() -> None:
     """Test SPI anomaly title and description localization regex and prefixes."""
     # Titles
     assert _localize_issue_title("") == "未知 SPI 異常（無標題）"
-    assert "MISO 浮接" in _localize_issue_title("JEDEC ID Read Returned All 0xFF (Floating MISO / No Power) @ Tx #1")
-    assert "對地短路" in _localize_issue_title("JEDEC ID Read Returned All 0x00 (MISO Short to GND / Bus Clamped) @ Tx #2")
-    assert "未知原因" in _localize_issue_title("JEDEC ID Read Returned All 0xFF (Random Reason) @ Tx #3")
-    assert "Flash 忙碌" in _localize_issue_title("Command issued while Flash is BUSY (WIP=1) @ Tx #4")
-    assert "觀察到寫入／抹除時 WEL=0" in _localize_issue_title("Write/Erase observed with WEL=0 @ Tx #5")
-    assert "寫入／抹除的 WEL 狀態未觀察到" in _localize_issue_title("Write/Erase WEL state was not observed @ Tx #6")
-    assert "未先執行 WREN" in _localize_issue_title("Write Status Register without WREN (0x06 / 0x50) @ Tx #7")
-    assert "Status Register 寫入的 WEL 狀態未觀察到" in _localize_issue_title("Status-register write WEL state was not observed @ Tx #8")
+    assert "MISO 浮接" in _localize_issue_title(
+        "JEDEC ID Read Returned All 0xFF (Floating MISO / No Power) @ Tx #1"
+    )
+    assert "對地短路" in _localize_issue_title(
+        "JEDEC ID Read Returned All 0x00 (MISO Short to GND / Bus Clamped) @ Tx #2"
+    )
+    assert "未知原因" in _localize_issue_title(
+        "JEDEC ID Read Returned All 0xFF (Random Reason) @ Tx #3"
+    )
+    assert "Flash 忙碌" in _localize_issue_title(
+        "Command issued while Flash is BUSY (WIP=1) @ Tx #4"
+    )
+    assert "觀察到寫入／抹除時 WEL=0" in _localize_issue_title(
+        "Write/Erase observed with WEL=0 @ Tx #5"
+    )
+    assert "寫入／抹除的 WEL 狀態未觀察到" in _localize_issue_title(
+        "Write/Erase WEL state was not observed @ Tx #6"
+    )
+    assert "未先執行 WREN" in _localize_issue_title(
+        "Write Status Register without WREN (0x06 / 0x50) @ Tx #7"
+    )
+    assert "Status Register 寫入的 WEL 狀態未觀察到" in _localize_issue_title(
+        "Status-register write WEL state was not observed @ Tx #8"
+    )
     assert "Wrap-around" in _localize_issue_title("Page Program Buffer Wrap-Around Hazard @ Tx #9")
-    assert "CS 提早解除" in _localize_issue_title("Incomplete SPI Command / Early CS Deassertion @ Tx #10")
+    assert "CS 提早解除" in _localize_issue_title(
+        "Incomplete SPI Command / Early CS Deassertion @ Tx #10"
+    )
     assert _localize_issue_title("已中文化標題") == "已中文化標題"
     assert "未知 SPI 異常" in _localize_issue_title("Completely Custom SPI Anomaly")
 
     # Descriptions
-    desc_ff = _localize_issue_description("JEDEC ID command (0x9F) returned [0xFF, 0xFF, 0xFF]. Flash device did not drive MISO line.")
+    desc_ff = _localize_issue_description(
+        "JEDEC ID command (0x9F) returned [0xFF, 0xFF, 0xFF]. Flash device did not drive MISO line."
+    )
     assert "未驅動 MISO" in desc_ff
-    desc_00 = _localize_issue_description("JEDEC ID command (0x9F) returned [0x00, 0x00, 0x00]. MISO line is clamped to GND.")
+    desc_00 = _localize_issue_description(
+        "JEDEC ID command (0x9F) returned [0x00, 0x00, 0x00]. MISO line is clamped to GND."
+    )
     assert "箝位至 GND" in desc_00
 
     desc_busy = _localize_issue_description(
@@ -200,7 +222,9 @@ def test_spi_localize_issue_title_and_description() -> None:
 def test_spi_localize_root_cause() -> None:
     """Test SPI root cause guide string localization."""
     assert _localize_root_cause("") == ""
-    rc_multiline = _localize_root_cause("【Root Cause 排查建議】\n1. 檢查線路\nRoot Cause: Power rail drop")
+    rc_multiline = _localize_root_cause(
+        "【Root Cause 排查建議】\n1. 檢查線路\nRoot Cause: Power rail drop"
+    )
     assert "【根因排查建議（Root Cause）】" in rc_multiline
     assert "根因：Power rail drop" in rc_multiline
     assert _localize_root_cause("純英文排查提示") == "純英文排查提示"
@@ -416,12 +440,22 @@ def test_uart_localize_helpers() -> None:
 
     # Panic reasons
     assert _localize_panic_reason("") == ""
-    assert "BUG：無法處理 page fault" in _localize_panic_reason("BUG: unable to handle page fault for address: 0x00000000")
-    assert "Kernel panic（核心 Panic）" in _localize_panic_reason("Kernel panic - not syncing: VFS: Unable to mount root fs")
+    assert "BUG：無法處理 page fault" in _localize_panic_reason(
+        "BUG: unable to handle page fault for address: 0x00000000"
+    )
+    assert "Kernel panic（核心 Panic）" in _localize_panic_reason(
+        "Kernel panic - not syncing: VFS: Unable to mount root fs"
+    )
     assert "中斷期間發生致命例外" in _localize_panic_reason("Fatal exception in interrupt")
-    assert "內部錯誤（Internal error）：同步 external abort" in _localize_panic_reason("Internal error: synchronous external abort: 96000010")
-    assert "內部錯誤（Internal error）：" in _localize_panic_reason("Internal error: Oops: 0000 [#1] SMP")
-    assert "無法處理核心 paging request" in _localize_panic_reason("Unable to handle kernel paging request at virtual address ffff8800")
+    assert "內部錯誤（Internal error）：同步 external abort" in _localize_panic_reason(
+        "Internal error: synchronous external abort: 96000010"
+    )
+    assert "內部錯誤（Internal error）：" in _localize_panic_reason(
+        "Internal error: Oops: 0000 [#1] SMP"
+    )
+    assert "無法處理核心 paging request" in _localize_panic_reason(
+        "Unable to handle kernel paging request at virtual address ffff8800"
+    )
     assert _localize_panic_reason("Unmapped panic string") == "Unmapped panic string"
 
     # Analysis text
@@ -447,11 +481,15 @@ def test_uart_localize_helpers() -> None:
     assert "堆疊損毀（Stack Corruption）" in _localize_checklist_item("Check for Stack Corruption")
 
     # Fault flags
-    assert "HFSR.FORCED" in _localize_fault_flag("HFSR.FORCED (HardFault generated by escalation of a configurable fault)")
+    assert "HFSR.FORCED" in _localize_fault_flag(
+        "HFSR.FORCED (HardFault generated by escalation of a configurable fault)"
+    )
     assert "UFSR.DIVBYZERO" in _localize_fault_flag("UFSR.DIVBYZERO (Division by Zero trapped)")
     assert "BFSR.BFARVALID" in _localize_fault_flag("BFSR.BFARVALID (Fault Address: 0x20000000)")
     assert "MMFSR.MMARVALID" in _localize_fault_flag("MMFSR.MMARVALID (Fault Address: 0x20000004)")
-    assert "BFSR.PRECISERR" in _localize_fault_flag("BFSR.PRECISERR (Precise Data Bus Error at address: 0x08000000)")
+    assert "BFSR.PRECISERR" in _localize_fault_flag(
+        "BFSR.PRECISERR (Precise Data Bus Error at address: 0x08000000)"
+    )
     assert _localize_fault_flag("UNKNOWN_FLAG") == "UNKNOWN_FLAG"
 
     # HardFault summary
@@ -469,8 +507,12 @@ def test_uart_render_terminal_and_markdown_kernel_panic() -> None:
         faulting_address="0x0000000000000010",
         modules_linked=["nvme", "nvme_core"],
         call_trace=[
-            CallTraceFrame(index=1, function_name="nvme_irq_handler", offset="0x8c/0x100", module="nvme"),
-            CallTraceFrame(index=2, function_name="blk_mq_complete_request", offset="0x24/0x50", module=""),
+            CallTraceFrame(
+                index=1, function_name="nvme_irq_handler", offset="0x8c/0x100", module="nvme"
+            ),
+            CallTraceFrame(
+                index=2, function_name="blk_mq_complete_request", offset="0x24/0x50", module=""
+            ),
         ],
         root_cause_analysis="NULL Pointer Dereference 候選: nvme_irq_handler",
         actionable_checklist=["Inspect Call Trace", "Check for Stack Corruption"],

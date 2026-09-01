@@ -36,7 +36,7 @@ def test_render_release_notes_shows_current_cards_and_history() -> None:
     dashboard_ui._render_release_notes()
     monkeypatch.undo()
     text = "\n".join(captured)
-    assert all(version in text for version in ("1.7.0", "1.6.0", "1.5.0"))
+    assert all(version in text for version in ("2.0.0", "1.7.0", "1.6.0"))
     assert options == [note.version for note in dashboard_ui.load_release_notes()]
 
 
@@ -52,12 +52,15 @@ def test_render_release_notes_locale_changes_labels(monkeypatch) -> None:
 
             def __exit__(self, *_):
                 return None
+
         monkeypatch.setattr(dashboard_ui.st, "subheader", captured.append)
         monkeypatch.setattr(dashboard_ui.st, "caption", captured.append)
         monkeypatch.setattr(dashboard_ui.st, "write", captured.append)
         monkeypatch.setattr(dashboard_ui.st, "expander", lambda *args, **kwargs: Expander())
         monkeypatch.setattr(dashboard_ui.st, "selectbox", lambda label, values: values[0])
-        monkeypatch.setattr(dashboard_ui, "_render_quick_link", lambda _url, label: captured.append(label))
+        monkeypatch.setattr(
+            dashboard_ui, "_render_quick_link", lambda _url, label: captured.append(label)
+        )
         dashboard_ui._render_release_notes()
         english = "\n".join(captured)
         assert "What's New" in english
@@ -67,7 +70,11 @@ def test_render_release_notes_locale_changes_labels(monkeypatch) -> None:
 
 
 def test_render_release_notes_warns_on_malformed_manifest(monkeypatch) -> None:
-    monkeypatch.setattr(dashboard_ui, "load_release_notes", lambda: (_ for _ in ()).throw(dashboard_ui.ReleaseNotesError("bad")))
+    monkeypatch.setattr(
+        dashboard_ui,
+        "load_release_notes",
+        lambda: (_ for _ in ()).throw(dashboard_ui.ReleaseNotesError("bad")),
+    )
     warnings: list[str] = []
     monkeypatch.setattr(dashboard_ui.st, "warning", warnings.append)
     dashboard_ui._render_release_notes()

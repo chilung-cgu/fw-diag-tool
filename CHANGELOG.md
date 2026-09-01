@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-09-01
+
+### Added
+- Linux Kernel (`dmesg`) and OpenBMC (`journalctl`) log correlation engine (`fw_diag_tool.log`) with pattern library of 22+ diagnostic signatures across 11 subsystems.
+- Incident correlation grouping related hardware errors by bus/address, BDF, and causal chains with BoardProfile topology enrichment.
+- Log A/B differential diagnostic engine (`LogDiffEngine`).
+- OpenBMC Entity-Manager visual JSON configuration builder and validator (`fw_diag_tool.em`) with 13+ chip templates across 7 categories.
+- CLI subcommands: `fw-diag log analyze`, `fw-diag log diff`, `fw-diag em validate`.
+- GUI pages: System Log Analyzer (`log-analyzer`) and Entity-Manager Generator (`em-builder`) under new `系統日誌與組態` category.
+- Documentation chapters `ch24_log_analyzer.md` and `ch25_em_builder.md`.
+
 ## [1.7.0] - 2026-08-30
 
 ### Added

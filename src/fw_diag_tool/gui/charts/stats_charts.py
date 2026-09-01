@@ -41,9 +41,7 @@ def distribution_pie(data: dict[str, int], title: str) -> go.Figure:
     return fig
 
 
-def distribution_bar(
-    data: dict[str, int], title: str, horizontal: bool = False
-) -> go.Figure:
+def distribution_bar(data: dict[str, int], title: str, horizontal: bool = False) -> go.Figure:
     """Build a bar chart for a categorical count distribution."""
     if not data:
         return _empty_figure(title)

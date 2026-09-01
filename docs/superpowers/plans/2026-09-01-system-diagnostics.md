@@ -270,9 +270,7 @@ _I2C_PATTERNS: list[LogPattern] = [
         id="I2C_SLAVE_ENXIO",
         subsystem=Subsystem.I2C,
         severity=Severity.ERROR,
-        regex=_compile(
-            r"i2c\s+i2c-(?P<bus>\d+):\s+sendbytes:\s+NAK\s+bailout"
-        ),
+        regex=_compile(r"i2c\s+i2c-(?P<bus>\d+):\s+sendbytes:\s+NAK\s+bailout"),
         extract_fields=["bus"],
         triage_hint="Device not responding; verify address and power state",
         description="I2C NAK during send — device not acknowledging",
@@ -422,9 +420,7 @@ _WATCHDOG_PATTERNS: list[LogPattern] = [
         id="WATCHDOG_TIMEOUT",
         subsystem=Subsystem.WATCHDOG,
         severity=Severity.CRITICAL,
-        regex=_compile(
-            r"(?:watchdog|wdt).*?(?:timeout|expired|triggered|reset)"
-        ),
+        regex=_compile(r"(?:watchdog|wdt).*?(?:timeout|expired|triggered|reset)"),
         extract_fields=[],
         triage_hint="Watchdog fired; check system responsiveness and main loop health",
         description="Watchdog timer timeout or reset",
@@ -549,7 +545,9 @@ def test_pattern_ids_unique():
     from fw_diag_tool.log.patterns import PATTERN_LIBRARY
 
     ids = [p.id for p in PATTERN_LIBRARY]
-    assert len(ids) == len(set(ids)), f"Duplicate pattern IDs: {[x for x in ids if ids.count(x) > 1]}"
+    assert len(ids) == len(set(ids)), (
+        f"Duplicate pattern IDs: {[x for x in ids if ids.count(x) > 1]}"
+    )
 
 
 def test_patterns_compile_and_match():

@@ -767,7 +767,9 @@ def analyze_uart_crash(
         timing = analyze_uart_timing(report, content)
         UARTReporter.render_terminal(report, console=console, timing=timing)
         if markdown_out:
-            markdown_out.write_text(UARTReporter.to_markdown(report, timing=timing), encoding="utf-8")
+            markdown_out.write_text(
+                UARTReporter.to_markdown(report, timing=timing), encoding="utf-8"
+            )
             console.print(
                 f"[green]✔ Markdown 報告已匯出（Markdown report exported to）: {markdown_out}[/]"
             )
@@ -1746,18 +1748,14 @@ def _generate_log_markdown(report: LogReport, file_path: Path) -> str:
 
 @log_app.command("analyze")
 def analyze_log(
-    file_path: Path = typer.Argument(
-        ..., help="Path to dmesg, journalctl, or mixed log file"
-    ),
+    file_path: Path = typer.Argument(..., help="Path to dmesg, journalctl, or mixed log file"),
     board_profile: Path | None = typer.Option(
         None, "--board-profile", "-b", help="Board Profile YAML for topology enrichment"
     ),
     markdown_out: Path | None = typer.Option(
         None, "--md", "-m", help="Export incident report to Markdown file"
     ),
-    json_out: Path | None = typer.Option(
-        None, "--json", "-j", help="Export report to JSON file"
-    ),
+    json_out: Path | None = typer.Option(None, "--json", "-j", help="Export report to JSON file"),
     fail_on: str | None = typer.Option(
         None,
         "--fail-on",
@@ -1806,7 +1804,10 @@ def analyze_log(
                 Severity.ERROR: "[red]ERROR[/]",
                 Severity.WARNING: "[yellow]WARNING[/]",
                 Severity.INFO: "[blue]INFO[/]",
-            }.get(inc.severity, str(inc.severity.value if hasattr(inc.severity, "value") else inc.severity))
+            }.get(
+                inc.severity,
+                str(inc.severity.value if hasattr(inc.severity, "value") else inc.severity),
+            )
             triage_hint = inc.recommended_actions[0] if inc.recommended_actions else "-"
             table.add_row(
                 inc.id,
@@ -1970,7 +1971,10 @@ def validate_em(
                 Severity.ERROR: "[red]ERROR[/]",
                 Severity.WARNING: "[yellow]WARNING[/]",
                 Severity.INFO: "[blue]INFO[/]",
-            }.get(issue.severity, str(issue.severity.value if hasattr(issue.severity, "value") else issue.severity))
+            }.get(
+                issue.severity,
+                str(issue.severity.value if hasattr(issue.severity, "value") else issue.severity),
+            )
             table.add_row(
                 sev_style,
                 issue.field_path,

@@ -181,7 +181,7 @@ def test_build_pdf_report_code_blocks_and_quotes() -> None:
         "```c\n"
         "#include <stdio.h>\n"
         "int main(void) {\n"
-        "    printf(\"Hello, Firmware Diagnostics!\\n\");\n"
+        '    printf("Hello, Firmware Diagnostics!\\n");\n'
         "    return 0;\n"
         "}\n"
         "```\n\n"
@@ -231,7 +231,7 @@ def test_build_pdf_report_multipage_header_footer() -> None:
         "PCIe AER, and MCTP protocol traces with timing jitter and waveform reconstruction.\n\n"
         f"| Step {i} | Metric | Measured | Target |\n"
         "|---|---|---|---|\n"
-        f"| Check A | Voltage | {3.3 + i*0.01:.2f} V | 3.30 V |\n"
+        f"| Check A | Voltage | {3.3 + i * 0.01:.2f} V | 3.30 V |\n"
         f"| Check B | Jitter | {12 + i:.1f} ns | < 25 ns |\n"
         for i in range(1, 25)
     ]
@@ -292,4 +292,3 @@ def test_write_pdf_report_nested_directory(tmp_path: Path) -> None:
     assert written_path == out_file
     assert out_file.is_file()
     assert out_file.read_bytes().startswith(b"%PDF-")
-

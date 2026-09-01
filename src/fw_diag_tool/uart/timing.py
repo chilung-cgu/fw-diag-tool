@@ -125,9 +125,7 @@ def _parse_line_timestamp(line: str) -> float | None:
             pass
 
     # 3. ISO timestamp [2026-08-30 12:00:00.123] or 2026-08-30T12:00:00.123456Z
-    m_iso = re.search(
-        r"(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z)?)", line
-    )
+    m_iso = re.search(r"(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z)?)", line)
     if m_iso:
         try:
             dt_str = m_iso.group(1).replace("Z", "").replace(" ", "T")
@@ -193,8 +191,7 @@ def analyze_uart_timing(report: UARTReport, raw_text: str) -> UARTTimingAnalysis
         total_duration = round(parsed_lines[-1][1] - parsed_lines[0][1], 6)
         if total_duration < 0:
             total_duration = round(
-                max(ts for _, ts, _ in parsed_lines)
-                - min(ts for _, ts, _ in parsed_lines),
+                max(ts for _, ts, _ in parsed_lines) - min(ts for _, ts, _ in parsed_lines),
                 6,
             )
     elif len(parsed_lines) == 1:
@@ -228,9 +225,7 @@ def analyze_uart_timing(report: UARTReport, raw_text: str) -> UARTTimingAnalysis
         if kernel_timestamps and kernel_timestamps[0] >= t_bl_start:
             bootloader_dur = round(kernel_timestamps[0] - t_bl_start, 6)
         elif len(bootloader_timestamps) >= 2:
-            bootloader_dur = round(
-                bootloader_timestamps[-1] - bootloader_timestamps[0], 6
-            )
+            bootloader_dur = round(bootloader_timestamps[-1] - bootloader_timestamps[0], 6)
         else:
             bootloader_dur = 0.0
 
@@ -251,9 +246,7 @@ def analyze_uart_timing(report: UARTReport, raw_text: str) -> UARTTimingAnalysis
         if t_last >= t_u_start:
             userspace_dur = round(t_last - t_u_start, 6)
         elif len(userspace_timestamps) >= 2:
-            userspace_dur = round(
-                userspace_timestamps[-1] - userspace_timestamps[0], 6
-            )
+            userspace_dur = round(userspace_timestamps[-1] - userspace_timestamps[0], 6)
         else:
             userspace_dur = 0.0
 
@@ -265,17 +258,11 @@ def analyze_uart_timing(report: UARTReport, raw_text: str) -> UARTTimingAnalysis
 
     # Crash-to-reset interval
     crash_to_reset_interval: float | None = None
-    is_crash = (
-        report.crash_type
-        in (
-            CrashType.KERNEL_PANIC,
-            CrashType.ARM_HARDFAULT,
-            CrashType.WATCHDOG_RESET,
-        )
-        or any(
-            any(kw in line.lower() for kw in _CRASH_KEYWORDS) for line in lines
-        )
-    )
+    is_crash = report.crash_type in (
+        CrashType.KERNEL_PANIC,
+        CrashType.ARM_HARDFAULT,
+        CrashType.WATCHDOG_RESET,
+    ) or any(any(kw in line.lower() for kw in _CRASH_KEYWORDS) for line in lines)
 
     if is_crash and parsed_lines:
         crash_ts: float | None = None

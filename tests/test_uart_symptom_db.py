@@ -59,7 +59,9 @@ def test_classify_preserves_duplicate_lines_and_order() -> None:
     matches = classify_symptoms(["watchdog timeout", "watchdog timeout"])
     assert len(matches) >= 2
     assert {match.line_number for match in matches} == {1, 2}
-    assert [match.line_number for match in matches] == sorted(match.line_number for match in matches)
+    assert [match.line_number for match in matches] == sorted(
+        match.line_number for match in matches
+    )
 
 
 def test_classify_empty_and_unmatched_lines() -> None:

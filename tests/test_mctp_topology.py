@@ -13,7 +13,9 @@ from fw_diag_tool.mctp.topology import (
 )
 
 
-def packet(src: int, dst: int, msg_type: str = "PLDM", payload: list[int] | None = None) -> MCTPPacket:
+def packet(
+    src: int, dst: int, msg_type: str = "PLDM", payload: list[int] | None = None
+) -> MCTPPacket:
     return MCTPPacket(
         dest_eid=dst,
         src_eid=src,
@@ -85,7 +87,9 @@ def test_duplicate_links_are_aggregated() -> None:
 
 
 def test_link_average_payload_size() -> None:
-    report = ServerMgmtReport(mctp_packets=[packet(1, 2, payload=[1]), packet(1, 2, payload=[1, 2, 3])])
+    report = ServerMgmtReport(
+        mctp_packets=[packet(1, 2, payload=[1]), packet(1, 2, payload=[1, 2, 3])]
+    )
     assert build_eid_topology(report).links[0].avg_payload_size == 2.0
 
 

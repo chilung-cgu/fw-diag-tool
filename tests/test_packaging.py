@@ -41,14 +41,20 @@ def project_version() -> str:
 
 def test_release_manifest_and_documentation_contract() -> None:
     version = project_version()
-    manifest = json.loads((ROOT / "src/fw_diag_tool/resources/release_notes.json").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (ROOT / "src/fw_diag_tool/resources/release_notes.json").read_text(encoding="utf-8")
+    )
     releases = manifest["releases"]
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     headings = re.findall(r"^##\s+\[([^]]+)\]", changelog, re.MULTILINE)
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    project_block = re.search(r"(?ms)^\[project\]\s*(.*?)(?=^\[|\Z)", (ROOT / "pyproject.toml").read_text())
+    project_block = re.search(
+        r"(?ms)^\[project\]\s*(.*?)(?=^\[|\Z)", (ROOT / "pyproject.toml").read_text()
+    )
     assert project_block is not None
-    declared = re.search(r"^version\s*=\s*[\"']([^\"']+)[\"']", project_block.group(1), re.MULTILINE)
+    declared = re.search(
+        r"^version\s*=\s*[\"']([^\"']+)[\"']", project_block.group(1), re.MULTILINE
+    )
     assert declared is not None and declared.group(1) == version
     assert releases[0]["version"] == version
     lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
@@ -109,9 +115,17 @@ def test_isolated_wheel_loads_release_notes_without_source_checkout(
     wheel_python = environment / "bin" / "python"
     if not wheel_python.exists():
         wheel_python = environment / "Scripts" / "python.exe"
-    subprocess.run([str(wheel_python), "-m", "pip", "install", "--no-deps", str(wheel)], cwd=tmp_path, check=True)
     subprocess.run(
-        [str(wheel_python), "-c", "from fw_diag_tool.release_notes import load_release_notes; assert load_release_notes()[0].version == '1.7.0'"],
+        [str(wheel_python), "-m", "pip", "install", "--no-deps", str(wheel)],
+        cwd=tmp_path,
+        check=True,
+    )
+    subprocess.run(
+        [
+            str(wheel_python),
+            "-c",
+            "from fw_diag_tool.release_notes import load_release_notes; assert load_release_notes()[0].version == '2.0.0'",
+        ],
         cwd=tmp_path,
         check=True,
     )

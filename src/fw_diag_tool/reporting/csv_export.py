@@ -66,9 +66,7 @@ def export_i2c_csv(transactions: list[I2CTransaction]) -> str:
             tx.direction.value
             if (tx.direction_available and isinstance(tx.direction, I2CDirection))
             else str(tx.direction or ""),
-            tx.address_ack.value
-            if hasattr(tx.address_ack, "value")
-            else str(tx.address_ack or ""),
+            tx.address_ack.value if hasattr(tx.address_ack, "value") else str(tx.address_ack or ""),
             tx.status,
             tx.hex_dump,
             str(len(tx.data_bytes)),
@@ -106,19 +104,13 @@ def export_spi_csv(report: SPIReport) -> str:
 
     for tx in report.transactions:
         mosi_str = (
-            "[" + ", ".join(f"0x{b:02X}" for b in tx.mosi_bytes) + "]"
-            if tx.mosi_bytes
-            else "[]"
+            "[" + ", ".join(f"0x{b:02X}" for b in tx.mosi_bytes) + "]" if tx.mosi_bytes else "[]"
         )
         miso_str = (
-            "[" + ", ".join(f"0x{b:02X}" for b in tx.miso_bytes) + "]"
-            if tx.miso_bytes
-            else "[]"
+            "[" + ", ".join(f"0x{b:02X}" for b in tx.miso_bytes) + "]" if tx.miso_bytes else "[]"
         )
         details_str = (
-            json.dumps(tx.decoded_details, ensure_ascii=False)
-            if tx.decoded_details
-            else ""
+            json.dumps(tx.decoded_details, ensure_ascii=False) if tx.decoded_details else ""
         )
         row = [
             str(tx.index),
@@ -188,9 +180,7 @@ def export_uart_csv(report: UARTReport) -> str:
     elif report.arm_hardfault is not None:
         hf = report.arm_hardfault
         for idx, flag in enumerate(hf.fault_flags, 1):
-            writer.writerow(
-                [str(idx), "HardFault Flag", flag, "", "", "", "Active HardFault flag"]
-            )
+            writer.writerow([str(idx), "HardFault Flag", flag, "", "", "", "Active HardFault flag"])
         if hf.pc_faulting is not None:
             writer.writerow(
                 [
@@ -294,9 +284,9 @@ def export_pcie_csv(
         )
         aer_errs_str = ""
         if cfg.aer_analysis:
-            active_errors = [
-                e.name for e in cfg.aer_analysis.uncorr_errors if e.is_active
-            ] + [e.name for e in cfg.aer_analysis.corr_errors if e.is_active]
+            active_errors = [e.name for e in cfg.aer_analysis.uncorr_errors if e.is_active] + [
+                e.name for e in cfg.aer_analysis.corr_errors if e.is_active
+            ]
             aer_errs_str = "; ".join(active_errors)
 
         row = [
@@ -305,9 +295,7 @@ def export_pcie_csv(
             f"0x{cfg.vendor_id:04X}",
             f"0x{cfg.device_id:04X}",
             cfg.class_name,
-            cfg.header_type.name
-            if hasattr(cfg.header_type, "name")
-            else str(cfg.header_type),
+            cfg.header_type.name if hasattr(cfg.header_type, "name") else str(cfg.header_type),
             link_speed_width,
             link_degraded,
             aer_errs_str,

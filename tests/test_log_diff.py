@@ -20,7 +20,9 @@ from fw_diag_tool.log import (
 )
 
 
-def _make_dummy_event(pattern_id: str, message: str, subsystem: Subsystem = Subsystem.I2C) -> LogEvent:
+def _make_dummy_event(
+    pattern_id: str, message: str, subsystem: Subsystem = Subsystem.I2C
+) -> LogEvent:
     """Helper to create minimal LogEvent for testing."""
     return LogEvent(
         timestamp=10.0,

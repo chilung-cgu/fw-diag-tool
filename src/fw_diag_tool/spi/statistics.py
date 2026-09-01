@@ -153,7 +153,11 @@ def compute_spi_statistics(report: SPIReport) -> SPIStatistics:
                 j += 1
             else:
                 # Loop ended without encountering busy=False after busy=True
-                if saw_busy_true and last_poll_tx is not None and _is_valid_number(last_poll_tx.end_time):
+                if (
+                    saw_busy_true
+                    and last_poll_tx is not None
+                    and _is_valid_number(last_poll_tx.end_time)
+                ):
                     wait_us = (last_poll_tx.end_time - write_end_time) * 1e6
                     if wait_us >= 0:
                         busy_wait_durations_us.append(wait_us)

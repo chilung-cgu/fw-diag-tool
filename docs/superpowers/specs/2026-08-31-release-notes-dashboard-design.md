@@ -98,14 +98,19 @@
 @dataclass(frozen=True)
 class ReleaseHighlight: ...
 
+
 @dataclass(frozen=True)
 class ReleaseNote: ...
 
+
 class ReleaseNotesError(ValueError): ...
+
 
 def parse_release_notes(payload: Mapping[str, object]) -> tuple[ReleaseNote, ...]: ...
 
+
 def load_release_notes() -> tuple[ReleaseNote, ...]: ...
+
 
 def localized_text(mapping: Mapping[str, str], locale: str) -> str: ...
 ```

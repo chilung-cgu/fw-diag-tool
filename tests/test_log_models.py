@@ -315,5 +315,6 @@ def test_patterns_match_samples(pattern_id: str, sample_line: str) -> None:
     assert len(matching_patterns) == 1, f"Pattern with ID {pattern_id} not found"
     pattern = matching_patterns[0]
     match = pattern.regex.search(sample_line)
-    assert match is not None, f"Pattern {pattern_id} ({pattern.regex.pattern}) did not match: {sample_line}"
-
+    assert match is not None, (
+        f"Pattern {pattern_id} ({pattern.regex.pattern}) did not match: {sample_line}"
+    )

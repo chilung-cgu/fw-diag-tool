@@ -165,11 +165,7 @@ def render() -> None:
                 with st.expander("🗺️ MCTP EID 端點拓撲（EID Topology Map）", expanded=False):
                     if mctp_topology.total_endpoints:
                         st.text(topology_to_text(mctp_topology))
-                        st.markdown(
-                            "```mermaid\n"
-                            f"{topology_to_mermaid(mctp_topology)}\n"
-                            "```"
-                        )
+                        st.markdown(f"```mermaid\n{topology_to_mermaid(mctp_topology)}\n```")
                     else:
                         st.info("尚未發現 MCTP EID 端點或 IPMB 位址")
 
