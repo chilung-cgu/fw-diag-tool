@@ -23,6 +23,13 @@ from fw_diag_tool.mctp.diff import MCTPDiffEngine
 from fw_diag_tool.mctp.parser import ServerMgmtParser
 from fw_diag_tool.pcie.diff import PCIeDiffEngine
 from fw_diag_tool.pcie.parser import PCIeAnalyzer
+from fw_diag_tool.resources import (
+    load_mctp_sample,
+    load_pcie_lspci_sample,
+    load_spi_sample,
+    load_uart_sample,
+    load_waveform_diff_samples,
+)
 from fw_diag_tool.spi.diff import SPIDiffEngine
 from fw_diag_tool.spi.engine import SPIDiagnosticEngine
 from fw_diag_tool.uart.diff import UARTDiffEngine
@@ -431,6 +438,35 @@ def render() -> None:
         _PROTOCOLS,
         key="protocol_diff_protocol",
     )
+    if st.button(
+        _tr("protocol_diff_load_sample", "載入示範對比資料"),
+        key="protocol_diff_load_sample",
+        help=_tr("protocol_diff_load_sample_help", "載入套件內建的 Golden 與 Failing 示範資料"),
+    ):
+        if protocol == "I2C":
+            golden_sample, failing_sample = load_waveform_diff_samples()
+            st.session_state["protocol_diff_baseline_text"] = golden_sample
+            st.session_state["protocol_diff_candidate_text"] = failing_sample
+        elif protocol == "UART":
+            st.session_state["protocol_diff_baseline_text"] = load_uart_sample("kernel-panic")
+            st.session_state["protocol_diff_candidate_text"] = load_uart_sample("hardfault")
+        elif protocol == "PCIe":
+            st.session_state["protocol_diff_baseline_text"] = load_pcie_lspci_sample()
+            st.session_state["protocol_diff_candidate_text"] = load_pcie_lspci_sample()
+        elif protocol == "MCTP":
+            st.session_state["protocol_diff_baseline_text"] = load_mctp_sample("mctp-pldm")
+            st.session_state["protocol_diff_candidate_text"] = load_mctp_sample("ipmb")
+        elif protocol == "SPI":
+            sample = load_spi_sample()
+            st.session_state["protocol_diff_baseline_text"] = sample
+            st.session_state["protocol_diff_candidate_text"] = sample
+        st.session_state.pop("protocol_diff_baseline_file", None)
+        st.session_state.pop("protocol_diff_candidate_file", None)
+        st.session_state["protocol_diff_sample_active"] = True
+
+    if st.session_state.get("protocol_diff_sample_active"):
+        st.info(_tr("protocol_diff_sample_loaded", "已載入內建示範對比資料！"))
+
     if protocol == "UART":
         file_types = ["txt", "log"]
     elif protocol in ("PCIe", "MCTP"):

@@ -50,3 +50,72 @@ def test_builtin_register_yamls():
     cat_pcie = RegisterMapCatalog()
     cat_pcie.load_from_yaml((data_dir / "pcie_aer_registers.yaml").read_text(encoding="utf-8"))
     assert "uncorrectable_error_status" in cat_pcie.name_map
+
+
+def test_all_pages_use_standard_render_function():
+    app_path = Path("src/fw_diag_tool/gui/app.py")
+    assert app_path.exists()
+    code = app_path.read_text(encoding="utf-8")
+
+    assert "spi_chip_db_ui.render" in code
+    assert "spi_chip_db_ui.page" not in code
+
+    from fw_diag_tool.gui.pages import (
+        batch_ui,
+        board_profile_ui,
+        chip_db_ui,
+        codegen_ui,
+        correlation_ui,
+        dashboard_ui,
+        dts_ui,
+        emulator_ui,
+        fault_arena_ui,
+        fuzz_lab_ui,
+        i2c_builder_ui,
+        i2c_diagnosis,
+        mctp_ui,
+        pcie_ui,
+        protocol_diff_ui,
+        register_ui,
+        session_analytics_ui,
+        session_compare_ui,
+        settings_ui,
+        sop_ui,
+        spi_chip_db_ui,
+        spi_ui,
+        tutorial_ui,
+        uart_ui,
+        unified_report_ui,
+        waveform_diff_ui,
+    )
+
+    pages = [
+        batch_ui,
+        board_profile_ui,
+        chip_db_ui,
+        codegen_ui,
+        correlation_ui,
+        dashboard_ui,
+        dts_ui,
+        emulator_ui,
+        fault_arena_ui,
+        fuzz_lab_ui,
+        i2c_builder_ui,
+        i2c_diagnosis,
+        mctp_ui,
+        pcie_ui,
+        protocol_diff_ui,
+        register_ui,
+        session_analytics_ui,
+        session_compare_ui,
+        settings_ui,
+        sop_ui,
+        spi_chip_db_ui,
+        spi_ui,
+        tutorial_ui,
+        uart_ui,
+        unified_report_ui,
+        waveform_diff_ui,
+    ]
+    for page_mod in pages:
+        assert callable(getattr(page_mod, "render", None)), f"{page_mod.__name__} has no callable render()"

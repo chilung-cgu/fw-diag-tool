@@ -188,3 +188,25 @@ def test_format_protocol_diff_json_structure() -> None:
     assert data["diff"]["new_anomalies"] == ["New NACK"]
     assert data["diff"]["resolved_anomalies"] == ["Old NACK"]
     assert data["diff"]["common_anomalies"] == ["Clock Stretching"]
+
+
+def test_protocol_diff_ui_render_and_sample_loading(monkeypatch: pytest.MonkeyPatch) -> None:
+    import streamlit as st
+
+    from fw_diag_tool.gui.pages import protocol_diff_ui
+
+    # Mock button clicks and session state
+    monkeypatch.setattr(st, "button", lambda *args, **kwargs: True)
+    monkeypatch.setattr(st, "selectbox", lambda *args, **kwargs: "I2C")
+    monkeypatch.setattr(st, "file_uploader", lambda *args, **kwargs: None)
+    monkeypatch.setattr(st, "text_area", lambda *args, **kwargs: "")
+    monkeypatch.setattr(st, "header", lambda *args, **kwargs: None)
+    monkeypatch.setattr(st, "subheader", lambda *args, **kwargs: None)
+    monkeypatch.setattr(st, "info", lambda *args, **kwargs: None)
+
+    st.session_state.clear()
+    protocol_diff_ui.render()
+
+    assert "protocol_diff_baseline_text" in st.session_state
+    assert "protocol_diff_candidate_text" in st.session_state
+    assert st.session_state["protocol_diff_sample_active"] is True

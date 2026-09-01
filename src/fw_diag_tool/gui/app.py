@@ -207,7 +207,7 @@ pages = {
             url_path="chip-db",
         ),
         st.Page(
-            spi_chip_db_ui.page,
+            spi_chip_db_ui.render,
             title=t("title_spi_chip_db", domain="gui"),
             icon="💾",
             url_path="spi-chip-db",

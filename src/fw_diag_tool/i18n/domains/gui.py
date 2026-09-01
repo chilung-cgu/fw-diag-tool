@@ -587,6 +587,18 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-TW": "下載 JSON 差異報告",
         "en-US": "Download JSON Diff Report",
     },
+    "protocol_diff_load_sample": {
+        "zh-TW": "載入示範對比資料",
+        "en-US": "Load Sample Diff Data",
+    },
+    "protocol_diff_load_sample_help": {
+        "zh-TW": "載入套件內建的 Golden 與 Failing 示範資料",
+        "en-US": "Load built-in Golden and Failing sample diff data",
+    },
+    "protocol_diff_sample_loaded": {
+        "zh-TW": "已載入內建示範對比資料！",
+        "en-US": "Loaded built-in sample diff data!",
+    },
     # Batch Analysis
     "batch_analysis_caption": {
         "zh-TW": "批次上傳多個韌體追蹤或日誌檔案（支援 .csv, .log, .txt, .hex），自動或指定協定進行平行診斷並產生綜合報告與 ZIP 封裝。",

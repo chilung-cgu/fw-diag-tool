@@ -33,7 +33,7 @@ def _chip_row(chip: SPIFlashChip) -> dict[str, str | int]:
     }
 
 
-def page() -> None:
+def render() -> None:
     """Render the SPI flash chip database browser."""
     st.header(t("title_spi_chip_db", domain="gui"))
     st.caption(t("spi_chip_db_caption", domain="gui"))
@@ -95,9 +95,9 @@ def page() -> None:
     render_page_footer()
 
 
-def render() -> None:
-    """Compatibility entry point used by page-module tests and callers."""
-    page()
+def page() -> None:
+    """Backward-compatible entry point for SPI flash chip database."""
+    render()
 
 
 __all__ = ["page", "render"]
