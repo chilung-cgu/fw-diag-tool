@@ -10,6 +10,7 @@ import streamlit as st
 
 from fw_diag_tool import __version__
 from fw_diag_tool.gui.page_index import PAGE_INDEX
+from fw_diag_tool.gui.route_registry import resolve_page
 from fw_diag_tool.gui.shared import _FAULT_ARENA_CASES_ZH, render_page_footer
 from fw_diag_tool.gui.theme import get_plotly_template
 from fw_diag_tool.i18n import get_global_registry, t
@@ -40,7 +41,11 @@ def _get_example_data_count() -> int:
 def _render_quick_link(url_path: str, label: str) -> None:
     """嘗試使用 st.page_link 呈現快速啟動按鈕，若不支援則降級至純文字。"""
     try:
-        st.page_link(url_path, label=label, use_container_width=True)
+        page = resolve_page(url_path)
+        if page is None:
+            st.caption(label)
+            return
+        st.page_link(page, label=label, use_container_width=True)
     except Exception:
         st.caption(label)
 

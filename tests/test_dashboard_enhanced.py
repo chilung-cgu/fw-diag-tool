@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import streamlit as st
+
 import fw_diag_tool.gui.shared as shared_module
+from fw_diag_tool.gui import route_registry
 from fw_diag_tool.gui.pages import correlation_ui, dashboard_ui
 from fw_diag_tool.gui.shared import render_page_footer
 
@@ -36,6 +39,28 @@ def test_dashboard_ui_example_counter():
 def test_dashboard_ui_quick_link_renderer():
     dashboard_ui._render_quick_link("i2c-diagnosis", "📊 I2C 診斷")
     dashboard_ui._render_quick_link("nonexistent-page", "🔗 測試連結")
+
+
+def test_quick_link_uses_registered_page_in_runtime_context(monkeypatch):
+    def render_page():
+        return None
+
+    page = object.__new__(st.Page)
+    page._default = False
+    page._url_path = "i2c-diagnosis"
+    route_registry.register_page(page)
+    calls = []
+
+    def page_link(target, **kwargs):
+        if isinstance(target, str):
+            raise TypeError("string slug is treated as a script path")
+        calls.append((target, kwargs))
+
+    monkeypatch.setattr(dashboard_ui.st, "page_link", page_link)
+    dashboard_ui._render_quick_link("i2c-diagnosis", "📊 I2C 診斷")
+
+    assert route_registry.resolve_page("i2c-diagnosis") is page
+    assert calls == [(page, {"label": "📊 I2C 診斷", "use_container_width": True})]
 
 
 def test_correlation_ui_render_executes_without_error():

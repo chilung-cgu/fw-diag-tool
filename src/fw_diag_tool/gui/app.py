@@ -38,6 +38,7 @@ from fw_diag_tool.gui.pages import (
     unified_report_ui,
     waveform_diff_ui,
 )
+from fw_diag_tool.gui.route_registry import register_pages
 from fw_diag_tool.gui.shared import (
     render_global_search,
     render_keyboard_shortcuts,
@@ -225,6 +226,8 @@ pages = {
         ),
     ],
 }
+
+register_pages(pages)
 
 nav = st.navigation(pages)
 
