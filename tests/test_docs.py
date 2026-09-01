@@ -43,7 +43,7 @@ def test_gui_reading_map_covers_all_pages_and_evidence_levels() -> None:
     reading_map = (ROOT / "docs" / "chapters" / "appendix_gui_reading_guide.md").read_text(
         encoding="utf-8"
     )
-    for page_id in range(1, 21):
+    for page_id in range(1, 29):
         assert f"### {page_id}." in reading_map
     for term in ("Measured", "Inferred", "Reconstructed", "Unavailable", "不能證明什麼"):
         assert term in reading_map
@@ -124,3 +124,56 @@ def test_register_codegen_chapter_meaning_table_uses_localized_labels() -> None:
     assert "輸出過電壓故障（Vout Overvoltage Fault）" in chapter
     assert "正常（Normal）" in chapter
     assert "過溫警報（Overtemperature Alarm）" in chapter
+
+
+def test_log_analyzer_and_em_builder_chapters_exist_and_indexed() -> None:
+    config = yaml.safe_load((ROOT / "mkdocs.yml").read_text(encoding="utf-8"))
+
+    def nav_contains_path(node: object, path: str) -> bool:
+        if isinstance(node, str):
+            return node == path
+        if isinstance(node, dict):
+            return any(nav_contains_path(value, path) for value in node.values())
+        if isinstance(node, list):
+            return any(nav_contains_path(value, path) for value in node)
+        return False
+
+    # 1. Assert chapters are indexed in mkdocs.yml
+    assert nav_contains_path(config.get("nav", []), "chapters/ch24_log_analyzer.md")
+    assert nav_contains_path(config.get("nav", []), "chapters/ch25_em_builder.md")
+
+    # 2. ch24 Log Analyzer checks
+    ch24_path = ROOT / "docs" / "chapters" / "ch24_log_analyzer.md"
+    assert ch24_path.is_file()
+    ch24_text = ch24_path.read_text(encoding="utf-8")
+    assert "# 系統日誌關聯分析 (System Log Correlation & Incident Triage)" in ch24_text
+    for heading in (
+        "## 核心概念與為什麼需要日誌分析",
+        "## 支援的日誌類型與特徵庫",
+        "## GUI 操作教學",
+        "## 板級拓撲 (Board Profile) 關聯加值",
+        "## A/B 日誌差分對比分析 (Log Diff)",
+        "## CLI 命令列使用指南",
+        "## 證據邊界與限制",
+    ):
+        assert heading in ch24_text
+    for keyword in ("dmesg", "journalctl", "Incident", "Board Profile", "Log Diff", "fw-diag log"):
+        assert keyword in ch24_text
+
+    # 3. ch25 EM Builder checks
+    ch25_path = ROOT / "docs" / "chapters" / "ch25_em_builder.md"
+    assert ch25_path.is_file()
+    ch25_text = ch25_path.read_text(encoding="utf-8")
+    assert "# Entity-Manager 組態視覺化產生器與校驗 (OpenBMC EM Builder & Validator)" in ch25_text
+    for heading in (
+        "## 什麼是 OpenBMC Entity-Manager",
+        "## 手寫 EM JSON 的痛點",
+        "## 視覺化建置模式 (Build Mode) 教學",
+        "## 語法與拓撲校驗模式 (Validate Mode) 教學",
+        "## 內建裝置範本庫一覽表",
+        "## CLI 命令列使用指南",
+        "## 實體硬體安全與驗證限制",
+    ):
+        assert heading in ch25_text
+    for keyword in ("Entity-Manager", "dbus-sensors", "FruDevice", "busctl", "TMP75", "fw-diag em"):
+        assert keyword in ch25_text

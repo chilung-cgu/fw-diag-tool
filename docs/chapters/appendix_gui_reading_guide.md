@@ -1,4 +1,4 @@
-# 附錄 B：26+ 個 GUI 頁面的閱讀地圖
+# 附錄 B：28+ 個 GUI 頁面的閱讀地圖
 
 這份附錄只回答「我現在在哪一頁、先放什麼、不能證明什麼、下一步去哪裡」。每一節都有該頁的直接章節連結；I2C 圖表細節請跳到[附錄 A：圖表與證據判讀](appendix_chart_guide.md)，不要在這張地圖重複定義 axes 或 thresholds。
 
@@ -9,7 +9,7 @@
 | [ch01 I2C/SMBus/PMBus](ch01_i2c_pmbus.md) | 第 1 頁輸入契約、fixture、五個 tabs 的操作流程與預期輸出 | 具體 workflow 與下一步 |
 | [附錄 A 圖表判讀](appendix_chart_guide.md) | frequency/timeline/health/anomaly 的軸、threshold、status 與 evidence 規則 | 第 1 頁連結 |
 | [ch02 Packet Builder](ch02_packet_builder.md) | 第 2 頁 canonical transfer、ideal waveform、四種模板與安全 gate | 第 2 頁欄位摘要 |
-| 本附錄 B | 26+ 個 GUI 頁面的導航與跨頁證據邊界 | 每頁入口、不能直接證明、下一步 |
+| 本附錄 B | 28+ 個 GUI 頁面的導航與跨頁證據邊界 | 每頁入口、不能直接證明、下一步 |
 
 ## 第一次導覽
 
@@ -174,3 +174,15 @@
 | 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
 |---|---|---|---|
 | I2C Timeout、語系、主題、資料列數上限、SPI Page Size 參數 | 目前生效設定摘要看板（5 組指標）、即時套用狀態 | 偏好設定僅調整本機分析門檻與介面外觀，不改變實體硬體暫存器 | 依測試規格微調門檻後，返回協定診斷頁面進行標準化判定。 |
+
+### 27. [系統日誌關聯分析（System Log Correlation & Incident Triage）](ch24_log_analyzer.md)
+
+| 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
+|---|---|---|---|
+| dmesg、journalctl 或混合 log 文字/檔案，可選配 Board Profile YAML | 4 大 KPI 指標（總行數/事件數/異常數/子系統數）、Incidents 異常群組、事件時間軸與子系統分佈 | 日誌關鍵字匹配不等於硬體實體損壞；日誌時間戳不等於示波器奈秒級時間 | 依 Incident 建議處置指引，跳轉至對應 I2C/PCIe/UART 協定頁面或量測實體電源與訊號。 |
+
+### 28. [Entity-Manager 組態視覺化產生器與校驗（OpenBMC EM Builder & Validator）](ch25_em_builder.md)
+
+| 先放什麼 | 先看什麼 | 不能直接證明 | 下一步 |
+|---|---|---|---|
+| 板卡名稱與 13+ 種裝置範本（建置模式），或既有 Entity-Manager JSON（校驗模式） | 產生的標準 JSON 預覽與下載，或結構/必填/位址衝突校驗報告與 Board Profile 交叉比對結果 | 靜態 JSON 語法無衝突不代表實體板卡上電或 I2C probe 成功 | 部署至 BMC 映像檔後，透過 `busctl` 與 `ipmitool sdr list` 進行目標板運行期驗證。 |

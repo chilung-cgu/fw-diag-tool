@@ -33,6 +33,8 @@ nav:
       - Session A/B 對比: chapters/ch21_session_compare.md
       - 批次分析: chapters/ch22_batch_analysis.md
       - 偏好設定: chapters/ch23_settings.md
+      - 系統日誌關聯分析: chapters/ch24_log_analyzer.md
+      - Entity-Manager 組態產生器: chapters/ch25_em_builder.md
   - 附錄:
       - 附錄 A 圖表判讀指南: chapters/appendix_chart_guide.md
-      - 附錄 B 26+ 個 GUI 頁面地圖: chapters/appendix_gui_reading_guide.md
+      - 附錄 B 28+ 個 GUI 頁面地圖: chapters/appendix_gui_reading_guide.md
