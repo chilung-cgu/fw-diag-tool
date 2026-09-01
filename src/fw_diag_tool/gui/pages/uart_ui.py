@@ -210,7 +210,6 @@ def render() -> None:
                         timing_analysis.boot_phase_durations,
                         "開機階段耗時（Boot Phase Durations）",
                     ),
-                    use_container_width=True,
                 )
 
             symptom_matches = classify_symptoms(valid_text.splitlines())

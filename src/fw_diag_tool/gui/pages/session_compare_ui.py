@@ -337,7 +337,7 @@ def render() -> None:
 
     st.subheader("📊 詳細指標對比表")
     df = build_comparison_dataframe(comparison, baseline_payload, candidate_payload)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, hide_index=True)
 
     st.subheader("⬇️ 匯出對比報告")
     md_content = format_session_comparison_markdown(comparison, baseline_payload, candidate_payload)

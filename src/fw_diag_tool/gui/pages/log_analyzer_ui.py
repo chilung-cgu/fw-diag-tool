@@ -251,14 +251,14 @@ def render() -> None:
                         "嚴重度 (Severity)": ev.severity.value,
                         "訊息內容 (Message)": ev.message,
                         "規則 ID (Pattern ID)": ev.pattern_id,
-                        "Bus": ev.bus if ev.bus is not None else "",
+                        "Bus": str(ev.bus) if ev.bus is not None else "",
                         "Address": f"0x{ev.address:02X}" if ev.address is not None else "",
                         "BDF": ev.bdf or "",
                         "驅動 (Driver)": ev.driver or "",
                         "錯誤代碼 (Errno)": ev.errno_code or "",
                     }
                 )
-            st.dataframe(event_rows, use_container_width=True)
+            st.dataframe(event_rows)
         else:
             st.info("日誌中無符合規則的事件。")
 
@@ -271,7 +271,6 @@ def render() -> None:
                         report.summary.subsystem_counts,
                         "子系統事件分佈 (Subsystem Distribution)",
                     ),
-                    use_container_width=True,
                 )
             with col_c2:
                 st.plotly_chart(
@@ -279,7 +278,6 @@ def render() -> None:
                         report.summary.subsystem_counts,
                         "子系統事件數量 (Subsystem Event Counts)",
                     ),
-                    use_container_width=True,
                 )
         else:
             st.info("無子系統分佈資料。")

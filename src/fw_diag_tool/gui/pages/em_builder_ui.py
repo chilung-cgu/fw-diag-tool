@@ -270,7 +270,7 @@ def _render_build_mode() -> None:
             }
             for idx, dev in enumerate(devices_list)
         ]
-        st.dataframe(pd.DataFrame(df_rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(df_rows))
     else:
         st.info("目前尚未加入任何裝置。請由上方新增裝置或載入標準範本。")
 

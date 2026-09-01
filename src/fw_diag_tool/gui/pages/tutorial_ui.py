@@ -173,7 +173,7 @@ def _render_step_1_interactive() -> None:
                     "資料內容": data_hex or "無",
                 }
             )
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(rows))
         st.success("✅ 成功解析 I2C 交易序列！已識別 PMBus 電源模組與 24C02 EEPROM 裝置。")
 
 
@@ -210,7 +210,7 @@ def _render_step_3_interactive() -> None:
             wave_data,
             title=f"Tx #{tx.id} (位址 0x{tx.address_7bit:02X} {dir_text}) 數位波形與協定疊加",
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig)
         st.caption(
             "💡 **波形顏色標記說明**：🟢 綠色=START 條件｜🔵 藍色=位址／資料位元｜"
             "🟢 青色=ACK 確認｜🔴 紅色=NACK｜🟣 紫色=STOP 條件"
@@ -239,7 +239,7 @@ def _render_step_4_interactive() -> None:
                     "解碼說明": tx.decoded_details or "—",
                 }
             )
-        st.dataframe(pd.DataFrame(rows), use_container_width=True)
+        st.dataframe(pd.DataFrame(rows))
         st.success("✅ 成功解析 SPI 命令序列！包含 0x9F (Read JEDEC ID) 與 0x02 (Page Program)。")
 
 

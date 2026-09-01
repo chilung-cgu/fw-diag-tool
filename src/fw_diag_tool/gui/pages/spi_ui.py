@@ -173,7 +173,7 @@ def render() -> None:
                     height=350,
                     margin=dict(l=30, r=20, t=40, b=30),
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig)
 
             except (TypeError, ValueError) as exc:
                 st.error(f"SPI 對比分析失敗：{_localize_gui_error(exc, domain='spi')}")
@@ -254,13 +254,12 @@ def render() -> None:
                             stats.command_distribution,
                             "指令頻率分佈（Command Distribution）",
                         ),
-                        use_container_width=True,
                     )
                     dist_data = [
                         {"指令名稱": k, "次數": v}
                         for k, v in sorted(stats.command_distribution.items(), key=lambda x: -x[1])
                     ]
-                    st.dataframe(dist_data, use_container_width=True)
+                    st.dataframe(dist_data)
             spi_md = SPIReporter.to_markdown(rep)
             st.markdown(spi_md)
             st.download_button(

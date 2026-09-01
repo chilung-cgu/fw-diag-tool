@@ -46,7 +46,7 @@ def _render_quick_link(url_path: str, label: str) -> None:
         if page is None:
             st.caption(label)
             return
-        st.page_link(page, label=label, use_container_width=True)
+        st.page_link(page, label=label)
     except Exception:
         st.caption(label)
 
@@ -314,7 +314,7 @@ def _render_recent_sessions() -> None:
             if rows:
                 import pandas as pd
 
-                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(rows), hide_index=True)
         except Exception:
             st.caption("無法載入最近記錄。")
 
@@ -352,7 +352,7 @@ def _render_analysis_history() -> None:
         height=320,
         margin=dict(l=40, r=40, t=50, b=40),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig)
     if not has_data:
         st.caption("ℹ️ 目前尚無協定分析記錄。在各協定診斷頁面執行分析時將自動記錄並更新。")
 
@@ -374,7 +374,7 @@ def _render_usage_metrics() -> None:
                 yaxis_title="次數",
                 height=320,
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig)
         else:
             st.info("尚未記錄使用事件。")
 
@@ -393,7 +393,6 @@ def _render_usage_metrics() -> None:
                         for event in recent_events
                     ]
                 ),
-                use_container_width=True,
                 hide_index=True,
             )
         else:

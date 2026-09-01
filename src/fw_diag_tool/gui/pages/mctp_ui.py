@@ -151,7 +151,6 @@ def render() -> None:
                                 mctp_stats.message_type_distribution,
                                 "訊息類型分佈（Message Type Distribution）",
                             ),
-                            use_container_width=True,
                         )
                         for msg_type, count in sorted(mctp_stats.message_type_distribution.items()):
                             st.write(f"- **{msg_type}**: {count}")

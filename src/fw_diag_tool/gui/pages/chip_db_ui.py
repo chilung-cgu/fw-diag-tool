@@ -391,7 +391,6 @@ def render() -> None:
     if not catalog_df.empty:
         st.dataframe(
             catalog_df,
-            use_container_width=True,
             hide_index=True,
         )
         st.caption(f"顯示 {len(filtered_chips)} 筆晶片資料（總計 {len(CHIP_DATABASE)} 筆）。")

@@ -53,7 +53,7 @@ def render() -> None:
         and query.casefold() in chip.part_number.casefold()
     ]
     st.subheader(t("spi_chip_db_table_heading", domain="gui"))
-    st.dataframe([_chip_row(chip) for chip in filtered], hide_index=True, use_container_width=True)
+    st.dataframe([_chip_row(chip) for chip in filtered], hide_index=True)
 
     st.subheader(t("spi_chip_db_jedec_heading", domain="gui"))
     mfr_col, type_col, capacity_col = st.columns(3)
@@ -92,7 +92,7 @@ def render() -> None:
                 st.warning(t("spi_chip_db_not_found", domain="gui"))
             else:
                 st.success(t("spi_chip_db_match_heading", domain="gui"))
-                st.dataframe([_chip_row(match)], hide_index=True, use_container_width=True)
+                st.dataframe([_chip_row(match)], hide_index=True)
 
     render_page_footer()
 

@@ -152,7 +152,7 @@ def render() -> None:
                 c4.metric(_tr("batch_metric_error", "錯誤"), error_count)
 
                 df = build_batch_dataframe(entries)
-                st.dataframe(df, use_container_width=True, hide_index=True)
+                st.dataframe(df, hide_index=True)
 
                 if error_count > 0:
                     st.error(

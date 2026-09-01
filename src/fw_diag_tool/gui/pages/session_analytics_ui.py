@@ -222,7 +222,7 @@ def _render_trend_chart(report: SessionTrendReport) -> None:
         height=400,
         legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "right", "x": 1},
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig)
 
 
 def _comparison_dataframe(report: SessionTrendReport) -> pd.DataFrame:
@@ -243,7 +243,7 @@ def _comparison_dataframe(report: SessionTrendReport) -> pd.DataFrame:
 def _render_comparison_table(report: SessionTrendReport) -> None:
     if not report.points:
         return
-    st.dataframe(_comparison_dataframe(report), use_container_width=True, hide_index=True)
+    st.dataframe(_comparison_dataframe(report), hide_index=True)
 
 
 def _build_trend_summary_markdown(report: SessionTrendReport) -> str:

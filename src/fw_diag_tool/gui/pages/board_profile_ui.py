@@ -790,11 +790,11 @@ def render() -> None:
     # 頂部操作工具列（預設範本載入與重置）
     t_col1, t_col2, t_col3, t_col4 = st.columns(4)
     with t_col1:
-        if st.button("📋 載入 YV4 參考範本", use_container_width=True):
+        if st.button("📋 載入 YV4 參考範本"):
             st.session_state["board_profile_editor_state"] = get_default_editor_state()
             st.rerun()
     with t_col2:
-        if st.button("⚡ 載入單 Bus 簡易範本", use_container_width=True):
+        if st.button("⚡ 載入單 Bus 簡易範本"):
             st.session_state["board_profile_editor_state"] = {
                 "board_name": "Simple-Carrier-Card",
                 "version": "0.1",
@@ -829,7 +829,7 @@ def render() -> None:
             }
             st.rerun()
     with t_col3:
-        if st.button("➕ 新增 I2C Bus", use_container_width=True):
+        if st.button("➕ 新增 I2C Bus"):
             existing_buses = state.get("buses", [])
             next_bus_num = (
                 max([b.get("bus_num", 0) for b in existing_buses], default=-1) + 1
@@ -847,7 +847,7 @@ def render() -> None:
             st.session_state["board_profile_editor_state"]["buses"] = existing_buses
             st.rerun()
     with t_col4:
-        if st.button("🗑 清空所有 Bus", use_container_width=True):
+        if st.button("🗑 清空所有 Bus"):
             st.session_state["board_profile_editor_state"]["buses"] = []
             st.rerun()
 
@@ -897,7 +897,6 @@ def render() -> None:
                     if st.button(
                         "🗑 刪除 Bus",
                         key=f"del_bus_{b_idx}",
-                        use_container_width=True,
                     ):
                         buses.pop(b_idx)
                         st.session_state["board_profile_editor_state"]["buses"] = buses
@@ -948,7 +947,6 @@ def render() -> None:
                             if st.button(
                                 "🗑 移除",
                                 key=f"del_dev_{b_idx}_{d_idx}",
-                                use_container_width=True,
                             ):
                                 devices.pop(d_idx)
                                 bus["devices"] = devices
@@ -1067,7 +1065,6 @@ def render() -> None:
                             if st.button(
                                 "🗑 移除 MUX",
                                 key=f"del_mux_{b_idx}_{m_idx}",
-                                use_container_width=True,
                             ):
                                 muxes.pop(m_idx)
                                 bus["muxes"] = muxes
@@ -1281,7 +1278,6 @@ def render() -> None:
                 data=yaml_content,
                 file_name=filename,
                 mime="application/x-yaml",
-                use_container_width=True,
                 disabled=bool(errors),
             )
             if errors:
@@ -1302,7 +1298,7 @@ def render() -> None:
                 key="bp_paste_text",
             )
 
-            if st.button("📥 執行匯入並套用至表單", use_container_width=True):
+            if st.button("📥 執行匯入並套用至表單"):
                 target_text = ""
                 if uploaded_yaml is not None:
                     try:

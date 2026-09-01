@@ -429,7 +429,7 @@ def render() -> None:
             with st.expander(
                 f"📋 檢視完整 {total_runs} 筆測試歷程紀錄", expanded=(crash_count > 0)
             ):
-                st.dataframe(results_log, use_container_width=True)
+                st.dataframe(results_log)
 
     render_page_footer()
 

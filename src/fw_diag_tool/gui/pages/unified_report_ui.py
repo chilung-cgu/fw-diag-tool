@@ -178,7 +178,6 @@ def render() -> None:
         generate_clicked = st.button(
             _tr("btn_generate_unified_report", "🚀 產生統一多協定報告"),
             type="primary",
-            use_container_width=True,
         )
 
     if generate_clicked:
@@ -242,7 +241,6 @@ def render() -> None:
                 data=report_obj.to_markdown(),
                 file_name="unified_fw_report.md",
                 mime="text/markdown",
-                use_container_width=True,
             )
         with c_down2:
             st.download_button(
@@ -250,7 +248,6 @@ def render() -> None:
                 data=report_obj.to_html(),
                 file_name="unified_fw_report.html",
                 mime="text/html",
-                use_container_width=True,
             )
 
         st.markdown("---")

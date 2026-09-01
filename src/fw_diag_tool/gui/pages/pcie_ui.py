@@ -297,7 +297,6 @@ def render() -> None:
                                 "裝置類別分佈（Topology Summary）",
                                 horizontal=True,
                             ),
-                            use_container_width=True,
                         )
                         for cls_name, count in sorted(stats.topology_summary.items()):
                             st.write(f"- {PCIeReporter.localize_class_name(cls_name)}: {count}")
@@ -308,7 +307,6 @@ def render() -> None:
                                 stats.link_speed_distribution,
                                 "速率世代分佈（Link Speed Distribution）",
                             ),
-                            use_container_width=True,
                         )
                         for spd, count in sorted(stats.link_speed_distribution.items()):
                             st.write(f"- {spd}: {count}")

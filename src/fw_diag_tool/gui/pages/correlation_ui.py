@@ -734,7 +734,7 @@ def render() -> None:
         return
 
     fig = _build_timeline_chart(events)
-    st.plotly_chart(fig, use_container_width=True, key="corr_timeline_chart")
+    st.plotly_chart(fig, key="corr_timeline_chart")
 
     # --- Statistics ---
     total_events = len(events)
@@ -792,7 +792,7 @@ def render() -> None:
                 "anomaly": "異常",
             }
         )
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.dataframe(display_df, hide_index=True)
 
     corr_payload = {
         "total_events": total_events,
