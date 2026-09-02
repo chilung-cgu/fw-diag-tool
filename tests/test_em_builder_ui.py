@@ -710,6 +710,24 @@ class _SampleConfigModel(BaseModel):
     label: str
 
 
+class _UnhashablePublicState:
+    __hash__ = None
+
+    def __init__(self, value: object) -> None:
+        self.value = value
+
+
+class _HashablePublicState:
+    def __init__(self, value: object) -> None:
+        self.value = value
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, _HashablePublicState) and self.value == other.value
+
+    def __hash__(self) -> int:
+        return hash(self.value)
+
+
 def test_freeze_value_mixed_dict_keys_and_uncomparable_values() -> None:
     # Keys with matching str representations but different types and uncomparable values
     raw_dict = {1: (1, 2), "1": 5}
@@ -773,3 +791,62 @@ def test_freeze_value_distinguishes_types_with_equal_python_values() -> None:
     assert _freeze_value({"flag": True}) != _freeze_value({"flag": 1})
     assert _freeze_value({"val": 1}) != _freeze_value({"val": 1.0})
     assert _freeze_value({"mode": 0}) != _freeze_value({"mode": False})
+
+
+def test_freeze_value_float_signed_zero_and_supported_results_are_stable_hashable() -> None:
+    assert _freeze_value(0.0) != _freeze_value(-0.0)
+    assert _freeze_value(1.25) == ("float", "0x1.4000000000000p+0")
+    for value in (None, True, 1, 1.25, "text", b"bytes", [1], (1,), {1}, frozenset({1}), {"a": 1}):
+        frozen = _freeze_value(value)
+        assert isinstance(frozen, tuple)
+        assert hash(frozen) is not None
+
+
+def test_freeze_value_unhashable_public_state_is_structural_without_identity() -> None:
+    first = _freeze_value(_UnhashablePublicState({"mode": "fast"}))
+    second = _freeze_value(_UnhashablePublicState({"mode": "fast"}))
+    changed = _freeze_value(_UnhashablePublicState({"mode": "slow"}))
+
+    assert first == second
+    assert first != changed
+    assert "0x" not in repr(first)
+    assert hash(first) is not None
+
+
+def test_freeze_value_hashable_public_state_is_structural_not_raw_object() -> None:
+    value = _HashablePublicState("fast")
+    frozen = _freeze_value(value)
+    equivalent = _freeze_value(_HashablePublicState("fast"))
+
+    assert frozen == equivalent
+    assert frozen[1] != value
+    assert "0x" not in repr(frozen)
+    assert hash(frozen) is not None
+
+
+def test_freeze_value_constant_repr_mapping_and_set_are_hashseed_invariant() -> None:
+    code = (
+        "from fw_diag_tool.gui.pages.em_builder_ui import _freeze_value\n"
+        "class C:\n"
+        "    def __init__(self, value): self.value = value\n"
+        "    def __hash__(self): return hash(self.value)\n"
+        "    def __eq__(self, other): return isinstance(other, C) and self.value == other.value\n"
+        "    def __repr__(self): return '<constant>'\n"
+        "items = [C('alpha'), C('beta'), C('gamma')]\n"
+        "order = [2, 1, 0] if __import__('os').environ.get('ORDER') == 'reverse' else [0, 1, 2]\n"
+        "mapping = {items[index]: chr(97 + index) for index in order}\n"
+        "values = {items[0], items[1], items[2]}\n"
+        "print(repr(_freeze_value({'mapping': mapping, 'values': values})))\n"
+    )
+    outputs: set[str] = set()
+    for seed in ("0", "1", "42", "1337", "random"):
+        for order in ("forward", "reverse"):
+            result = subprocess.run(
+                [sys.executable, "-c", code],
+                capture_output=True,
+                text=True,
+                check=True,
+                env=dict(os.environ, PYTHONHASHSEED=seed, ORDER=order),
+            )
+            outputs.add(result.stdout.strip())
+    assert len(outputs) == 1

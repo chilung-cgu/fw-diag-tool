@@ -407,62 +407,97 @@ def _render_validate_mode() -> None:
 
 
 def _freeze_value(val: Any) -> Any:
-    if val is None:
-        return ("NoneType", None)
-    if isinstance(val, bool):
-        return ("bool", val)
-    if isinstance(val, int):
-        return ("int", val)
-    if isinstance(val, float):
-        if math.isnan(val):
-            return ("float", "__float_nan__")
-        if math.isinf(val):
-            return ("float", "__float_inf__" if val > 0 else "__float_neginf__")
-        return ("float", val)
-    if isinstance(val, str):
-        return ("str", val)
-    if isinstance(val, (bytes, bytearray, memoryview)):
-        return ("bytes", bytes(val))
-    if isinstance(val, Mapping):
-        frozen_items = [(_freeze_value(k), _freeze_value(v)) for k, v in val.items()]
-        return (
-            "dict",
-            tuple(
-                sorted(
-                    frozen_items,
-                    key=lambda item: (
-                        type(item[0]).__qualname__,
-                        repr(item[0]),
-                        type(item[1]).__qualname__,
-                        repr(item[1]),
-                    ),
-                )
-            ),
-        )
-    if isinstance(val, (set, frozenset)):
-        frozen_items = [_freeze_value(v) for v in val]
-        return (
-            "set" if isinstance(val, set) else "frozenset",
-            tuple(sorted(frozen_items, key=lambda x: (type(x).__qualname__, repr(x)))),
-        )
-    if isinstance(val, (list, tuple)):
-        return (
-            "list" if isinstance(val, list) else "tuple",
-            tuple(_freeze_value(v) for v in val),
-        )
-    if isinstance(val, enum.Enum):
-        return (type(val).__qualname__, val.name, _freeze_value(val.value))
-    if isinstance(val, os.PathLike):
-        return (type(val).__qualname__, os.fspath(val))
-    if hasattr(val, "model_dump") and callable(val.model_dump):
-        return (type(val).__qualname__, _freeze_value(val.model_dump()))
-    if dataclasses.is_dataclass(val) and not isinstance(val, type):
-        return (type(val).__qualname__, _freeze_value(dataclasses.asdict(val)))
-    try:
-        hash(val)
-        return (type(val).__qualname__, val)
-    except TypeError:
-        return (type(val).__qualname__, repr(val))
+    def qualified_type(value: Any) -> str:
+        value_type = type(value)
+        return f"{value_type.__module__}.{value_type.__qualname__}"
+
+    def freeze(value: Any, seen: set[int]) -> tuple[Any, ...]:
+        if value is None:
+            return ("none",)
+        if isinstance(value, bool):
+            return ("bool", value)
+        if isinstance(value, int):
+            return ("int", value)
+        if isinstance(value, float):
+            if math.isnan(value):
+                token = "nan"
+            elif math.isinf(value):
+                token = "inf" if value > 0 else "-inf"
+            else:
+                token = value.hex()
+            return ("float", token)
+        if isinstance(value, str):
+            return ("str", value)
+        if isinstance(value, (bytes, bytearray, memoryview)):
+            return ("bytes", bytes(value))
+
+        value_id = id(value)
+        if value_id in seen:
+            return ("cycle", qualified_type(value))
+
+        if isinstance(value, Mapping):
+            seen.add(value_id)
+            frozen_items = tuple(sorted((freeze(k, seen), freeze(v, seen)) for k, v in value.items()))
+            seen.remove(value_id)
+            return ("mapping", qualified_type(value), frozen_items)
+        if isinstance(value, (set, frozenset)):
+            seen.add(value_id)
+            frozen_items = tuple(sorted(freeze(item, seen) for item in value))
+            seen.remove(value_id)
+            return ("set" if isinstance(value, set) else "frozenset", frozen_items)
+        if isinstance(value, (list, tuple)):
+            seen.add(value_id)
+            frozen_items = tuple(freeze(item, seen) for item in value)
+            seen.remove(value_id)
+            return ("list" if isinstance(value, list) else "tuple", frozen_items)
+        if isinstance(value, enum.Enum):
+            seen.add(value_id)
+            frozen_value = freeze(value.value, seen)
+            seen.remove(value_id)
+            return ("enum", qualified_type(value), value.name, frozen_value)
+        if isinstance(value, os.PathLike):
+            return ("path", qualified_type(value), freeze(os.fspath(value), seen))
+        if hasattr(value, "model_dump") and callable(value.model_dump):
+            seen.add(value_id)
+            frozen_payload = freeze(value.model_dump(), seen)
+            seen.remove(value_id)
+            return ("model", qualified_type(value), frozen_payload)
+        if dataclasses.is_dataclass(value) and not isinstance(value, type):
+            seen.add(value_id)
+            payload = {
+                field.name: getattr(value, field.name) for field in dataclasses.fields(value)
+            }
+            frozen_payload = freeze(payload, seen)
+            seen.remove(value_id)
+            return ("dataclass", qualified_type(value), frozen_payload)
+
+        public_state: dict[str, Any] = {}
+        try:
+            public_state.update(
+                {
+                    name: state
+                    for name, state in vars(value).items()
+                    if not name.startswith("_")
+                }
+            )
+        except TypeError:
+            pass
+        for value_type in type(value).__mro__:
+            slot_names = value_type.__dict__.get("__slots__", ())
+            if isinstance(slot_names, str):
+                slot_names = (slot_names,)
+            for slot_name in slot_names:
+                if isinstance(slot_name, str) and not slot_name.startswith("_") and hasattr(value, slot_name):
+                    public_state[slot_name] = getattr(value, slot_name)
+
+        if public_state:
+            seen.add(value_id)
+            frozen_state = freeze(public_state, seen)
+            seen.remove(value_id)
+            return ("object", qualified_type(value), frozen_state)
+        return ("object", qualified_type(value), "type-only")
+
+    return freeze(val, set())
 
 
 def _mock_generation_key(
