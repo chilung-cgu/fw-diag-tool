@@ -96,8 +96,8 @@ def test_find_cjk_font_paths_all_combinations() -> None:
 
 def test_build_pdf_report_cjk_reg_without_bold() -> None:
     """Test PDF generation when CJK regular is available but CJK bold is absent."""
-    reg_font = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
-    if not Path(reg_font).is_file():
+    reg_font, _, _ = _find_cjk_font_paths()
+    if reg_font is None:
         pytest.skip("System CJK font not present")
     with patch(
         "fw_diag_tool.reporting.pdf_report._find_cjk_font_paths",
@@ -114,8 +114,9 @@ def test_build_pdf_report_cjk_reg_without_bold() -> None:
 
 def test_build_pdf_report_fallback_font_only() -> None:
     """Test PDF generation when CJK font is absent but Unicode fallback font is configured."""
-    fallback_candidate = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
-    if not Path(fallback_candidate).is_file():
+    cjk_reg, _, fallback = _find_cjk_font_paths()
+    fallback_candidate = cjk_reg or fallback
+    if fallback_candidate is None:
         pytest.skip("Unicode test font not present")
     with patch(
         "fw_diag_tool.reporting.pdf_report._find_cjk_font_paths",
