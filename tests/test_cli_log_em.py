@@ -575,3 +575,65 @@ def test_cli_em_generate_both_preserves_existing_file_mode(tmp_path: Path) -> No
     )
     assert result.exit_code == 0
     assert stat.S_IMODE(existing.stat().st_mode) == 0o640
+
+
+def test_cli_em_generate_both_restores_when_rollback_replace_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE)
+    output_dir = tmp_path / "artifacts"
+    output_dir.mkdir()
+    orig_em = output_dir / "entity-manager.json"
+    orig_em.write_text('{"Name": "ORIGINAL_EM"}\n', encoding="utf-8")
+    orig_dts = output_dir / "device-tree.dts"
+    orig_dts.write_text('// ORIGINAL DTS\n', encoding="utf-8")
+
+    import fw_diag_tool.cli as cli_mod
+
+    original_replace = cli_mod.os.replace
+    failed_publish = False
+    failed_restore = False
+
+    def faulty_replace(src: Path | str, dst: Path | str) -> None:
+        nonlocal failed_publish, failed_restore
+        source_name = Path(src).name
+        destination_name = Path(dst).name
+        if destination_name == "device-tree.dts" and not failed_publish:
+            failed_publish = True
+            raise OSError("Simulated disk failure on second artifact publish")
+        if (
+            destination_name == "entity-manager.json"
+            and source_name.startswith(".entity-manager.json.orig.")
+            and not failed_restore
+        ):
+            failed_restore = True
+            raise OSError("Simulated rollback replace failure")
+        original_replace(src, dst)
+
+    monkeypatch.setattr(cli_mod.os, "replace", faulty_replace)
+
+    result = runner.invoke(
+        app,
+        ["em", "generate", str(profile_file), "-f", "both", "-o", str(output_dir)],
+    )
+    assert result.exit_code == 2
+    assert orig_em.read_text(encoding="utf-8") == '{"Name": "ORIGINAL_EM"}\n'
+    assert orig_dts.read_text(encoding="utf-8") == '// ORIGINAL DTS\n'
+    assert list(output_dir.glob(".*.tmp")) == []
+
+
+def test_cli_em_generate_both_rejects_symlink_output_directory(tmp_path: Path) -> None:
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE)
+    real_dir = tmp_path / "real-artifacts"
+    real_dir.mkdir()
+    output_link = tmp_path / "artifacts"
+    output_link.symlink_to(real_dir, target_is_directory=True)
+
+    result = runner.invoke(
+        app,
+        ["em", "generate", str(profile_file), "-f", "both", "-o", str(output_link)],
+    )
+    assert result.exit_code == 2
+    assert list(real_dir.iterdir()) == []

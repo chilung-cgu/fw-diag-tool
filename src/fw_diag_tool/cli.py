@@ -2071,7 +2071,7 @@ def _atomic_write_artifacts(
     except BaseException:
         for target in reversed(published_without_backup):
             try:
-                target.unlink(missing_ok=True)
+                os.unlink(target)
             except OSError:
                 pass
         for target, backup_path in backups.items():
@@ -2079,10 +2079,17 @@ def _atomic_write_artifacts(
                 if backup_path.exists():
                     os.replace(backup_path, target)
             except OSError:
-                pass
+                try:
+                    shutil.copy2(backup_path, target)
+                    os.unlink(backup_path)
+                except OSError:
+                    try:
+                        os.unlink(target)
+                    except OSError:
+                        pass
         for _, _, tmp_path in staged:
             try:
-                tmp_path.unlink(missing_ok=True)
+                os.unlink(tmp_path)
             except OSError:
                 pass
         ready_backups = set(backups.values())
@@ -2090,14 +2097,16 @@ def _atomic_write_artifacts(
             if backup_path in ready_backups and backup_path.exists():
                 continue
             try:
-                backup_path.unlink(missing_ok=True)
+                os.unlink(backup_path)
             except OSError:
                 pass
         raise
     else:
         for backup_path in backups.values():
             try:
-                backup_path.unlink(missing_ok=True)
+                os.unlink(backup_path)
+            except FileNotFoundError:
+                pass
             except OSError:
                 pass
 
@@ -2143,7 +2152,7 @@ def generate_em_or_dts(
         if output_file is None:
             console.print("[bold red]Error: --format both requires --out DIRECTORY.[/]")
             raise typer.Exit(code=2)
-        if not output_file.is_dir():
+        if output_file.is_symlink() or not output_file.is_dir():
             console.print("[bold red]Error: --out must be an existing directory for --format both.[/]")
             raise typer.Exit(code=2)
 
