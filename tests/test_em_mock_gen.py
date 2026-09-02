@@ -197,7 +197,13 @@ def test_mock_mapping_handles_case_collision_on_case_insensitive_comparisons() -
     assert len(paths) == len(set(paths)) == 2
 
 
-@pytest.mark.parametrize("board_name", ['Board"\\\nraise RuntimeError("INJECTED")#', "Board'''evil"])
+@pytest.mark.parametrize(
+    "board_name",
+    [
+        'Board"""evil',
+        'Board"\\\nraise RuntimeError("INJECTED")#',
+    ],
+)
 def test_generated_python_is_valid_and_treats_board_name_as_data(board_name: str) -> None:
     config = EMBoardConfig(board_name=board_name, devices=[])
     script = EMMockGenerator.generate_python_mock(config)
@@ -226,6 +232,18 @@ def test_generated_bash_does_not_execute_device_text(
     assert "<<'PYTHON_MOCK'" in script_path.read_text()
 
 
+def test_generated_bash_does_not_execute_heredoc_delimiter_from_board_text(
+    sample_board_config: EMBoardConfig,
+    tmp_path: Path,
+) -> None:
+    sample_board_config.board_name = "Board\nPYTHON_MOCK\necho INJECTED"
+    script_path = tmp_path / "mock.sh"
+    script_path.write_text(EMMockGenerator.generate_busctl_script(sample_board_config))
+    result = subprocess.run(["bash", "-n", str(script_path)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0
+    assert script_path.read_text().splitlines().count("PYTHON_MOCK") == 1
+
+
 def test_generated_python_owns_name_and_exports_objects(
     sample_board_config: EMBoardConfig,
 ) -> None:
@@ -235,3 +253,14 @@ def test_generated_python_owns_name_and_exports_objects(
     assert "ServiceInterface" in script
     assert "busctl set-property" not in script
     assert "|| true" not in script
+
+
+def test_generated_python_rejects_non_owner_name_reply(
+    sample_board_config: EMBoardConfig,
+) -> None:
+    script = EMMockGenerator.generate_python_mock(sample_board_config)
+    assert "from dbus_next.constants import RequestNameReply" in script
+    assert (
+        "if reply not in (RequestNameReply.PRIMARY_OWNER, RequestNameReply.ALREADY_OWNER):"
+        in script
+    )
