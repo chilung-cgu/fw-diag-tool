@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+import re
 
 from fw_diag_tool.board_profile import BoardProfile, I2CDeviceProfile
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
@@ -21,6 +21,10 @@ _SPEED_MODE_FREQ_MAP: dict[str, int] = {
     "high_speed": 3400000,
     "ultra_fast": 5000000,
 }
+
+
+def _dts_name(name: str) -> str:
+    return re.sub(r"[\s_]+", "-", name.strip()).lower()
 
 
 class EMBridge:
@@ -137,38 +141,33 @@ class EMBridge:
         dts_blocks: list[str] = []
         for bus in target_buses:
             clock_freq = _SPEED_MODE_FREQ_MAP.get(bus.speed_mode, 400000)
+            direct_devices = [
+                {"addr": dev.address_7bit, "name": _dts_name(dev.name), "compatible": dev.compatible}
+                for dev in bus.devices
+            ]
+            muxes = [
+                {
+                    "addr": mux.address_7bit,
+                    "compatible": mux.compatible,
+                    "channels": [
+                        {
+                            "channel": channel.channel,
+                            "devices": [
+                                {"addr": dev.address_7bit, "name": _dts_name(dev.name), "compatible": dev.compatible}
+                                for dev in channel.devices
+                            ],
+                        }
+                        for channel in mux.channels
+                    ],
+                }
+                for mux in bus.muxes
+            ]
 
-            if bus.muxes:
-                mux = bus.muxes[0]
-                mux_addr = mux.address_7bit
-                mux_compat = mux.compatible
-                dev_list: list[dict[str, Any]] = []
-                for ch in mux.channels:
-                    for dev in ch.devices:
-                        dev_list.append({
-                            "addr": dev.address_7bit,
-                            "channel": ch.channel,
-                            "name": dev.name.lower().replace("_", "-"),
-                            "compatible": dev.compatible,
-                        })
-            else:
-                mux_addr = 0x70
-                mux_compat = "nxp,pca9548"
-                dev_list = []
-                for dev in bus.devices:
-                    dev_list.append({
-                        "addr": dev.address_7bit,
-                        "channel": 0,
-                        "name": dev.name.lower().replace("_", "-"),
-                        "compatible": dev.compatible,
-                    })
-
-            dts_str = DeviceTreeGenerator.generate_dts_from_topology(
+            dts_str = DeviceTreeGenerator.generate_i2c_bus(
                 bus_num=bus.bus_num,
-                mux_addr=mux_addr,
-                devices=dev_list,
+                direct_devices=direct_devices,
+                muxes=muxes,
                 clock_frequency=clock_freq,
-                mux_compatible=mux_compat,
             )
             dts_blocks.append(dts_str)
 

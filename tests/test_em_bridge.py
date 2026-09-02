@@ -96,6 +96,52 @@ i2c_buses:
         register_width: 8
 """
 
+SAMPLE_BOARD_WITH_TWO_MUXES_YAML = """
+board_name: Multi_Mux_Board
+version: "1.0"
+i2c_buses:
+  - bus_num: 3
+    speed_mode: fast
+    devices:
+      - address_7bit: 0x48
+        name: local-temp
+        category: temperature
+        protocol: I2C
+        compatible: ti,tmp75
+        register_width: 8
+    muxes:
+      - address_7bit: 0x70
+        name: mux-a
+        category: mux
+        protocol: I2C
+        compatible: nxp,pca9548
+        register_width: 8
+        channels:
+          - channel: 0
+            devices:
+              - address_7bit: 0x50
+                name: fru-a
+                category: fru
+                protocol: I2C
+                compatible: atmel,24c64
+                register_width: 8
+      - address_7bit: 0x71
+        name: mux-b
+        category: mux
+        protocol: I2C
+        compatible: nxp,pca9548
+        register_width: 8
+        channels:
+          - channel: 1
+            devices:
+              - address_7bit: 0x50
+                name: fru-b
+                category: fru
+                protocol: I2C
+                compatible: atmel,24c64
+                register_width: 8
+"""
+
 
 def test_from_board_profile_basic() -> None:
     profile = BoardProfile.from_text(SAMPLE_BOARD_PROFILE_YAML)
@@ -192,3 +238,18 @@ def test_from_board_profile_rejects_populated_mux_channel_without_linux_bus() ->
         match=r"MUX PCA9548_Mux channel 0 requires downstream_bus_num for Entity-Manager",
     ):
         EMBridge.from_board_profile(profile)
+
+
+def test_to_dts_preserves_direct_devices_and_all_muxes() -> None:
+    profile = BoardProfile.from_text(SAMPLE_BOARD_WITH_TWO_MUXES_YAML)
+    dts = EMBridge.to_dts(profile)
+    assert "local-temp@48" in dts
+    assert dts.count("i2c-mux@") == 2
+    assert "i2c-mux@70" in dts
+    assert "i2c-mux@71" in dts
+
+
+def test_to_dts_without_mux_does_not_invent_mux() -> None:
+    profile = BoardProfile.from_text(SAMPLE_BOARD_PROFILE_YAML)
+    dts = EMBridge.to_dts(profile, bus_num=1)
+    assert "i2c-mux@" not in dts

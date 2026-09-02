@@ -1,0 +1,12 @@
+board_name: Direct_Test_Board
+version: "1.0"
+i2c_buses:
+  - bus_num: 1
+    speed_mode: standard
+    devices:
+      - address_7bit: 0x48
+        name: inlet-temp
+        category: Temperature Sensor
+        protocol: I2C
+        compatible: ti,tmp75
+        register_width: 8
