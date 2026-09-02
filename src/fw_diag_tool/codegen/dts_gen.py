@@ -85,8 +85,13 @@ class DeviceTreeGenerator:
             cls._normalize_device(device, path=f"direct_devices[{index}]")
             for index, device in enumerate(direct_devices)
         ]
+        parent_addresses: set[int] = set()
+        for address, _, _ in normalized_direct:
+            if address in parent_addresses:
+                raise ValueError(f"duplicate I2C address 0x{address:02X} on parent bus {bus}")
+            parent_addresses.add(address)
+
         normalized_muxes: list[tuple[int, str, list[tuple[int, list[tuple[int, str, str]]]]]] = []
-        parent_addresses = {address for address, _, _ in normalized_direct}
 
         for mux_index, mux in enumerate(muxes):
             path = f"muxes[{mux_index}]"

@@ -1,3 +1,5 @@
+import pytest
+
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
 
 
@@ -56,3 +58,15 @@ def test_generate_i2c_bus_renders_direct_devices_and_all_muxes() -> None:
     assert "i2c-mux@71" in dts
     assert "fru-a@50" in dts
     assert "fru-b@50" in dts
+
+
+def test_generate_i2c_bus_rejects_duplicate_direct_device_address() -> None:
+    with pytest.raises(ValueError, match=r"duplicate I2C address 0x48 on parent bus 1"):
+        DeviceTreeGenerator.generate_i2c_bus(
+            bus_num=1,
+            direct_devices=[
+                {"addr": 0x48, "name": "temp-a", "compatible": "ti,tmp75"},
+                {"addr": 0x48, "name": "temp-b", "compatible": "ti,tmp75"},
+            ],
+            muxes=[],
+        )
