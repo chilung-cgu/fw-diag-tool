@@ -2018,7 +2018,7 @@ def generate_em_or_dts(
         help="Output format: json (Entity-Manager), dts (Device Tree), or both",
     ),
     output_file: Path | None = typer.Option(
-        None, "--out", "-o", help="Write output to file instead of stdout"
+        None, "--out", "-o", help="Write output to file instead of stdout (or directory for --format both)"
     ),
 ) -> None:
     """Generate OpenBMC Entity-Manager JSON and/or Linux Device Tree (.dts) from a Board Profile."""
@@ -2039,38 +2039,54 @@ def generate_em_or_dts(
         console.print(f"[bold red]Error: Failed to load board profile: {exc}[/]")
         raise typer.Exit(code=2) from exc
 
-    results: list[str] = []
+    if fmt == "both":
+        if output_file is None:
+            console.print("[bold red]Error: --format both requires --out DIRECTORY.[/]")
+            raise typer.Exit(code=2)
+        if not output_file.is_dir():
+            console.print("[bold red]Error: --out must be an existing directory for --format both.[/]")
+            raise typer.Exit(code=2)
 
-    if fmt in ("json", "both"):
         try:
             em_config = EMBridge.from_board_profile(profile, bus_num=bus)
             em_json = EMBuilder.generate(em_config, indent=2)
-            results.append(em_json)
+            dts_content = EMBridge.to_dts(profile, bus_num=bus)
+        except ValueError as exc:
+            console.print(f"[bold red]Error generating artifacts: {exc}[/]", soft_wrap=True)
+            raise typer.Exit(code=2) from exc
+
+        try:
+            (output_file / "entity-manager.json").write_text(em_json + "\n", encoding="utf-8")
+            (output_file / "device-tree.dts").write_text(dts_content.rstrip("\n") + "\n", encoding="utf-8")
+            console.print(f"[green]Artifacts exported to {output_file}[/]")
+        except OSError as exc:
+            console.print(f"[bold red]Error: Failed to write output file: {exc}[/]")
+            raise typer.Exit(code=2) from exc
+        return
+
+    if fmt == "json":
+        try:
+            em_config = EMBridge.from_board_profile(profile, bus_num=bus)
+            output_text = EMBuilder.generate(em_config, indent=2)
         except ValueError as exc:
             console.print(f"[bold red]Error generating Entity-Manager JSON: {exc}[/]", soft_wrap=True)
             raise typer.Exit(code=2) from exc
-
-    if fmt in ("dts", "both"):
+    else:
         try:
-            dts_content = EMBridge.to_dts(profile, bus_num=bus)
-            results.append(dts_content)
+            output_text = EMBridge.to_dts(profile, bus_num=bus)
         except ValueError as exc:
             console.print(f"[bold red]Error generating Device Tree: {exc}[/]")
             raise typer.Exit(code=2) from exc
 
-    output_text = chr(10).join(results)
-
     if output_file:
         try:
-            output_file.write_text(output_text + chr(10), encoding="utf-8")
+            output_file.write_text(output_text.rstrip("\n") + "\n", encoding="utf-8")
             console.print(f"[green]Output exported to {output_file}[/]")
         except OSError as exc:
             console.print(f"[bold red]Error: Failed to write output file: {exc}[/]")
             raise typer.Exit(code=2) from exc
     else:
-        console.print(
-            Panel(output_text, title=f"[bold cyan]Generated Output ({profile.board_name})[/]")
-        )
+        typer.echo(output_text)
 
 
 @em_app.command("mock")
@@ -2101,7 +2117,7 @@ def mock_em(
     try:
         em_content = file_path.read_text(encoding="utf-8")
         config = EMMockGenerator.parse_em_json(em_content)
-    except Exception as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
         console.print(f"[bold red]Error: Failed to parse Entity-Manager JSON: {exc}[/]")
         raise typer.Exit(code=2) from exc
 

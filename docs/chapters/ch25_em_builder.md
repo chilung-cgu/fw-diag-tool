@@ -109,7 +109,7 @@
 
 ## CLI 命令列使用指南
 
-在 CI/CD 靜態代碼檢查或建置流程中，可使用 CLI 直接對 Entity-Manager JSON 進行校驗。
+在 CI/CD 靜態代碼檢查或建置流程中，可使用 CLI 直接對 Entity-Manager JSON 進行校驗，或從 Board Profile 產生 Entity-Manager JSON 與 Linux Device Tree。
 
 ### 基本校驗
 
@@ -127,6 +127,21 @@ uv run fw-diag em validate board_config.json --board-profile examples/data/board
 # 輸出 JSON 格式錯誤報告供自動化工具處理
 uv run fw-diag em validate board_config.json --json validation_result.json
 ```
+
+### 從 Board Profile 產生 Entity-Manager JSON 與 Device Tree
+
+```bash
+# 產生純 JSON 到標準輸出（不含多餘 decoration，可直接重導向）
+uv run fw-diag em generate profile.yaml --format json > entity-manager.json
+
+# 產生純 DTS 到標準輸出
+uv run fw-diag em generate profile.yaml --format dts > device-tree.dts
+
+# 同時產生兩種格式至指定目錄（--format both 必須指定既有目錄 --out）
+mkdir -p generated && uv run fw-diag em generate profile.yaml --format both --out generated
+```
+
+單一格式（`--format json` 或 `--format dts`）輸出至 stdout 時僅包含乾淨的 artifact 位元組，方便 pipeline 重導向；若指定 `--format both`，必須搭配 `--out DIRECTORY` 將兩個 artifact 分別寫入 `entity-manager.json` 與 `device-tree.dts`，絕不將異質格式串接輸出。
 
 ---
 

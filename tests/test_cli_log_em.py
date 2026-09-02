@@ -341,8 +341,9 @@ def test_cli_em_generate_json(tmp_path: Path) -> None:
     # Test stdout output
     result = runner.invoke(app, ["em", "generate", str(profile_file), "--format", "json"])
     assert result.exit_code == 0
-    assert "Exposes" in result.output
-    assert "TMP75" in result.output
+    payload = json.loads(result.stdout)
+    assert payload["Name"] == "TestServer_V1"
+    assert payload["Exposes"][0]["Type"] == "TMP75"
 
     # Test file output
     out_file = tmp_path / "em_out.json"
@@ -366,16 +367,39 @@ def test_cli_em_generate_dts(tmp_path: Path) -> None:
     assert "compatible" in result.output
 
 
-def test_cli_em_generate_both_and_invalid(tmp_path: Path) -> None:
-    """Test em generate command with both format and error handling."""
+def test_cli_em_generate_both_requires_output_directory(tmp_path: Path) -> None:
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE)
+    missing_out = runner.invoke(app, ["em", "generate", str(profile_file), "-f", "both"])
+    assert missing_out.exit_code == 2
+    assert "requires --out DIRECTORY" in missing_out.output
+
+    output_dir = tmp_path / "artifacts"
+    output_dir.mkdir()
+    result = runner.invoke(
+        app,
+        ["em", "generate", str(profile_file), "-f", "both", "-o", str(output_dir)],
+    )
+    assert result.exit_code == 0
+    assert json.loads((output_dir / "entity-manager.json").read_text())["Name"] == "TestServer_V1"
+    assert "&i2c1" in (output_dir / "device-tree.dts").read_text()
+
+
+def test_cli_em_generate_both_rejects_file_output_without_partial_write(tmp_path: Path) -> None:
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE)
+    output_file = tmp_path / "combined.txt"
+    result = runner.invoke(
+        app,
+        ["em", "generate", str(profile_file), "-f", "both", "-o", str(output_file)],
+    )
+    assert result.exit_code == 2
+    assert not output_file.exists()
+
+
+def test_cli_em_generate_invalid_format_and_missing_file(tmp_path: Path) -> None:
     profile_file = tmp_path / "profile.yaml"
     profile_file.write_text(SAMPLE_BOARD_PROFILE, encoding="utf-8")
-
-    # Test both
-    res_both = runner.invoke(app, ["em", "generate", str(profile_file), "-f", "both"])
-    assert res_both.exit_code == 0
-    assert "Exposes" in res_both.output
-    assert "i2c" in res_both.output
 
     # Test invalid format
     res_inv = runner.invoke(app, ["em", "generate", str(profile_file), "-f", "invalid_fmt"])

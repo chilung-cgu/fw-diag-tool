@@ -139,6 +139,11 @@ fw-diag log diff examples/data/golden_boot.log examples/data/failing_boot.log
 # 5c. OpenBMC Entity-Manager JSON 組態校驗
 fw-diag em validate examples/data/entity_config.json
 
+# 5d. Board Profile 轉 Entity-Manager JSON 與 Device Tree (.dts) 產生
+uv run fw-diag em generate profile.yaml --format json > entity-manager.json
+uv run fw-diag em generate profile.yaml --format dts > device-tree.dts
+mkdir -p generated && uv run fw-diag em generate profile.yaml --format both --out generated
+
 # 6. 目錄級多檔案批次平行分析（自動偵測協定、匯出多格式報告）
 fw-diag batch /path/to/captures/ -o ./batch_reports/ --format all
 
