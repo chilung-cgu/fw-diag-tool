@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.0.0] - 2026-09-01
+## [2.0.0] - 2026-09-02
 
 ### Added
 - Linux Kernel (`dmesg`) and OpenBMC (`journalctl`) log correlation engine (`fw_diag_tool.log`) with pattern library of 22+ diagnostic signatures across 11 subsystems.
@@ -19,11 +19,13 @@ All notable changes to this project will be documented in this file.
 - Added raw-artifact CLI contracts: JSON and DTS remain pipeable, while `--format both` writes separate files atomically.
 - Added the `fw-diag em mock` workflow and documented Bash launcher/Python daemon output for local D-Bus topology simulation.
 - Final regression coverage is 1518 tests, with Ruff, mypy, and strict MkDocs gates recorded for this branch.
+- CI now installs the PDF extra and CJK fonts on Ubuntu and macOS, and runs only for pushes and pull requests.
 
 ### Fixed
 - Hardened generated mock parsing, object-path collision handling, source quoting, D-Bus name ownership, and non-zero failure propagation.
 - Invalidated stale or malformed GUI mock artifacts whenever input or format identity changes.
 - Preserved pre-existing output files and rollback recovery artifacts during failed atomic generation.
+- Made PDF report metadata and footers render safely when a host has no CJK font, while preserving Traditional Chinese output when a compatible font is available.
 
 ## [1.7.0] - 2026-08-30
 

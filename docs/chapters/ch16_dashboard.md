@@ -50,7 +50,7 @@
 
 ## Release history：累積歷史與使用方式
 
-Dashboard 的「Release history」區塊讀取套件內建的 release-notes manifest，預設以三張卡片顯示最新版本（目前包含 `v1.7.0`）。這是方便快速掌握近期變更的摘要；三卡片不代表任何特定目標板卡已經收到或套用更新。
+Dashboard 的「Release history」區塊讀取套件內建的 release-notes manifest，預設以三張卡片顯示最新版本（目前包含 `v2.0.0`，並保留 `v1.7.0` 等歷史版本）。這是方便快速掌握近期變更的摘要；三卡片不代表任何特定目標板卡已經收到或套用更新。
 
 ### 先看三張摘要卡片
 

@@ -3,7 +3,7 @@
   "releases": [
     {
       "version":"2.0.0",
-      "date":"2026-09-01",
+      "date":"2026-09-02",
       "source_ref":"CHANGELOG.md#2.0.0",
       "summary":{
         "zh-TW":"新增 Linux Kernel (dmesg) 與 OpenBMC (journalctl) 日誌關聯診斷引擎，擴充 35 種跨 13 個子系統的特徵；新增 OpenBMC Entity-Manager 視覺化產生、Board Profile 拓撲橋接、校驗與 D-Bus Mock 工具。",
