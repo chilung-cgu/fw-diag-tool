@@ -24,6 +24,8 @@ def _sanitize_name(name: str) -> str:
 def _infer_category(type_name: str, dev_name: str) -> str:
     """Infer device category from type name or device name when template is missing."""
     token = f"{type_name} {dev_name}".lower()
+    if any(k in token for k in ("mux", "pca954", "tca954")):
+        return "mux"
     if any(k in token for k in ("temp", "tmp", "lm75", "emc14", "thermal")):
         return "temperature"
     if any(k in token for k in ("fan", "tach", "pwm", "max31790", "emc23")):
@@ -37,6 +39,21 @@ def _infer_category(type_name: str, dev_name: str) -> str:
     if any(k in token for k in ("pca95", "gpio", "expander")):
         return "gpio"
     return "temperature"
+
+
+def _parse_int_field(value: Any, *, path: str, minimum: int, maximum: int) -> int:
+    """Parse and validate an integer field with explicit bounds."""
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise TypeError(f"{path} must be an integer")
+    try:
+        parsed = int(value, 0) if isinstance(value, str) else value
+    except ValueError as exc:
+        raise ValueError(f"{path} must be an integer") from exc
+    if not minimum <= parsed <= maximum:
+        if path.endswith("Address"):
+            raise ValueError(f"{path} must be a non-reserved 7-bit I2C address (0x08..0x77)")
+        raise ValueError(f"{path} must be between {minimum} and {maximum}")
+    return parsed
 
 
 class EMMockGenerator:
@@ -53,25 +70,31 @@ class EMMockGenerator:
         if not isinstance(data, dict):
             raise TypeError("Entity-Manager configuration root must be a JSON object")
 
+        if "Exposes" not in data:
+            raise ValueError("Entity-Manager configuration is missing Exposes")
+        exposes_list = data["Exposes"]
+        if not isinstance(exposes_list, list):
+            raise TypeError("Exposes must be a JSON array")
+
         board_name = str(data.get("Name", "Mock_Board"))
         probe_expr = str(data.get("Probe", "TRUE"))
-        exposes_list = data.get("Exposes", [])
 
         devices: list[EMDeviceEntry] = []
         for idx, item in enumerate(exposes_list):
+            path = f"Exposes[{idx}]"
             if not isinstance(item, dict):
-                continue
+                raise TypeError(f"{path} must be a JSON object")
 
-            name = str(item.get("Name", f"Device_{idx}"))
-            type_name = str(item.get("Type", ""))
-            bus = int(item.get("Bus", 0))
+            for field_name in ("Name", "Type", "Bus", "Address"):
+                if field_name not in item:
+                    raise ValueError(f"{path} is missing {field_name}")
 
-            addr_raw = item.get("Address", 0)
-            if isinstance(addr_raw, str):
-                addr_str = addr_raw.strip()
-                address = int(addr_str, 16) if addr_str.startswith(("0x", "0X")) else int(addr_str, 10)
-            else:
-                address = int(addr_raw)
+            name = str(item["Name"])
+            type_name = str(item["Type"])
+            bus = _parse_int_field(item["Bus"], path=f"{path}.Bus", minimum=0, maximum=65535)
+            address = _parse_int_field(
+                item["Address"], path=f"{path}.Address", minimum=0x08, maximum=0x77
+            )
 
             power_state = item.get("PowerState")
 
@@ -116,55 +139,90 @@ class EMMockGenerator:
 
     @classmethod
     def _get_sensor_mapping(cls, dev: EMDeviceEntry) -> dict[str, Any] | None:
-        """Map a device entry to its D-Bus sensor path, unit, and default value."""
+        """Map a device entry to its category metadata, unit, and default value."""
         cat = dev.template.category.lower()
-        clean_name = _sanitize_name(dev.name)
-
-        if cat == "gpio":
+        if cat in ("gpio", "mux"):
             return None
 
         if cat == "temperature":
             return {
-                "path": f"/xyz/openbmc_project/sensors/temperature/{clean_name}",
+                "kind": "temperature",
                 "unit": "xyz.openbmc_project.Sensor.Value.Unit.DegreesC",
                 "value": 25.0,
                 "is_sensor": True,
             }
         elif cat == "fan":
             return {
-                "path": f"/xyz/openbmc_project/sensors/fan_tach/{clean_name}",
+                "kind": "fan_tach",
                 "unit": "xyz.openbmc_project.Sensor.Value.Unit.RPMS",
                 "value": 5000.0,
                 "is_sensor": True,
             }
         elif cat in ("psu", "hotswap"):
             return {
-                "path": f"/xyz/openbmc_project/sensors/power/{clean_name}",
+                "kind": "power",
                 "unit": "xyz.openbmc_project.Sensor.Value.Unit.Watts",
                 "value": 100.0,
                 "is_sensor": True,
             }
         elif cat == "adc":
             return {
-                "path": f"/xyz/openbmc_project/sensors/voltage/{clean_name}",
+                "kind": "voltage",
                 "unit": "xyz.openbmc_project.Sensor.Value.Unit.Volts",
                 "value": 3.3,
                 "is_sensor": True,
             }
         elif cat == "fru":
             return {
-                "path": f"/xyz/openbmc_project/inventory/system/board/{clean_name}",
+                "kind": "inventory",
                 "unit": "",
                 "value": 0.0,
                 "is_sensor": False,
             }
         else:
             return {
-                "path": f"/xyz/openbmc_project/sensors/temperature/{clean_name}",
+                "kind": "temperature",
                 "unit": "xyz.openbmc_project.Sensor.Value.Unit.DegreesC",
                 "value": 25.0,
                 "is_sensor": True,
             }
+
+    @classmethod
+    def _build_mock_objects(cls, config: EMBoardConfig) -> list[dict[str, Any]]:
+        """Construct deterministic, collision-free mock sensor object records."""
+        supported: list[tuple[EMDeviceEntry, dict[str, Any]]] = []
+        for dev in config.devices:
+            mapping = cls._get_sensor_mapping(dev)
+            if mapping is not None:
+                supported.append((dev, mapping))
+
+        base_counts: dict[str, int] = {}
+        for dev, _ in supported:
+            base = _sanitize_name(dev.name)
+            base_counts[base] = base_counts.get(base, 0) + 1
+
+        objects: list[dict[str, Any]] = []
+        for dev, mapping in supported:
+            base = _sanitize_name(dev.name)
+            component = f"{base}_b{dev.bus}_a{dev.address:02x}" if base_counts[base] > 1 else base
+            sensor_kind = mapping["kind"]
+            prefix = (
+                "/xyz/openbmc_project/inventory/system/board"
+                if sensor_kind == "inventory"
+                else f"/xyz/openbmc_project/sensors/{sensor_kind}"
+            )
+            objects.append({
+                "name": dev.name,
+                "chip": dev.template.chip_name,
+                "category": dev.template.category.lower(),
+                "bus": dev.bus,
+                "address": f"0x{dev.address:02x}",
+                "path": f"{prefix}/{component}",
+                "unit": mapping["unit"],
+                "value": mapping["value"],
+                "is_sensor": mapping["is_sensor"],
+            })
+        return objects
 
     @classmethod
     def generate_busctl_script(cls, config: EMBoardConfig) -> str:
@@ -181,35 +239,29 @@ class EMMockGenerator:
             "",
         ]
 
-        sensor_count = 0
-        for dev in config.devices:
-            mapping = cls._get_sensor_mapping(dev)
-            if mapping is None:
-                lines.append(f"# Skipping GPIO expander {dev.name} (no direct D-Bus sensor object)")
-                continue
+        objects = cls._build_mock_objects(config)
+        for obj in objects:
+            clean_name = _sanitize_name(obj["name"])
+            path = obj["path"]
 
-            clean_name = _sanitize_name(dev.name)
-            path = mapping["path"]
-
-            if not mapping["is_sensor"]:
+            if not obj["is_sensor"]:
                 lines.extend([
-                    f"# --- FRU Inventory: {dev.name} (Bus {dev.bus}, Addr 0x{dev.address:02x}) ---",
+                    f"# --- FRU Inventory: {obj['name']} (Bus {obj['bus']}, Addr {obj['address']}) ---",
                     f"# Expected Object Path: {path}",
                     f'# Verify with: busctl call xyz.openbmc_project.ObjectMapper /xyz/openbmc_project/object_mapper xyz.openbmc_project.ObjectMapper GetObject sas \"{path}\" 0',
                     f'echo "[MOCK] Registering FRU Board Object: {clean_name}"',
-                    f'busctl set-property {cls.MOCK_SERVICE} {path} {cls.BOARD_INTF} PrettyName s \"{dev.name}\" 2>/dev/null || true',
+                    f'busctl set-property {cls.MOCK_SERVICE} {path} {cls.BOARD_INTF} PrettyName s "{clean_name}" 2>/dev/null || true',
                     "",
                 ])
-                sensor_count += 1
                 continue
 
-            cat = dev.template.category.lower()
-            val = mapping["value"]
-            unit = mapping["unit"]
+            cat = obj["category"]
+            val = obj["value"]
+            unit = obj["unit"]
             unit_short = unit.split(".")[-1]
 
             lines.extend([
-                f"# --- Sensor: {dev.name} ({dev.template.chip_name}, Bus {dev.bus}, Addr 0x{dev.address:02x}) ---",
+                f"# --- Sensor: {obj['name']} ({obj['chip']}, Bus {obj['bus']}, Addr {obj['address']}) ---",
                 f"# Expected Object Path: {path}",
                 f'# Verify with: busctl call xyz.openbmc_project.ObjectMapper /xyz/openbmc_project/object_mapper xyz.openbmc_project.ObjectMapper GetObject sas \"{path}\" 0',
                 f'echo "[MOCK] Publishing {cat} sensor: {clean_name} -> {val} ({unit_short})"',
@@ -217,10 +269,9 @@ class EMMockGenerator:
                 f'busctl set-property {cls.MOCK_SERVICE} {path} {cls.SENSOR_VALUE_INTF} Unit s \"{unit}\" 2>/dev/null || true',
                 "",
             ])
-            sensor_count += 1
 
         lines.extend([
-            f'echo "[SUCCESS] Successfully registered {sensor_count} D-Bus mock objects for {config.board_name}."',
+            f'echo "[SUCCESS] Successfully registered {len(objects)} D-Bus mock objects for {config.board_name}."',
             'echo "[INFO] Inspect active sensors with: busctl tree xyz.openbmc_project.FWDiagMock"',
         ])
         return "\n".join(lines) + "\n"
@@ -228,25 +279,7 @@ class EMMockGenerator:
     @classmethod
     def generate_python_mock(cls, config: EMBoardConfig) -> str:
         """Generate a standalone Python script using subprocess and busctl."""
-        devices_data: list[dict[str, Any]] = []
-
-        for dev in config.devices:
-            mapping = cls._get_sensor_mapping(dev)
-            if mapping is None:
-                continue
-
-            devices_data.append({
-                "name": dev.name,
-                "chip": dev.template.chip_name,
-                "category": dev.template.category.lower(),
-                "bus": dev.bus,
-                "address": f"0x{dev.address:02x}",
-                "path": mapping["path"],
-                "unit": mapping["unit"],
-                "value": mapping["value"],
-                "is_sensor": mapping["is_sensor"],
-            })
-
+        devices_data = cls._build_mock_objects(config)
         json_mock_data = json.dumps(devices_data, indent=4)
 
         board = config.board_name
@@ -293,11 +326,11 @@ class EMMockGenerator:
             '        if obj[\"is_sensor\"]:',
             '            val = obj[\"value\"]',
             '            unit = obj[\"unit\"]',
-            '            print(f"  -> Publishing {obj[\x27category\x27]} sensor \x27{name}\x27 at {path} = {val}")',
+            '            print(f\"  -> Publishing {obj[\x27category\x27]} sensor \x27{name}\x27 at {path} = {val}\")',
             '            run_busctl([\"set-property\", MOCK_SERVICE, path, SENSOR_VALUE_INTF, \"Value\", \"d\", str(val)])',
             '            run_busctl([\"set-property\", MOCK_SERVICE, path, SENSOR_VALUE_INTF, \"Unit\", \"s\", unit])',
             "        else:",
-            '            print(f"  -> Registering FRU inventory \x27{name}\x27 at {path}")',
+            '            print(f\"  -> Registering FRU inventory \x27{name}\x27 at {path}\")',
             '            run_busctl([\"set-property\", MOCK_SERVICE, path, BOARD_INTF, \"PrettyName\", \"s\", name])',
             '    print(\"[SUCCESS] All mock objects initialized.\")',
             "",
@@ -305,8 +338,8 @@ class EMMockGenerator:
             "def main() -> int:",
             '    \"\"\"Main entrypoint for D-Bus mock script.\"\"\"',
             f'    parser = argparse.ArgumentParser(description=\"Mock D-Bus sensor daemon for {board}\")',
-            '    parser.add_argument(\"--interval\", type=float, default=2.0, help=\"Periodic refresh interval\")',
-            '    parser.add_argument(\"--once\", action=\"store_true\", help=\"Set properties once and exit\")',
+            '    parser.add_argument(\"--interval", type=float, default=2.0, help=\"Periodic refresh interval\")',
+            '    parser.add_argument(\"--once", action=\"store_true", help=\"Set properties once and exit\")',
             "    args = parser.parse_args()",
             "",
             "    setup_mock_objects()",
@@ -328,4 +361,3 @@ class EMMockGenerator:
         ]
 
         return "\n".join(lines) + "\n"
-

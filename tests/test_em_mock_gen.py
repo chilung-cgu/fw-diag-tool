@@ -95,7 +95,6 @@ def test_generate_busctl_script(sample_board_config: EMBoardConfig) -> None:
     assert "xyz.openbmc_project.Sensor.Value.Unit.Volts" in script
     assert "3.3" in script
     assert "/xyz/openbmc_project/inventory/system/board/Baseboard_FRU" in script
-    assert "IO_Expander0" in script
     assert "xyz.openbmc_project.ObjectMapper" in script
 
 
@@ -111,3 +110,43 @@ def test_generate_python_mock(sample_board_config: EMBoardConfig) -> None:
     assert "/xyz/openbmc_project/sensors/voltage/P12V_Sens" in script
     assert "/xyz/openbmc_project/inventory/system/board/Baseboard_FRU" in script
 
+
+
+@pytest.mark.parametrize(
+    ("payload", "message"),
+    [
+        ({"Exposes": {}}, "Exposes must be a JSON array"),
+        ({"Exposes": ["not-an-object"]}, r"Exposes\[0\] must be a JSON object"),
+        ({"Exposes": [{"Name": "T", "Type": "TMP75", "Address": "0x48"}]}, "Bus"),
+        ({"Exposes": [{"Name": "T", "Type": "TMP75", "Bus": True, "Address": "0x48"}]}, "Bus must be an integer"),
+        ({"Exposes": [{"Name": "T", "Type": "TMP75", "Bus": 1.5, "Address": "0x48"}]}, "Bus must be an integer"),
+        ({"Exposes": [{"Name": "T", "Type": "TMP75", "Bus": 1, "Address": "0x78"}]}, "Address must be a non-reserved"),
+    ],
+)
+def test_parse_em_json_rejects_malformed_contract(payload: dict[str, object], message: str) -> None:
+    with pytest.raises((TypeError, ValueError), match=message):
+        EMMockGenerator.parse_em_json(json.dumps(payload))
+
+
+def test_mock_mapping_skips_mux_instead_of_inventing_temperature_sensor() -> None:
+    config = EMMockGenerator.parse_em_json(json.dumps({
+        "Name": "MuxBoard",
+        "Probe": "TRUE",
+        "Exposes": [
+            {"Name": "Main Mux", "Type": "PCA9548", "Bus": 1, "Address": "0x70"}
+        ],
+    }))
+    assert EMMockGenerator._build_mock_objects(config) == []
+
+
+def test_mock_mapping_disambiguates_sanitized_path_collisions() -> None:
+    template = get_template("TMP75")
+    assert template is not None
+    config = EMBoardConfig(board_name="B", devices=[
+        EMDeviceEntry(template=template, bus=1, address=0x48, name="CPU Temp"),
+        EMDeviceEntry(template=template, bus=2, address=0x48, name="CPU-Temp"),
+    ])
+    paths = [obj["path"] for obj in EMMockGenerator._build_mock_objects(config)]
+    assert len(paths) == len(set(paths)) == 2
+    assert paths[0].endswith("/CPU_Temp_b1_a48")
+    assert paths[1].endswith("/CPU_Temp_b2_a48")
