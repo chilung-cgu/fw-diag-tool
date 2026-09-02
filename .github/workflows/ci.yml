@@ -4,9 +4,6 @@ on:
   push:
     branches: [main, develop]
     tags: ["v*"]
-  schedule:
-    # Nightly at 02:00 UTC for fuzz, performance, and dependency regression.
-    - cron: "0 2 * * *"
   pull_request:
     branches: [main, develop]
 
@@ -40,7 +37,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --locked --extra dev
+        run: uv sync --locked --extra dev --extra pdf
 
       - name: Lint with ruff
         run: uv run --locked --extra dev ruff check src/ tests/
