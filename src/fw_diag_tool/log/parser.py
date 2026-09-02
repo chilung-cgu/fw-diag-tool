@@ -51,6 +51,8 @@ _RELATED_TOOL_PAGES: dict[Subsystem, str] = {
     Subsystem.WATCHDOG: "watchdog",
     Subsystem.GPIO: "gpio",
     Subsystem.USB: "usb",
+    Subsystem.DBUS: "log-analyzer",
+    Subsystem.MEMORY: "log-analyzer",
 }
 
 
@@ -289,6 +291,14 @@ class LogParser:
                 hypothesis = "System watchdog expired due to kernel hang or unresponsive task"
             elif "POWER_SUPPLY_FAULT" in pattern_ids:
                 hypothesis = "Power supply rail anomaly or PMBus hardware fault"
+            elif "OOM_KILLER_INVOKED" in pattern_ids or "OOM_CGROUP_LIMIT" in pattern_ids:
+                hypothesis = "OOM Killer terminated a process; memory pressure or cgroup limit exceeded"
+            elif "DBUS_BROKER_MAX_BYTES" in pattern_ids or "DBUS_BROKER_QUOTA" in pattern_ids:
+                hypothesis = "D-Bus broker message saturation; a daemon is flooding the system bus"
+            elif "KERNEL_RCU_STALL" in pattern_ids or "KERNEL_SOFT_LOCKUP" in pattern_ids:
+                hypothesis = "Kernel scheduling stall; CPU stuck in non-preemptible context"
+            elif "SYSTEMD_SERVICE_FAILED" in pattern_ids:
+                hypothesis = "One or more systemd services entered a failed state"
             else:
                 hypothesis = f"Identified {len(ev_list)} correlated anomaly event(s) in {primary_subsystem.value} subsystem"
 

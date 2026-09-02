@@ -31,6 +31,8 @@ class Subsystem(str, Enum):
     THERMAL = "thermal"
     POWER = "power"
     USB = "usb"
+    DBUS = "dbus"
+    MEMORY = "memory"
     GENERAL = "general"
 
 
