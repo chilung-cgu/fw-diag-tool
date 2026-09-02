@@ -881,14 +881,18 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-TW": "🛠️ 視覺化建置模式 (Build Mode)",
         "en-US": "🛠️ Visual Build Mode (Build Mode)",
     },
-    "em_mode_validate": {
-        "zh-TW": "🔍 JSON 語法與拓撲校驗模式 (Validate Mode)",
-        "en-US": "🔍 JSON Syntax & Topology Validation Mode (Validate Mode)",
+   "em_mode_validate": {
+       "zh-TW": "🔍 JSON 語法與拓撲校驗模式 (Validate Mode)",
+       "en-US": "🔍 JSON Syntax & Topology Validation Mode (Validate Mode)",
+   },
+    "em_mode_mock": {
+        "zh-TW": "🧪 D-Bus Mock 產生器 (Mock Mode)",
+        "en-US": "🧪 D-Bus Mock Generator Mode (Mock Mode)",
     },
-    "em_board_name": {
-        "zh-TW": "板卡名稱 (Board Name)",
-        "en-US": "Board Name",
-    },
+   "em_board_name": {
+       "zh-TW": "板卡名稱 (Board Name)",
+       "en-US": "Board Name",
+   },
     "em_probe_expr": {
         "zh-TW": "Probe 匹配條件 (Probe Expression)",
         "en-US": "Probe Expression",
@@ -953,9 +957,33 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
         "zh-TW": "🚀 載入待校驗 JSON 範例 (含 Address 衝突)",
         "en-US": "🚀 Load Sample JSON (with Address Conflict)",
     },
-    "em_val_success": {
-        "zh-TW": "✅ Entity-Manager 組態校驗通過！結構與硬體位址無任何異常。",
-        "en-US": "✅ Entity-Manager configuration passed validation! No structural or address anomalies detected.",
+   "em_val_success": {
+       "zh-TW": "✅ Entity-Manager 組態校驗通過！結構與硬體位址無任何異常。",
+       "en-US": "✅ Entity-Manager configuration passed validation! No structural or address anomalies detected.",
+   },
+    "em_mock_format": {
+        "zh-TW": "輸出腳本格式",
+        "en-US": "Mock Script Format",
+    },
+    "em_mock_generate": {
+        "zh-TW": "✨ 產生 D-Bus Mock 腳本",
+        "en-US": "✨ Generate D-Bus Mock Script",
+    },
+    "em_mock_download": {
+        "zh-TW": "下載 Mock 腳本",
+        "en-US": "Download Mock Script",
+    },
+    "em_mock_no_devices": {
+        "zh-TW": "尚未設定任何裝置，請先切換至建置模式新增裝置，或點擊下方按鈕載入範例裝置。",
+        "en-US": "No devices configured yet. Please switch to Build Mode to add devices or click below to load sample devices.",
+    },
+    "em_mock_source_mode": {
+        "zh-TW": "Mock 資料來源",
+        "en-US": "Mock Data Source",
+    },
+    "em_mock_source_builder": {
+        "zh-TW": "從建置器目前裝置清單產生",
+        "en-US": "From Current Builder Device List",
     },
 }
 

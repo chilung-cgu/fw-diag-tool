@@ -48,6 +48,7 @@ def test_i18n_gui_keys_exist() -> None:
         "em_work_mode",
         "em_mode_build",
         "em_mode_validate",
+        "em_mode_mock",
         "em_board_name",
         "em_probe_expr",
         "em_category",
@@ -66,6 +67,10 @@ def test_i18n_gui_keys_exist() -> None:
         "em_val_text_label",
         "em_load_sample_conflict",
         "em_val_success",
+        "em_mock_format",
+        "em_mock_generate",
+        "em_mock_download",
+        "em_mock_no_devices",
     ]
     for key in required_keys:
         assert key in GUI_TRANSLATIONS, f"Missing i18n key: {key}"
@@ -283,3 +288,55 @@ def test_apptest_em_validate_with_board_profile() -> None:
     # Should find missing device 0x50 from BoardProfile -> 1 Info issue
     metric_labels = [m.label for m in at.metric]
     assert any("Info" in lbl for lbl in metric_labels)
+
+
+def _mock_mode_empty_app() -> None:
+    import streamlit as st
+
+    from fw_diag_tool.gui.pages.em_builder_ui import render
+    from fw_diag_tool.i18n import t
+
+    st.session_state["em_mode_select"] = t("em_mode_mock", domain="gui")
+    st.session_state["em_devices_list"] = []
+    render()
+
+
+def test_apptest_em_mock_mode_no_devices() -> None:
+    """Test Mock Generator Mode when no devices are configured."""
+    at = AppTest.from_function(_mock_mode_empty_app, default_timeout=15).run()
+    assert not at.exception
+
+    assert any("尚未設定任何裝置" in info.value for info in at.info)
+    btn_load = next((b for b in at.button if "載入標準" in b.label or "4 裝置" in b.label), None)
+    assert btn_load is not None
+
+
+def _mock_mode_with_devices_app() -> None:
+    import streamlit as st
+
+    from fw_diag_tool.gui.pages.em_builder_ui import _get_default_sample_devices, render
+    from fw_diag_tool.i18n import t
+
+    st.session_state["em_mode_select"] = t("em_mode_mock", domain="gui")
+    st.session_state["em_devices_list"] = list(_get_default_sample_devices())
+    render()
+
+
+def test_apptest_em_mock_mode_generate_bash_and_python() -> None:
+    """Test Mock Generator Mode generating Bash and Python mock scripts."""
+    at = AppTest.from_function(_mock_mode_with_devices_app, default_timeout=15).run()
+    assert not at.exception
+
+    assert len(at.dataframe) >= 1
+    assert len(at.radio) >= 2  # mode select + mock format select
+
+    # Click Generate Mock Script button
+    btn_gen = next((b for b in at.button if "產生 D-Bus Mock 腳本" in b.label), None)
+    assert btn_gen is not None
+    btn_gen.click().run()
+    assert not at.exception
+
+    # Code block and download button should appear
+    assert len(at.code) >= 1
+    assert any("busctl" in c.value or "xyz.openbmc_project" in c.value for c in at.code)
+    assert len(at.download_button) >= 1

@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from fw_diag_tool.board_profile import BoardProfile, load_board_profile
-from fw_diag_tool.em import EMBuilder, EMValidator
+from fw_diag_tool.em import EMBuilder, EMMockGenerator, EMValidator
 from fw_diag_tool.em.models import (
     EMBoardConfig,
     EMDeviceEntry,
@@ -133,6 +133,7 @@ def render() -> None:
     mode_options = [
         t("em_mode_build", domain="gui"),
         t("em_mode_validate", domain="gui"),
+        t("em_mode_mock", domain="gui"),
     ]
     mode = st.radio(
         t("em_work_mode", domain="gui"),
@@ -143,8 +144,10 @@ def render() -> None:
 
     if mode == mode_options[0]:
         _render_build_mode()
-    else:
+    elif mode == mode_options[1]:
         _render_validate_mode()
+    else:
+        _render_mock_mode()
 
     render_page_footer()
 
@@ -394,3 +397,76 @@ def _render_validate_mode() -> None:
                     st.markdown(f"- **錯誤訊息 (Message)**: {issue.message}")
                     if issue.suggestion:
                         st.markdown(f"- **建議修復行動 (Suggestion)**: {issue.suggestion}")
+
+
+def _render_mock_mode() -> None:
+    """Render Entity-Manager to D-Bus Mock Script Generator mode."""
+    devices_list: list[EMDeviceEntry] = st.session_state.get("em_devices_list", [])
+
+    if not devices_list:
+        st.info(t("em_mock_no_devices", domain="gui"))
+        if st.button(t("em_load_sample_devices", domain="gui"), key="em_mock_btn_load_sample"):
+            st.session_state["em_devices_list"] = list(_get_default_sample_devices())
+            st.rerun()
+        return
+
+    st.subheader(f"已就緒裝置清單 ({len(devices_list)} 個裝置)")
+    df_rows = [
+        {
+            "序號": idx + 1,
+            "裝置名稱": dev.name,
+            "晶片型號": dev.template.chip_name,
+            "類別": dev.template.category,
+            "I2C 匯流排": dev.bus,
+            "7-bit 位址": f"0x{dev.address:02x}",
+        }
+        for idx, dev in enumerate(devices_list)
+    ]
+    st.dataframe(pd.DataFrame(df_rows))
+
+    col_fmt, col_btn = st.columns([2, 1])
+    with col_fmt:
+        format_choice = st.radio(
+            t("em_mock_format", domain="gui"),
+            ["Bash (busctl)", "Python (standalone)"],
+            horizontal=True,
+            key="em_mock_fmt_select",
+        )
+    with col_btn:
+        st.write("")
+        st.write("")
+        gen_clicked = st.button(t("em_mock_generate", domain="gui"), key="em_btn_gen_mock")
+
+    if gen_clicked:
+        board_name = st.session_state.get("em_board_name_input", "Yosemite_V4_Mainboard")
+        probe_expr = st.session_state.get("em_probe_input", "TRUE")
+        config = EMBoardConfig(
+            board_name=board_name.strip() or "Yosemite_V4_Mainboard",
+            devices=list(devices_list),
+            probe_expression=probe_expr.strip() or "TRUE",
+        )
+
+        if "Bash" in str(format_choice):
+            script_code = EMMockGenerator.generate_busctl_script(config)
+            st.session_state["em_mock_script"] = script_code
+        else:
+            script_code = EMMockGenerator.generate_python_mock(config)
+            st.session_state["em_mock_script"] = script_code
+
+    if st.session_state.get("em_mock_script"):
+        st.subheader("產出的 D-Bus Mock 腳本")
+        script_content = st.session_state["em_mock_script"]
+        format_choice_val = st.session_state.get("em_mock_fmt_select", "Bash")
+        is_bash = "Bash" in str(format_choice_val)
+        lang = "bash" if is_bash else "python"
+        filename = "mock_sensors.sh" if is_bash else "mock_sensors.py"
+        mime_type = "text/x-sh" if is_bash else "text/x-python"
+
+        st.code(script_content, language=lang)
+        st.download_button(
+            t("em_mock_download", domain="gui"),
+            script_content,
+            file_name=filename,
+            mime=mime_type,
+            key="em_btn_download_mock",
+        )

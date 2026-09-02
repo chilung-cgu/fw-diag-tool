@@ -301,6 +301,8 @@ def test_cli_log_help_messages() -> None:
     res_em = runner.invoke(app, ["em", "--help"])
     assert res_em.exit_code == 0
     assert "validate" in res_em.output
+    assert "generate" in res_em.output
+    assert "mock" in res_em.output
 
 
 def test_cli_log_analyze_fail_on_error_only(tmp_path: Path) -> None:
@@ -329,3 +331,84 @@ def test_cli_em_validate_malformed_syntax(tmp_path: Path) -> None:
     result = runner.invoke(app, ["em", "validate", str(em_file)])
     assert result.exit_code == 1
     assert "JSON syntax error" in result.output or "CRITICAL" in result.output
+
+
+def test_cli_em_generate_json(tmp_path: Path) -> None:
+    """Test em generate command producing Entity-Manager JSON."""
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE, encoding="utf-8")
+
+    # Test stdout output
+    result = runner.invoke(app, ["em", "generate", str(profile_file), "--format", "json"])
+    assert result.exit_code == 0
+    assert "Exposes" in result.output
+    assert "TMP75" in result.output
+
+    # Test file output
+    out_file = tmp_path / "em_out.json"
+    res_file = runner.invoke(
+        app,
+        ["em", "generate", str(profile_file), "-f", "json", "-o", str(out_file)],
+    )
+    assert res_file.exit_code == 0
+    assert out_file.exists()
+    assert "TMP75" in out_file.read_text(encoding="utf-8")
+
+
+def test_cli_em_generate_dts(tmp_path: Path) -> None:
+    """Test em generate command producing Linux Device Tree."""
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE, encoding="utf-8")
+
+    result = runner.invoke(app, ["em", "generate", str(profile_file), "--format", "dts", "-b", "1"])
+    assert result.exit_code == 0
+    assert "&i2c1" in result.output
+    assert "compatible" in result.output
+
+
+def test_cli_em_generate_both_and_invalid(tmp_path: Path) -> None:
+    """Test em generate command with both format and error handling."""
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE, encoding="utf-8")
+
+    # Test both
+    res_both = runner.invoke(app, ["em", "generate", str(profile_file), "-f", "both"])
+    assert res_both.exit_code == 0
+    assert "Exposes" in res_both.output
+    assert "i2c" in res_both.output
+
+    # Test invalid format
+    res_inv = runner.invoke(app, ["em", "generate", str(profile_file), "-f", "invalid_fmt"])
+    assert res_inv.exit_code == 2
+
+    # Test non-existent file
+    res_missing = runner.invoke(app, ["em", "generate", "/non/existent/prof.yaml"])
+    assert res_missing.exit_code == 1
+
+
+def test_cli_em_mock_bash_and_python(tmp_path: Path) -> None:
+    """Test em mock command generating Bash and Python mock scripts."""
+    em_file = tmp_path / "valid_em.json"
+    em_file.write_text(SAMPLE_VALID_EM_JSON, encoding="utf-8")
+
+    # Test Bash format to stdout
+    res_bash = runner.invoke(app, ["em", "mock", str(em_file), "--format", "bash"])
+    assert res_bash.exit_code == 0
+    assert "#!/bin/bash" in res_bash.output
+    assert "busctl" in res_bash.output
+
+    # Test Python format to file
+    out_py = tmp_path / "mock.py"
+    res_py = runner.invoke(app, ["em", "mock", str(em_file), "-f", "python", "-o", str(out_py)])
+    assert res_py.exit_code == 0
+    assert out_py.exists()
+    py_content = out_py.read_text(encoding="utf-8")
+    assert "class " in py_content or "xyz.openbmc_project" in py_content
+
+    # Test invalid format
+    res_inv = runner.invoke(app, ["em", "mock", str(em_file), "-f", "yaml"])
+    assert res_inv.exit_code == 2
+
+    # Test non-existent file
+    res_missing = runner.invoke(app, ["em", "mock", "/non/existent/em.json"])
+    assert res_missing.exit_code == 1

@@ -21,6 +21,9 @@ from fw_diag_tool.board_profile import SchemaError, load_board_profile
 from fw_diag_tool.cli_extra import register_extra_commands
 from fw_diag_tool.codegen.c_header import CHeaderGenerator
 from fw_diag_tool.codegen.dts_gen import DeviceTreeGenerator
+from fw_diag_tool.em.bridge import EMBridge
+from fw_diag_tool.em.builder import EMBuilder
+from fw_diag_tool.em.mock_gen import EMMockGenerator
 from fw_diag_tool.em.validator import EMValidator
 from fw_diag_tool.i2c.engine import I2CDiagnosticEngine
 from fw_diag_tool.i2c.models import Severity
@@ -1999,6 +2002,123 @@ def validate_em(
         raise typer.Exit(code=1)
 
 
+
+
+
+@em_app.command("generate")
+def generate_em_or_dts(
+    profile_path: Path = typer.Argument(..., help="Path to Board Profile YAML/JSON file"),
+    bus: int | None = typer.Option(
+        None, "--bus", "-b", help="Target I2C bus number (generates for all buses if omitted)"
+    ),
+    output_format: str = typer.Option(
+        "json",
+        "--format",
+        "-f",
+        help="Output format: json (Entity-Manager), dts (Device Tree), or both",
+    ),
+    output_file: Path | None = typer.Option(
+        None, "--out", "-o", help="Write output to file instead of stdout"
+    ),
+) -> None:
+    """Generate OpenBMC Entity-Manager JSON and/or Linux Device Tree (.dts) from a Board Profile."""
+    if not profile_path.exists():
+        console.print(f"[bold red]Error: File {profile_path} not found![/]")
+        raise typer.Exit(code=1)
+
+    fmt = output_format.strip().lower()
+    if fmt not in ("json", "dts", "both"):
+        console.print(
+            f"[bold red]Error: Invalid format '{output_format}'. Must be json, dts, or both.[/]"
+        )
+        raise typer.Exit(code=2)
+
+    try:
+        profile = load_board_profile(profile_path)
+    except (OSError, UnicodeError, TypeError, ValueError, SchemaError) as exc:
+        console.print(f"[bold red]Error: Failed to load board profile: {exc}[/]")
+        raise typer.Exit(code=2) from exc
+
+    results: list[str] = []
+
+    if fmt in ("json", "both"):
+        try:
+            em_config = EMBridge.from_board_profile(profile, bus_num=bus)
+            em_json = EMBuilder.generate(em_config, indent=2)
+            results.append(em_json)
+        except ValueError as exc:
+            console.print(f"[bold red]Error generating Entity-Manager JSON: {exc}[/]")
+            raise typer.Exit(code=2) from exc
+
+    if fmt in ("dts", "both"):
+        try:
+            dts_content = EMBridge.to_dts(profile, bus_num=bus)
+            results.append(dts_content)
+        except ValueError as exc:
+            console.print(f"[bold red]Error generating Device Tree: {exc}[/]")
+            raise typer.Exit(code=2) from exc
+
+    output_text = chr(10).join(results)
+
+    if output_file:
+        try:
+            output_file.write_text(output_text + chr(10), encoding="utf-8")
+            console.print(f"[green]Output exported to {output_file}[/]")
+        except OSError as exc:
+            console.print(f"[bold red]Error: Failed to write output file: {exc}[/]")
+            raise typer.Exit(code=2) from exc
+    else:
+        console.print(
+            Panel(output_text, title=f"[bold cyan]Generated Output ({profile.board_name})[/]")
+        )
+
+
+@em_app.command("mock")
+def mock_em(
+    file_path: Path = typer.Argument(..., help="Path to Entity-Manager JSON configuration file"),
+    format_type: str = typer.Option(
+        "bash",
+        "--format",
+        "-f",
+        help="Output script format: bash or python (default: bash)",
+    ),
+    output: Path | None = typer.Option(
+        None, "--output", "-o", help="Write generated mock script to file instead of stdout"
+    ),
+) -> None:
+    """Generate a runnable Bash or Python D-Bus mock script from an Entity-Manager JSON."""
+    if not file_path.exists():
+        console.print(f"[bold red]Error: File {file_path} not found![/]")
+        raise typer.Exit(code=1)
+
+    fmt_normalized = format_type.strip().lower()
+    if fmt_normalized not in ("bash", "sh", "python", "py"):
+        console.print(
+            f"[bold red]Error: Unsupported format '{format_type}'. Supported: bash, python.[/]"
+        )
+        raise typer.Exit(code=2)
+
+    try:
+        em_content = file_path.read_text(encoding="utf-8")
+        config = EMMockGenerator.parse_em_json(em_content)
+    except Exception as exc:
+        console.print(f"[bold red]Error: Failed to parse Entity-Manager JSON: {exc}[/]")
+        raise typer.Exit(code=2) from exc
+
+    if fmt_normalized in ("bash", "sh"):
+        script_code = EMMockGenerator.generate_busctl_script(config)
+    else:
+        script_code = EMMockGenerator.generate_python_mock(config)
+
+    if output:
+        try:
+            output.write_text(script_code, encoding="utf-8")
+            console.print(f"[green]Mock script successfully written to {output}[/]")
+        except OSError as exc:
+            console.print(f"[bold red]Error: Failed to write output file: {exc}[/]")
+            raise typer.Exit(code=2) from exc
+    else:
+        print(script_code, end="")
 def main() -> None:
     app()
 
