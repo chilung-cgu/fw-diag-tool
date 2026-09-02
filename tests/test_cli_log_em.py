@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from fw_diag_tool.cli import app
@@ -445,3 +446,54 @@ def test_cli_em_mock_bash_and_python(tmp_path: Path) -> None:
     # Test non-existent file
     res_missing = runner.invoke(app, ["em", "mock", "/non/existent/em.json"])
     assert res_missing.exit_code == 1
+
+
+def test_cli_em_generate_single_format_rejects_directory(tmp_path: Path) -> None:
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE)
+    output_dir = tmp_path / "dir_out"
+    output_dir.mkdir()
+    result = runner.invoke(
+        app,
+        ["em", "generate", str(profile_file), "-f", "json", "-o", str(output_dir)],
+    )
+    assert result.exit_code == 2
+    assert "cannot be a directory" in result.output
+
+
+def test_cli_em_mock_rejects_directory(tmp_path: Path) -> None:
+    em_file = tmp_path / "valid_em.json"
+    em_file.write_text(SAMPLE_VALID_EM_JSON, encoding="utf-8")
+    output_dir = tmp_path / "mock_dir"
+    output_dir.mkdir()
+    result = runner.invoke(
+        app,
+        ["em", "mock", str(em_file), "-f", "bash", "-o", str(output_dir)],
+    )
+    assert result.exit_code == 2
+    assert "cannot be a directory" in result.output
+
+
+def test_cli_em_generate_both_atomic_failure_cleanup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE)
+    output_dir = tmp_path / "artifacts"
+    output_dir.mkdir()
+
+    import fw_diag_tool.cli as cli_mod
+    original_replace = cli_mod.os.replace
+    def faulty_replace(src: Path | str, dst: Path | str) -> None:
+        if "device-tree.dts" in str(dst):
+            raise OSError("Simulated disk failure on second artifact")
+        original_replace(src, dst)
+
+    monkeypatch.setattr(cli_mod.os, "replace", faulty_replace)
+
+    result = runner.invoke(
+        app,
+        ["em", "generate", str(profile_file), "-f", "both", "-o", str(output_dir)],
+    )
+    assert result.exit_code == 2
+    assert not (output_dir / "entity-manager.json").exists()
+    assert not (output_dir / "device-tree.dts").exists()
+    assert list(output_dir.glob(".*.tmp")) == []

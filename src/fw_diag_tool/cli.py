@@ -4,8 +4,10 @@ import hashlib
 import importlib
 import ipaddress
 import json
+import os
 import platform
 import sys
+import tempfile
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -2002,6 +2004,63 @@ def validate_em(
         raise typer.Exit(code=1)
 
 
+def _atomic_write_text(target: Path, content: str, *, encoding: str = "utf-8") -> None:
+    """Write text to target path atomically via a temporary file in the same directory."""
+    parent = target.resolve().parent
+    parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_path_str = tempfile.mkstemp(
+        prefix=f".{target.name}.", suffix=".tmp", dir=parent
+    )
+    tmp_path = Path(tmp_path_str)
+    try:
+        with open(fd, "w", encoding=encoding) as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, target)
+    except BaseException:
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _atomic_write_artifacts(
+    directory: Path, artifacts: dict[str, str], *, encoding: str = "utf-8"
+) -> None:
+    """Write multiple named artifacts to directory atomically so no partial artifact set is created on failure."""
+    tmp_files: list[tuple[str, Path]] = []
+    committed_targets: list[Path] = []
+    try:
+        for filename, content in artifacts.items():
+            fd, tmp_path_str = tempfile.mkstemp(
+                prefix=f".{filename}.", suffix=".tmp", dir=directory
+            )
+            tmp_path = Path(tmp_path_str)
+            tmp_files.append((filename, tmp_path))
+            with open(fd, "w", encoding=encoding) as f:
+                f.write(content)
+                f.flush()
+                os.fsync(f.fileno())
+        for filename, tmp_path in tmp_files:
+            target = directory / filename
+            os.replace(tmp_path, target)
+            committed_targets.append(target)
+    except BaseException:
+        for _, tmp_path in tmp_files:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+        for target in committed_targets:
+            try:
+                target.unlink()
+            except OSError:
+                pass
+        raise
+
+
 
 
 
@@ -2056,8 +2115,13 @@ def generate_em_or_dts(
             raise typer.Exit(code=2) from exc
 
         try:
-            (output_file / "entity-manager.json").write_text(em_json + "\n", encoding="utf-8")
-            (output_file / "device-tree.dts").write_text(dts_content.rstrip("\n") + "\n", encoding="utf-8")
+            _atomic_write_artifacts(
+                output_file,
+                {
+                    "entity-manager.json": em_json + "\n",
+                    "device-tree.dts": dts_content.rstrip("\n") + "\n",
+                },
+            )
             console.print(f"[green]Artifacts exported to {output_file}[/]")
         except OSError as exc:
             console.print(f"[bold red]Error: Failed to write output file: {exc}[/]")
@@ -2079,8 +2143,11 @@ def generate_em_or_dts(
             raise typer.Exit(code=2) from exc
 
     if output_file:
+        if output_file.is_dir():
+            console.print("[bold red]Error: --out cannot be a directory for single-format generation.[/]")
+            raise typer.Exit(code=2)
         try:
-            output_file.write_text(output_text.rstrip("\n") + "\n", encoding="utf-8")
+            _atomic_write_text(output_file, output_text.rstrip("\n") + "\n")
             console.print(f"[green]Output exported to {output_file}[/]")
         except OSError as exc:
             console.print(f"[bold red]Error: Failed to write output file: {exc}[/]")
@@ -2127,8 +2194,11 @@ def mock_em(
         script_code = EMMockGenerator.generate_python_mock(config)
 
     if output:
+        if output.is_dir():
+            console.print("[bold red]Error: --output cannot be a directory.[/]")
+            raise typer.Exit(code=2)
         try:
-            output.write_text(script_code, encoding="utf-8")
+            _atomic_write_text(output, script_code)
             console.print(f"[green]Mock script successfully written to {output}[/]")
         except OSError as exc:
             console.print(f"[bold red]Error: Failed to write output file: {exc}[/]")
