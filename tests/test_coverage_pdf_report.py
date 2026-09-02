@@ -4,7 +4,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from fpdf.errors import FPDFUnicodeEncodingException
 
 from fw_diag_tool.reporting.pdf_report import (
     _clean_markdown_text,
@@ -118,20 +117,19 @@ def test_build_pdf_report_fallback_font_only() -> None:
     fallback_candidate = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
     if not Path(fallback_candidate).is_file():
         pytest.skip("Unicode test font not present")
-    with (
-        patch(
-            "fw_diag_tool.reporting.pdf_report._find_cjk_font_paths",
-            return_value=(None, None, fallback_candidate),
-        ),
-        # Because font_family_name defaults to Helvetica when cjk_reg is None,
-        # fpdf raises encoding exception for the footer containing Chinese characters
-        pytest.raises((UnicodeEncodeError, FPDFUnicodeEncodingException)),
+    with patch(
+        "fw_diag_tool.reporting.pdf_report._find_cjk_font_paths",
+        return_value=(None, None, fallback_candidate),
     ):
-        build_pdf_report(
+        # With CJK text removed from footer/banner when no CJK font is present,
+        # the fallback Unicode font should produce a valid PDF without encoding errors.
+        pdf_bytes = build_pdf_report(
             title="Fallback Font Report",
             markdown_content="# Diagnostic Report\n\n- Status: PASS\n",
             timestamp="2026-08-30 12:00:00 UTC",
         )
+        assert isinstance(pdf_bytes, bytes)
+        assert pdf_bytes.startswith(b"%PDF-")
 
 
 def test_build_pdf_report_all_heading_levels() -> None:

@@ -149,10 +149,11 @@ if _FPDF_AVAILABLE:
             self.set_x(self.l_margin)
             self.set_font(self.font_family_name, size=8)
             self.set_text_color(148, 163, 184)
+            page_label = "頁碼" if self.font_family_name == "CustomCJK" else "Page"
             footer_text = (
-                f"fw-diag-tool v{self.tool_version_str}  •  "
-                f"{self.timestamp_str}  •  "
-                f"頁碼 {self.page_no()}/{{nb}}"
+                f"fw-diag-tool v{self.tool_version_str}  -  "
+                f"{self.timestamp_str}  -  "
+                f"{page_label} {self.page_no()}/{{nb}}"
             )
             self.cell(self.epw, 8, _sanitize_for_font(footer_text), align="C")
 
@@ -245,9 +246,14 @@ def build_pdf_report(
     pdf.set_text_color(71, 85, 105)  # Slate 600
 
     col_w = (pdf.epw - 6) / 3
-    pdf.cell(col_w, 5, _sanitize_for_font(f"診斷套件: fw-diag-tool v{version_str}"), align="L")
-    pdf.cell(col_w, 5, _sanitize_for_font(f"產生時間: {ts_str}"), align="L")
-    pdf.cell(col_w, 5, _sanitize_for_font("格式: Standalone PDF Report"), align="L")
+    if cjk_reg:
+        pdf.cell(col_w, 5, _sanitize_for_font(f"診斷套件: fw-diag-tool v{version_str}"), align="L")
+        pdf.cell(col_w, 5, _sanitize_for_font(f"產生時間: {ts_str}"), align="L")
+        pdf.cell(col_w, 5, _sanitize_for_font("格式: Standalone PDF Report"), align="L")
+    else:
+        pdf.cell(col_w, 5, _sanitize_for_font(f"fw-diag-tool v{version_str}"), align="L")
+        pdf.cell(col_w, 5, _sanitize_for_font(f"Generated: {ts_str}"), align="L")
+        pdf.cell(col_w, 5, _sanitize_for_font("Format: Standalone PDF Report"), align="L")
     pdf.ln(5)
 
     if metadata:
