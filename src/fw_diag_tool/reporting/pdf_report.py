@@ -44,6 +44,7 @@ _CJK_REGULAR_CANDIDATES = [
     "/Library/Fonts/Arial Unicode.ttf",
     "/System/Library/Fonts/STHeiti Light.ttc",
     "/System/Library/Fonts/Supplemental/Songti.ttc",
+    str(Path.home() / "Library/Fonts/NotoSansCJKtc-Regular.otf"),
     # Windows standard paths
     "C:/Windows/Fonts/msjh.ttc",
     "C:/Windows/Fonts/mingliu.ttc",
@@ -54,6 +55,7 @@ _CJK_REGULAR_CANDIDATES = [
 _CJK_BOLD_CANDIDATES = [
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
     "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+    str(Path.home() / "Library/Fonts/NotoSansCJKtc-Bold.otf"),
     "C:/Windows/Fonts/msjhbd.ttc",
 ]
 
