@@ -2029,9 +2029,10 @@ def _atomic_write_text(target: Path, content: str, *, encoding: str = "utf-8") -
 def _atomic_write_artifacts(
     directory: Path, artifacts: dict[str, str], *, encoding: str = "utf-8"
 ) -> None:
-    """Write multiple named artifacts to directory atomically so no partial artifact set is created on failure."""
+    """Write multiple named artifacts to directory atomically with rollback preservation on failure."""
     tmp_files: list[tuple[str, Path]] = []
-    committed_targets: list[Path] = []
+    committed: list[tuple[Path, Path | None, bool]] = []
+    backups: list[Path] = []
     try:
         for filename, content in artifacts.items():
             fd, tmp_path_str = tempfile.mkstemp(
@@ -2045,20 +2046,44 @@ def _atomic_write_artifacts(
                 os.fsync(f.fileno())
         for filename, tmp_path in tmp_files:
             target = directory / filename
+            existed = target.exists() or target.is_symlink()
+            backup_path: Path | None = None
+            if existed:
+                fd_b, b_path_str = tempfile.mkstemp(
+                    prefix=f".{filename}.orig.", suffix=".tmp", dir=directory
+                )
+                os.close(fd_b)
+                backup_path = Path(b_path_str)
+                backups.append(backup_path)
+                os.replace(target, backup_path)
             os.replace(tmp_path, target)
-            committed_targets.append(target)
+            committed.append((target, backup_path, existed))
     except BaseException:
         for _, tmp_path in tmp_files:
             try:
-                tmp_path.unlink()
+                tmp_path.unlink(missing_ok=True)
             except OSError:
                 pass
-        for target in committed_targets:
+        for target, backup_path, existed in reversed(committed):
             try:
-                target.unlink()
+                if existed and backup_path is not None and backup_path.exists():
+                    os.replace(backup_path, target)
+                else:
+                    target.unlink(missing_ok=True)
+            except OSError:
+                pass
+        for b_path in backups:
+            try:
+                b_path.unlink(missing_ok=True)
             except OSError:
                 pass
         raise
+    else:
+        for b_path in backups:
+            try:
+                b_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 

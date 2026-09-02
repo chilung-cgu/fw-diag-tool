@@ -497,3 +497,33 @@ def test_cli_em_generate_both_atomic_failure_cleanup(tmp_path: Path, monkeypatch
     assert not (output_dir / "entity-manager.json").exists()
     assert not (output_dir / "device-tree.dts").exists()
     assert list(output_dir.glob(".*.tmp")) == []
+
+
+def test_cli_em_generate_both_preserves_preexisting_files_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE)
+    output_dir = tmp_path / "artifacts"
+    output_dir.mkdir()
+
+    orig_em = output_dir / "entity-manager.json"
+    orig_em.write_text('{"Name": "ORIGINAL_EM"}\n', encoding="utf-8")
+    orig_dts = output_dir / "device-tree.dts"
+    orig_dts.write_text('// ORIGINAL DTS\n', encoding="utf-8")
+
+    import fw_diag_tool.cli as cli_mod
+    original_replace = cli_mod.os.replace
+    def faulty_replace(src: Path | str, dst: Path | str) -> None:
+        if "device-tree.dts" in str(dst) and not str(src).endswith(".orig."):
+            raise OSError("Simulated disk failure on second artifact")
+        original_replace(src, dst)
+
+    monkeypatch.setattr(cli_mod.os, "replace", faulty_replace)
+
+    result = runner.invoke(
+        app,
+        ["em", "generate", str(profile_file), "-f", "both", "-o", str(output_dir)],
+    )
+    assert result.exit_code == 2
+    assert orig_em.read_text(encoding="utf-8") == '{"Name": "ORIGINAL_EM"}\n'
+    assert orig_dts.read_text(encoding="utf-8") == '// ORIGINAL DTS\n'
+    assert list(output_dir.glob(".*.tmp")) == []
