@@ -399,6 +399,19 @@ def _render_validate_mode() -> None:
                         st.markdown(f"- **建議修復行動 (Suggestion)**: {issue.suggestion}")
 
 
+def _mock_generation_key(
+    board_name: str,
+    probe_expression: str,
+    format_name: str,
+    devices: list[EMDeviceEntry],
+) -> tuple[object, ...]:
+    device_key = tuple(
+        (dev.name, dev.template.em_type, dev.bus, dev.address, dev.power_state)
+        for dev in devices
+    )
+    return (board_name, probe_expression, format_name, device_key)
+
+
 def _render_mock_mode() -> None:
     """Render Entity-Manager to D-Bus Mock Script Generator mode."""
     devices_list: list[EMDeviceEntry] = st.session_state.get("em_devices_list", [])
@@ -437,27 +450,38 @@ def _render_mock_mode() -> None:
         st.write("")
         gen_clicked = st.button(t("em_mock_generate", domain="gui"), key="em_btn_gen_mock")
 
+    board_name = st.session_state.get("em_board_name_input", "Yosemite_V4_Mainboard")
+    probe_expr = st.session_state.get("em_probe_input", "TRUE")
+    format_name = "bash" if "Bash" in str(format_choice) else "python"
+    current_key = _mock_generation_key(board_name, probe_expr, format_name, devices_list)
+
     if gen_clicked:
-        board_name = st.session_state.get("em_board_name_input", "Yosemite_V4_Mainboard")
-        probe_expr = st.session_state.get("em_probe_input", "TRUE")
         config = EMBoardConfig(
             board_name=board_name.strip() or "Yosemite_V4_Mainboard",
             devices=list(devices_list),
             probe_expression=probe_expr.strip() or "TRUE",
         )
 
-        if "Bash" in str(format_choice):
+        if format_name == "bash":
             script_code = EMMockGenerator.generate_busctl_script(config)
-            st.session_state["em_mock_script"] = script_code
         else:
             script_code = EMMockGenerator.generate_python_mock(config)
-            st.session_state["em_mock_script"] = script_code
 
-    if st.session_state.get("em_mock_script"):
+        st.session_state["em_mock_artifact"] = {
+            "key": current_key,
+            "content": script_code,
+            "format": format_name,
+        }
+
+    artifact = st.session_state.get("em_mock_artifact")
+    if artifact is not None and artifact["key"] != current_key:
+        st.session_state.pop("em_mock_artifact", None)
+        artifact = None
+
+    if artifact is not None:
         st.subheader("產出的 D-Bus Mock 腳本")
-        script_content = st.session_state["em_mock_script"]
-        format_choice_val = st.session_state.get("em_mock_fmt_select", "Bash")
-        is_bash = "Bash" in str(format_choice_val)
+        script_content = artifact["content"]
+        is_bash = artifact["format"] == "bash"
         lang = "bash" if is_bash else "python"
         filename = "mock_sensors.sh" if is_bash else "mock_sensors.py"
         mime_type = "text/x-sh" if is_bash else "text/x-python"

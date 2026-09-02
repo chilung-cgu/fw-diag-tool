@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from streamlit.testing.v1 import AppTest
 
+from fw_diag_tool.em.models import EMDeviceEntry
 from fw_diag_tool.gui.pages import em_builder_ui
 from fw_diag_tool.gui.pages.em_builder_ui import (
     _get_default_sample_devices,
+    _mock_generation_key,
     _parse_address,
     render,
 )
@@ -340,3 +342,34 @@ def test_apptest_em_mock_mode_generate_bash_and_python() -> None:
     assert len(at.code) >= 1
     assert any("busctl" in c.value or "xyz.openbmc_project" in c.value for c in at.code)
     assert len(at.download_button) >= 1
+
+
+def test_mock_generation_key_changes_with_format_and_devices() -> None:
+    devices = list(_get_default_sample_devices())
+    bash_key = _mock_generation_key("Board", "TRUE", "bash", devices)
+    python_key = _mock_generation_key("Board", "TRUE", "python", devices)
+    changed_devices = list(devices)
+    changed_devices[0] = EMDeviceEntry(
+        template=devices[0].template,
+        bus=devices[0].bus,
+        address=devices[0].address,
+        name="Changed_Name",
+    )
+    assert bash_key != python_key
+    assert bash_key != _mock_generation_key("Board", "TRUE", "bash", changed_devices)
+
+
+def test_apptest_em_mock_format_change_invalidates_generated_artifact() -> None:
+    at = AppTest.from_function(_mock_mode_with_devices_app, default_timeout=15).run()
+    generate = next(button for button in at.button if "產生 D-Bus Mock" in button.label)
+    generate.click().run()
+    assert any(code.language == "bash" for code in at.code)
+
+    format_radio = next(
+        radio for radio in at.radio
+        if "輸出格式" in radio.label or "Python daemon" in getattr(radio, "options", [])
+    )
+    format_radio.set_value("Python daemon").run()
+
+    assert not at.code
+    assert not at.download_button
