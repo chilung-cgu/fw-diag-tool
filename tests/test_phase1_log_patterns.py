@@ -1,6 +1,8 @@
 """Tests for Phase 1: expanded OpenBMC log patterns."""
 from __future__ import annotations
 
+import pytest
+
 from fw_diag_tool.log.models import Subsystem
 from fw_diag_tool.log.parser import LogParser
 
@@ -96,6 +98,22 @@ def test_pattern_nfsroot_mount_fail() -> None:
     report = LogParser.parse_log_text(log)
     assert report.summary.total_events == 1
     assert report.events[0].pattern_id == "NFSROOT_MOUNT_FAIL"
+
+
+@pytest.mark.parametrize(
+    "log",
+    [
+        "Sep 02 01:00:00 bmc ipmid[200]: Host command timeout configured to 30 seconds",
+        "Sep 02 01:00:01 bmc systemd[1]: demo.service: Main process exited, code=exited, status=0/SUCCESS",
+        "Sep 02 02:00:00 bmc systemd-journald[50]: Vacuuming done, freed 16.0M of archived journals",
+        "Sep 02 02:00:01 bmc systemd-journald[50]: Suppressed 12 messages from demo.service",
+        "[ 600.0] mmcblk0: retrying command after retune",
+        "[ 700.0] NFS: sending mount request for 192.0.2.10:/srv/root",
+    ],
+)
+def test_expanded_patterns_ignore_normal_status_lines(log: str) -> None:
+    report = LogParser.parse_log_text(log)
+    assert report.summary.total_events == 0
 
 
 def test_incident_hypothesis_oom() -> None:
