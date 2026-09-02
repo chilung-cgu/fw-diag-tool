@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+
 from streamlit.testing.v1 import AppTest
 
 from fw_diag_tool.em.models import EMDeviceEntry, EMDeviceTemplate
@@ -558,6 +562,89 @@ def test_mock_generation_key_template_fields_and_nested_custom_fields() -> None:
     )
     assert _mock_generation_key("", "", "bash", dev_base) == k_default
     assert _mock_generation_key("   ", "   ", "bash", dev_base) == k_default
+
+
+def test_mock_generation_key_deterministic_set_and_frozenset_order() -> None:
+    tmpl = EMDeviceTemplate(
+        category="Temperature",
+        chip_name="TMP75",
+        em_type="TMP75",
+        optional_fields={"Tags": {"b", "a", "c"}, "Modes": frozenset([3, 1, 2])},
+    )
+    dev = [EMDeviceEntry(template=tmpl, bus=1, address=0x48, name="Temp")]
+
+    key1 = _mock_generation_key("Board", "TRUE", "bash", dev)
+    assert hash(key1) is not None
+
+    tmpl_reordered = EMDeviceTemplate(
+        category="Temperature",
+        chip_name="TMP75",
+        em_type="TMP75",
+        optional_fields={"Tags": {"c", "b", "a"}, "Modes": frozenset([1, 2, 3])},
+    )
+    dev_reordered = [EMDeviceEntry(template=tmpl_reordered, bus=1, address=0x48, name="Temp")]
+    key2 = _mock_generation_key("Board", "TRUE", "bash", dev_reordered)
+
+    assert key1 == key2
+    assert hash(key1) == hash(key2)
+
+
+def test_mock_generation_key_nested_bytearray_and_set_in_custom_fields() -> None:
+    tmpl = EMDeviceTemplate(category="Temperature", chip_name="TMP75", em_type="TMP75")
+    dev1 = [
+        EMDeviceEntry(
+            template=tmpl,
+            bus=1,
+            address=0x48,
+            name="Temp",
+            custom_fields={"raw": bytearray(b"\x01\x02"), "flags": {"debug", "active"}},
+        )
+    ]
+    dev2 = [
+        EMDeviceEntry(
+            template=tmpl,
+            bus=1,
+            address=0x48,
+            name="Temp",
+            custom_fields={"raw": bytearray(b"\x01\x03"), "flags": {"debug", "active"}},
+        )
+    ]
+
+    k1 = _mock_generation_key("Board", "TRUE", "bash", dev1)
+    k2 = _mock_generation_key("Board", "TRUE", "bash", dev2)
+
+    assert hash(k1) is not None
+    assert hash(k2) is not None
+    assert k1 != k2
+
+
+def test_mock_generation_key_hashseed_invariance_subprocess() -> None:
+    code = (
+        "from fw_diag_tool.em.models import EMDeviceTemplate, EMDeviceEntry\n"
+        "from fw_diag_tool.gui.pages.em_builder_ui import _mock_generation_key\n"
+        "tmpl = EMDeviceTemplate(\n"
+        "    category='Temp',\n"
+        "    chip_name='TMP75',\n"
+        "    em_type='TMP75',\n"
+        "    optional_fields={'Tags': {'zeta', 'alpha', 'beta', 'gamma'}},\n"
+        ")\n"
+        "dev = [EMDeviceEntry(template=tmpl, bus=1, address=0x48, name='T')]\n"
+        "key = _mock_generation_key('Board', 'TRUE', 'bash', dev)\n"
+        "print(repr(key))\n"
+    )
+    outputs: set[str] = set()
+    seeds = ["0", "1", "42", "1337", "999999", "random"]
+    for seed in seeds:
+        env = dict(os.environ, PYTHONHASHSEED=seed)
+        res = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            check=True,
+            env=env,
+        )
+        outputs.add(res.stdout.strip())
+    assert len(outputs) == 1
 
 
 def test_apptest_em_mock_invalidates_malformed_session_state() -> None:

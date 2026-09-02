@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import pandas as pd
@@ -402,11 +403,20 @@ def _render_validate_mode() -> None:
 
 
 def _freeze_value(val: Any) -> Any:
-    if isinstance(val, dict):
+    if isinstance(val, (bytes, bytearray, memoryview)):
+        return bytes(val)
+    if isinstance(val, Mapping):
         return tuple(sorted((str(k), _freeze_value(v)) for k, v in val.items()))
-    if isinstance(val, (list, tuple, set)):
+    if isinstance(val, (set, frozenset)):
+        frozen_items = [_freeze_value(v) for v in val]
+        return tuple(sorted(frozen_items, key=lambda x: (type(x).__qualname__, repr(x))))
+    if isinstance(val, (list, tuple)):
         return tuple(_freeze_value(v) for v in val)
-    return val
+    try:
+        hash(val)
+        return val
+    except TypeError:
+        return repr(val)
 
 
 def _mock_generation_key(
