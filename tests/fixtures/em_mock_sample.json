@@ -1,0 +1,18 @@
+{
+  "Exposes": [
+    {
+      "Address": "0x48",
+      "Bus": 1,
+      "Name": "Inlet_Temp",
+      "Type": "TMP75"
+    },
+    {
+      "Address": "0x50",
+      "Bus": 1,
+      "Name": "Baseboard_FRU",
+      "Type": "EEPROM"
+    }
+  ],
+  "Name": "Mock_Test_Board",
+  "Probe": "TRUE"
+}

@@ -130,6 +130,12 @@ uv run fw-diag em validate board_config.json --json validation_result.json
 
 ---
 
+## D-Bus Mock 產生器
+
+產生的 Mock 是長時間執行的 D-Bus service，不是一次性的 `busctl set-property` 指令。它會取得 `xyz.openbmc_project.FWDiagMock` bus name 並 export sensor/inventory objects；執行環境必須安裝 `dbus-next`，且 D-Bus policy 必須允許該 process 連線、取得名稱與匯出物件。任一動作失敗時程式會以非零狀態結束，不會顯示假成功。
+
+---
+
 ## 實體硬體安全與驗證限制
 
 Entity-Manager Builder 與 Validator 是提升組態正確性與開發效率的強大工具，但在真實硬體部署前，工程師仍需理解以下邊界：
@@ -140,4 +146,3 @@ Entity-Manager Builder 與 Validator 是提升組態正確性與開發效率的�
   1. `busctl tree xyz.openbmc_project.EntityManager`：確認 EM 成功識別該板卡。
   2. `busctl tree xyz.openbmc_project.HwmonTempSensor` 或 `busctl introspect`：確認各 Sensor Object 正常建立且 `Value` 屬性有正確讀值。
   3. `ipmitool sdr list`：確認 IPMI SDR 能正確回報所有感測器狀態，無 `ns` (Not Sensed) 異常。
-

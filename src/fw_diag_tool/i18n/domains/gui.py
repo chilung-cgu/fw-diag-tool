@@ -961,11 +961,11 @@ GUI_TRANSLATIONS: dict[str, dict[str, str]] = {
        "zh-TW": "✅ Entity-Manager 組態校驗通過！結構與硬體位址無任何異常。",
        "en-US": "✅ Entity-Manager configuration passed validation! No structural or address anomalies detected.",
    },
-    "em_mock_format": {
-        "zh-TW": "輸出腳本格式",
-        "en-US": "Mock Script Format",
-    },
-    "em_mock_generate": {
+   "em_mock_format": {
+        "zh-TW": "輸出格式：Bash launcher 或 Python daemon",
+        "en-US": "Output format: Bash launcher or Python daemon",
+   },
+   "em_mock_generate": {
         "zh-TW": "✨ 產生 D-Bus Mock 腳本",
         "en-US": "✨ Generate D-Bus Mock Script",
     },

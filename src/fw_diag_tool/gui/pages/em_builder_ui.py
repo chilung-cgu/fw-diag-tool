@@ -428,7 +428,7 @@ def _render_mock_mode() -> None:
     with col_fmt:
         format_choice = st.radio(
             t("em_mock_format", domain="gui"),
-            ["Bash (busctl)", "Python (standalone)"],
+            ["Bash launcher", "Python daemon"],
             horizontal=True,
             key="em_mock_fmt_select",
         )

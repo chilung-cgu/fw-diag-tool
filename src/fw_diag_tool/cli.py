@@ -2080,7 +2080,7 @@ def mock_em(
         "bash",
         "--format",
         "-f",
-        help="Output script format: bash or python (default: bash)",
+        help="Output format: bash launcher or python daemon (default: bash)",
     ),
     output: Path | None = typer.Option(
         None, "--output", "-o", help="Write generated mock script to file instead of stdout"

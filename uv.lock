@@ -410,6 +410,15 @@ toml = [
 ]
 
 [[package]]
+name = "dbus-next"
+version = "0.2.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ce/45/6a40fbe886d60a8c26f480e7d12535502b5ba123814b3b9a0b002ebca198/dbus_next-0.2.3.tar.gz", hash = "sha256:f4eae26909332ada528c0a3549dda8d4f088f9b365153952a408e28023a626a5", size = 71112, upload-time = "2021-07-25T22:11:28.398Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d2/fc/c0a3f4c4eaa5a22fbef91713474666e13d0ea2a69c84532579490a9f2cc8/dbus_next-0.2.3-py3-none-any.whl", hash = "sha256:58948f9aff9db08316734c0be2a120f6dc502124d9642f55e90ac82ffb16a18b", size = 57885, upload-time = "2021-07-25T22:11:25.466Z" },
+]
+
+[[package]]
 name = "defusedxml"
 version = "0.7.1"
 source = { registry = "https://pypi.org/simple" }
@@ -506,6 +515,7 @@ name = "fw-diag-tool"
 version = "2.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "dbus-next" },
     { name = "pandas", version = "2.3.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "pandas", version = "3.0.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "plotly" },
@@ -532,6 +542,7 @@ pdf = [
 
 [package.metadata]
 requires-dist = [
+    { name = "dbus-next", specifier = ">=0.2.3,<1.0.0" },
     { name = "fpdf2", marker = "extra == 'pdf'", specifier = ">=2.7.0" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100.0,<7.0.0" },
     { name = "mkdocs", marker = "extra == 'dev'", specifier = ">=1.6.1,<2.0.0" },

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -80,6 +82,7 @@ def test_generate_busctl_script(sample_board_config: EMBoardConfig) -> None:
     script = EMMockGenerator.generate_busctl_script(sample_board_config)
     assert script.startswith("#!/bin/bash")
     assert "set -euo pipefail" in script
+    assert "<<'PYTHON_MOCK'" in script
     assert "Yosemite_V4_MB" in script
     assert "/xyz/openbmc_project/sensors/temperature/Inlet_Temp" in script
     assert "xyz.openbmc_project.Sensor.Value.Unit.DegreesC" in script
@@ -95,13 +98,13 @@ def test_generate_busctl_script(sample_board_config: EMBoardConfig) -> None:
     assert "xyz.openbmc_project.Sensor.Value.Unit.Volts" in script
     assert "3.3" in script
     assert "/xyz/openbmc_project/inventory/system/board/Baseboard_FRU" in script
-    assert "xyz.openbmc_project.ObjectMapper" in script
+    assert "PYTHON_MOCK" in script
 
 
 def test_generate_python_mock(sample_board_config: EMBoardConfig) -> None:
     script = EMMockGenerator.generate_python_mock(sample_board_config)
     assert script.startswith("#!/usr/bin/env python3")
-    assert "import subprocess" in script
+    assert "from dbus_next.aio import MessageBus" in script
     assert 'if __name__ == "__main__":' in script
     assert "Yosemite_V4_MB" in script
     assert "/xyz/openbmc_project/sensors/temperature/Inlet_Temp" in script
@@ -192,3 +195,43 @@ def test_mock_mapping_handles_case_collision_on_case_insensitive_comparisons() -
     ])
     paths = [obj["path"] for obj in EMMockGenerator._build_mock_objects(config)]
     assert len(paths) == len(set(paths)) == 2
+
+
+@pytest.mark.parametrize("board_name", ['Board"\\\nraise RuntimeError("INJECTED")#', "Board'''evil"])
+def test_generated_python_is_valid_and_treats_board_name_as_data(board_name: str) -> None:
+    config = EMBoardConfig(board_name=board_name, devices=[])
+    script = EMMockGenerator.generate_python_mock(config)
+    compile(script, "<generated-mock>", "exec")
+    assert "BOARD_NAME = " + repr(board_name) in script
+
+
+def test_generated_python_uses_python_booleans_not_json_tokens(
+    sample_board_config: EMBoardConfig,
+) -> None:
+    script = EMMockGenerator.generate_python_mock(sample_board_config)
+    compile(script, "<generated-mock>", "exec")
+    assert "'is_sensor': True" in script
+    assert '"is_sensor": true' not in script
+
+
+def test_generated_bash_does_not_execute_device_text(
+    sample_board_config: EMBoardConfig,
+    tmp_path: Path,
+) -> None:
+    sample_board_config.devices[0].name = 'FRU"; echo INJECTED; #'
+    script_path = tmp_path / "mock.sh"
+    script_path.write_text(EMMockGenerator.generate_busctl_script(sample_board_config))
+    result = subprocess.run(["bash", "-n", str(script_path)], capture_output=True, text=True, check=False)
+    assert result.returncode == 0
+    assert "<<'PYTHON_MOCK'" in script_path.read_text()
+
+
+def test_generated_python_owns_name_and_exports_objects(
+    sample_board_config: EMBoardConfig,
+) -> None:
+    script = EMMockGenerator.generate_python_mock(sample_board_config)
+    assert "await bus.request_name(MOCK_SERVICE)" in script
+    assert "bus.export(obj['path'], interface)" in script
+    assert "ServiceInterface" in script
+    assert "busctl set-property" not in script
+    assert "|| true" not in script

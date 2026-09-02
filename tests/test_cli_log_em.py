@@ -395,7 +395,7 @@ def test_cli_em_mock_bash_and_python(tmp_path: Path) -> None:
     res_bash = runner.invoke(app, ["em", "mock", str(em_file), "--format", "bash"])
     assert res_bash.exit_code == 0
     assert "#!/bin/bash" in res_bash.output
-    assert "busctl" in res_bash.output
+    assert "PYTHON_MOCK" in res_bash.output
 
     # Test Python format to file
     out_py = tmp_path / "mock.py"
