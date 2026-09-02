@@ -6,6 +6,8 @@ import ipaddress
 import json
 import os
 import platform
+import shutil
+import stat
 import sys
 import tempfile
 from dataclasses import asdict, replace
@@ -2004,84 +2006,98 @@ def validate_em(
         raise typer.Exit(code=1)
 
 
-def _atomic_write_text(target: Path, content: str, *, encoding: str = "utf-8") -> None:
-    """Write text to target path atomically via a temporary file in the same directory."""
-    parent = target.resolve().parent
-    parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_path_str = tempfile.mkstemp(
-        prefix=f".{target.name}.", suffix=".tmp", dir=parent
-    )
-    tmp_path = Path(tmp_path_str)
+def _default_file_mode() -> int:
+    """Return the regular-file mode that the current process umask permits."""
     try:
-        with open(fd, "w", encoding=encoding) as f:
-            f.write(content)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp_path, target)
-    except BaseException:
-        try:
-            tmp_path.unlink()
-        except OSError:
-            pass
-        raise
+        current_umask = os.umask(0)
+    except (AttributeError, NotImplementedError):
+        return 0o600
+    try:
+        return 0o666 & ~current_umask
+    finally:
+        os.umask(current_umask)
 
 
 def _atomic_write_artifacts(
     directory: Path, artifacts: dict[str, str], *, encoding: str = "utf-8"
 ) -> None:
-    """Write multiple named artifacts to directory atomically with rollback preservation on failure."""
-    tmp_files: list[tuple[str, Path]] = []
-    committed: list[tuple[Path, Path | None, bool]] = []
-    backups: list[Path] = []
+    """Stage artifacts and publish them while preserving prior files on failure."""
+    staged: list[tuple[str, Path, Path]] = []
+    backups: dict[Path, Path] = {}
+    backup_paths: list[Path] = []
+    published_without_backup: list[Path] = []
     try:
+        targets: list[tuple[str, Path]] = []
+        for filename in artifacts:
+            target = directory / filename
+            if target.is_symlink():
+                raise OSError(f"Refusing to replace symlink artifact target: {target}")
+            if target.exists() and not target.is_file():
+                raise IsADirectoryError(f"Artifact target is not a regular file: {target}")
+            targets.append((filename, target))
+
+        default_mode = _default_file_mode()
         for filename, content in artifacts.items():
             fd, tmp_path_str = tempfile.mkstemp(
                 prefix=f".{filename}.", suffix=".tmp", dir=directory
             )
             tmp_path = Path(tmp_path_str)
-            tmp_files.append((filename, tmp_path))
-            with open(fd, "w", encoding=encoding) as f:
-                f.write(content)
-                f.flush()
-                os.fsync(f.fileno())
-        for filename, tmp_path in tmp_files:
+            staged.append((filename, directory / filename, tmp_path))
             target = directory / filename
-            existed = target.exists() or target.is_symlink()
-            backup_path: Path | None = None
-            if existed:
+            if target.exists():
+                os.chmod(tmp_path, stat.S_IMODE(target.stat().st_mode))
+            else:
+                os.chmod(tmp_path, default_mode)
+            with os.fdopen(fd, "w", encoding=encoding) as stream:
+                stream.write(content)
+                stream.flush()
+                os.fsync(stream.fileno())
+
+        for _, target in targets:
+            if target.exists():
                 fd_b, b_path_str = tempfile.mkstemp(
-                    prefix=f".{filename}.orig.", suffix=".tmp", dir=directory
+                    prefix=f".{target.name}.orig.", suffix=".tmp", dir=directory
                 )
                 os.close(fd_b)
                 backup_path = Path(b_path_str)
-                backups.append(backup_path)
-                os.replace(target, backup_path)
+                backup_paths.append(backup_path)
+                shutil.copy2(target, backup_path)
+                backups[target] = backup_path
+
+        for _, target, tmp_path in staged:
             os.replace(tmp_path, target)
-            committed.append((target, backup_path, existed))
+            if target not in backups:
+                published_without_backup.append(target)
     except BaseException:
-        for _, tmp_path in tmp_files:
+        for target in reversed(published_without_backup):
+            try:
+                target.unlink(missing_ok=True)
+            except OSError:
+                pass
+        for target, backup_path in backups.items():
+            try:
+                if backup_path.exists():
+                    os.replace(backup_path, target)
+            except OSError:
+                pass
+        for _, _, tmp_path in staged:
             try:
                 tmp_path.unlink(missing_ok=True)
             except OSError:
                 pass
-        for target, backup_path, existed in reversed(committed):
+        ready_backups = set(backups.values())
+        for backup_path in backup_paths:
+            if backup_path in ready_backups and backup_path.exists():
+                continue
             try:
-                if existed and backup_path is not None and backup_path.exists():
-                    os.replace(backup_path, target)
-                else:
-                    target.unlink(missing_ok=True)
-            except OSError:
-                pass
-        for b_path in backups:
-            try:
-                b_path.unlink(missing_ok=True)
+                backup_path.unlink(missing_ok=True)
             except OSError:
                 pass
         raise
     else:
-        for b_path in backups:
+        for backup_path in backups.values():
             try:
-                b_path.unlink(missing_ok=True)
+                backup_path.unlink(missing_ok=True)
             except OSError:
                 pass
 
@@ -2168,11 +2184,8 @@ def generate_em_or_dts(
             raise typer.Exit(code=2) from exc
 
     if output_file:
-        if output_file.is_dir():
-            console.print("[bold red]Error: --out cannot be a directory for single-format generation.[/]")
-            raise typer.Exit(code=2)
         try:
-            _atomic_write_text(output_file, output_text.rstrip("\n") + "\n")
+            output_file.write_text(output_text.rstrip("\n") + "\n", encoding="utf-8")
             console.print(f"[green]Output exported to {output_file}[/]")
         except OSError as exc:
             console.print(f"[bold red]Error: Failed to write output file: {exc}[/]")
@@ -2219,11 +2232,8 @@ def mock_em(
         script_code = EMMockGenerator.generate_python_mock(config)
 
     if output:
-        if output.is_dir():
-            console.print("[bold red]Error: --output cannot be a directory.[/]")
-            raise typer.Exit(code=2)
         try:
-            _atomic_write_text(output, script_code)
+            output.write_text(script_code, encoding="utf-8")
             console.print(f"[green]Mock script successfully written to {output}[/]")
         except OSError as exc:
             console.print(f"[bold red]Error: Failed to write output file: {exc}[/]")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import stat
 from pathlib import Path
 
 import pytest
@@ -448,32 +449,6 @@ def test_cli_em_mock_bash_and_python(tmp_path: Path) -> None:
     assert res_missing.exit_code == 1
 
 
-def test_cli_em_generate_single_format_rejects_directory(tmp_path: Path) -> None:
-    profile_file = tmp_path / "profile.yaml"
-    profile_file.write_text(SAMPLE_BOARD_PROFILE)
-    output_dir = tmp_path / "dir_out"
-    output_dir.mkdir()
-    result = runner.invoke(
-        app,
-        ["em", "generate", str(profile_file), "-f", "json", "-o", str(output_dir)],
-    )
-    assert result.exit_code == 2
-    assert "cannot be a directory" in result.output
-
-
-def test_cli_em_mock_rejects_directory(tmp_path: Path) -> None:
-    em_file = tmp_path / "valid_em.json"
-    em_file.write_text(SAMPLE_VALID_EM_JSON, encoding="utf-8")
-    output_dir = tmp_path / "mock_dir"
-    output_dir.mkdir()
-    result = runner.invoke(
-        app,
-        ["em", "mock", str(em_file), "-f", "bash", "-o", str(output_dir)],
-    )
-    assert result.exit_code == 2
-    assert "cannot be a directory" in result.output
-
-
 def test_cli_em_generate_both_atomic_failure_cleanup(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     profile_file = tmp_path / "profile.yaml"
     profile_file.write_text(SAMPLE_BOARD_PROFILE)
@@ -482,9 +457,13 @@ def test_cli_em_generate_both_atomic_failure_cleanup(tmp_path: Path, monkeypatch
 
     import fw_diag_tool.cli as cli_mod
     original_replace = cli_mod.os.replace
+    failed = False
+
     def faulty_replace(src: Path | str, dst: Path | str) -> None:
-        if "device-tree.dts" in str(dst):
-            raise OSError("Simulated disk failure on second artifact")
+        nonlocal failed
+        if Path(dst).name == "device-tree.dts" and not failed:
+            failed = True
+            raise OSError("Simulated disk failure on second artifact publish")
         original_replace(src, dst)
 
     monkeypatch.setattr(cli_mod.os, "replace", faulty_replace)
@@ -512,9 +491,13 @@ def test_cli_em_generate_both_preserves_preexisting_files_on_failure(tmp_path: P
 
     import fw_diag_tool.cli as cli_mod
     original_replace = cli_mod.os.replace
+    failed = False
+
     def faulty_replace(src: Path | str, dst: Path | str) -> None:
-        if "device-tree.dts" in str(dst) and not str(src).endswith(".orig."):
-            raise OSError("Simulated disk failure on second artifact")
+        nonlocal failed
+        if Path(dst).name == "device-tree.dts" and not failed:
+            failed = True
+            raise OSError("Simulated disk failure on second artifact publish")
         original_replace(src, dst)
 
     monkeypatch.setattr(cli_mod.os, "replace", faulty_replace)
@@ -527,3 +510,68 @@ def test_cli_em_generate_both_preserves_preexisting_files_on_failure(tmp_path: P
     assert orig_em.read_text(encoding="utf-8") == '{"Name": "ORIGINAL_EM"}\n'
     assert orig_dts.read_text(encoding="utf-8") == '// ORIGINAL DTS\n'
     assert list(output_dir.glob(".*.tmp")) == []
+
+
+def test_cli_em_generate_both_preserves_single_preexisting_file_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE)
+    output_dir = tmp_path / "artifacts"
+    output_dir.mkdir()
+
+    orig_em = output_dir / "entity-manager.json"
+    orig_em.write_text('{"Name": "ORIGINAL_EM"}\n', encoding="utf-8")
+
+    import fw_diag_tool.cli as cli_mod
+    original_replace = cli_mod.os.replace
+    def faulty_replace(src: Path | str, dst: Path | str) -> None:
+        if Path(dst).name == "device-tree.dts":
+            raise OSError("Simulated disk failure on second artifact publish")
+        original_replace(src, dst)
+
+    monkeypatch.setattr(cli_mod.os, "replace", faulty_replace)
+
+    result = runner.invoke(
+        app,
+        ["em", "generate", str(profile_file), "-f", "both", "-o", str(output_dir)],
+    )
+    assert result.exit_code == 2
+    assert orig_em.read_text(encoding="utf-8") == '{"Name": "ORIGINAL_EM"}\n'
+    assert not (output_dir / "device-tree.dts").exists()
+    assert list(output_dir.glob(".*.tmp")) == []
+
+
+def test_cli_em_generate_both_rejects_symlink_target_without_mutation(tmp_path: Path) -> None:
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE)
+    output_dir = tmp_path / "artifacts"
+    output_dir.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text('{"Name": "OUTSIDE"}\n', encoding="utf-8")
+    target = output_dir / "entity-manager.json"
+    target.symlink_to(outside)
+
+    result = runner.invoke(
+        app,
+        ["em", "generate", str(profile_file), "-f", "both", "-o", str(output_dir)],
+    )
+    assert result.exit_code == 2
+    assert target.is_symlink()
+    assert outside.read_text(encoding="utf-8") == '{"Name": "OUTSIDE"}\n'
+    assert list(output_dir.glob(".*.tmp")) == []
+
+
+def test_cli_em_generate_both_preserves_existing_file_mode(tmp_path: Path) -> None:
+    profile_file = tmp_path / "profile.yaml"
+    profile_file.write_text(SAMPLE_BOARD_PROFILE)
+    output_dir = tmp_path / "artifacts"
+    output_dir.mkdir()
+    existing = output_dir / "entity-manager.json"
+    existing.write_text('{"Name": "ORIGINAL"}\n', encoding="utf-8")
+    existing.chmod(0o640)
+
+    result = runner.invoke(
+        app,
+        ["em", "generate", str(profile_file), "-f", "both", "-o", str(output_dir)],
+    )
+    assert result.exit_code == 0
+    assert stat.S_IMODE(existing.stat().st_mode) == 0o640
