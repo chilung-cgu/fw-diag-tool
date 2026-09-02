@@ -84,9 +84,15 @@ class EMBridge:
                 all_entries.append(cls._create_device_entry(dev, bus.bus_num))
             for mux in bus.muxes:
                 all_entries.append(cls._create_device_entry(mux, bus.bus_num))
-                for ch in mux.channels:
-                    for dev in ch.devices:
-                        all_entries.append(cls._create_device_entry(dev, bus.bus_num))
+                for channel in mux.channels:
+                    if channel.devices and channel.downstream_bus_num is None:
+                        raise ValueError(
+                            f"MUX {mux.name} channel {channel.channel} requires downstream_bus_num "
+                            "for Entity-Manager generation"
+                        )
+                    for dev in channel.devices:
+                        assert channel.downstream_bus_num is not None
+                        all_entries.append(cls._create_device_entry(dev, channel.downstream_bus_num))
 
         return EMBoardConfig(board_name=profile.board_name, devices=all_entries)
 
@@ -167,4 +173,3 @@ class EMBridge:
             dts_blocks.append(dts_str)
 
         return "\n\n".join(dts_blocks)
-

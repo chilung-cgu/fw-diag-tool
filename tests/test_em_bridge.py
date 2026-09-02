@@ -62,6 +62,7 @@ i2c_buses:
         register_width: 8
         channels:
           - channel: 0
+            downstream_bus_num: 10
             devices:
               - address_7bit: 0x52
                 name: "DIMM0_SPD"
@@ -70,6 +71,7 @@ i2c_buses:
                 compatible: "atmel,24c64"
                 register_width: 8
           - channel: 1
+            downstream_bus_num: 11
             devices:
               - address_7bit: 0x53
                 name: "DIMM1_SPD"
@@ -171,3 +173,22 @@ def test_to_dts_invalid_bus() -> None:
     with pytest.raises(ValueError, match=r"Bus number 42 not found"):
         EMBridge.to_dts(profile, bus_num=42)
 
+
+def test_from_board_profile_preserves_downstream_bus_identity() -> None:
+    profile = BoardProfile.from_text(SAMPLE_BOARD_WITH_MUX_YAML)
+    config = EMBridge.from_board_profile(profile)
+    dev_map = {dev.name: dev for dev in config.devices}
+    assert dev_map["PCA9548_Mux"].bus == 3
+    assert dev_map["DIMM0_SPD"].bus == 10
+    assert dev_map["DIMM1_SPD"].bus == 11
+
+
+def test_from_board_profile_rejects_populated_mux_channel_without_linux_bus() -> None:
+    profile = BoardProfile.from_text(SAMPLE_BOARD_WITH_MUX_YAML.replace(
+        "            downstream_bus_num: 10\n", ""
+    ))
+    with pytest.raises(
+        ValueError,
+        match=r"MUX PCA9548_Mux channel 0 requires downstream_bus_num for Entity-Manager",
+    ):
+        EMBridge.from_board_profile(profile)

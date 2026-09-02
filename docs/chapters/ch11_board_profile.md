@@ -246,6 +246,8 @@ Bus #1：位址衝突！「outlet-temp」與「inlet-temp」皆使用相同 7-bi
 
 在診斷分析時，若邏輯分析儀 capture 記錄了對 MUX `0x70` 寫入控制暫存器啟用特定通道（例如寫入 `0x01` 開啟 Channel 0，寫入 `0x02` 開啟 Channel 1）的交易，診斷引擎的 `MuxTracker` 會動態追蹤當前啟用的通道，並精準將後續 `0x48` 的讀寫操作映射至正確的感測器元件。
 
+`downstream_bus_num` 是 MUX channel 對應到 Linux runtime I2C adapter 的明確編號。DTS 產生只需要 parent bus、MUX address 與 channel，因此可以省略；Entity-Manager 的 `Bus` 欄位則必須填入實際 adapter number。工具不會猜測此值：只要 populated channel 缺少 `downstream_bus_num`，`fw-diag em generate --format json` 就會停止並指出 MUX 與 channel。請在目標板上依 `/sys/bus/i2c/devices` 或 `i2cdetect -l` 的實際結果填入，不能直接複製另一塊板的編號。
+
 ---
 
 ## 限制與能力邊界（Limitations & Boundaries）

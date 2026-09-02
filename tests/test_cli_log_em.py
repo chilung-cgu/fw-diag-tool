@@ -386,6 +386,15 @@ def test_cli_em_generate_both_and_invalid(tmp_path: Path) -> None:
     assert res_missing.exit_code == 1
 
 
+def test_cli_em_generate_json_requires_explicit_mux_downstream_bus_mapping() -> None:
+    result = runner.invoke(
+        app,
+        ["em", "generate", "examples/data/board_yv4.yaml", "--format", "json"],
+    )
+    assert result.exit_code == 2
+    assert "requires downstream_bus_num" in result.output
+
+
 def test_cli_em_mock_bash_and_python(tmp_path: Path) -> None:
     """Test em mock command generating Bash and Python mock scripts."""
     em_file = tmp_path / "valid_em.json"

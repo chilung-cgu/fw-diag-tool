@@ -2047,7 +2047,7 @@ def generate_em_or_dts(
             em_json = EMBuilder.generate(em_config, indent=2)
             results.append(em_json)
         except ValueError as exc:
-            console.print(f"[bold red]Error generating Entity-Manager JSON: {exc}[/]")
+            console.print(f"[bold red]Error generating Entity-Manager JSON: {exc}[/]", soft_wrap=True)
             raise typer.Exit(code=2) from exc
 
     if fmt in ("dts", "both"):

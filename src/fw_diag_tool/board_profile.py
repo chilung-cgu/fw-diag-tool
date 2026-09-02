@@ -293,6 +293,7 @@ class MuxChannel(_SchemaModel):
     """One downstream channel of an I2C mux."""
 
     channel: int
+    downstream_bus_num: int | None = None
     devices: list[I2CDeviceProfile] = Field(default_factory=list)
 
     @field_validator("channel", mode="before")
@@ -302,6 +303,16 @@ class MuxChannel(_SchemaModel):
         if not 0 <= channel <= 7:
             raise ValueError("channel must be between 0 and 7")
         return channel
+
+    @field_validator("downstream_bus_num", mode="before")
+    @classmethod
+    def _validate_downstream_bus_num(cls, value: Any) -> int | None:
+        if value is None:
+            return None
+        bus_num = _parse_int(value, "downstream_bus_num")
+        if not 0 <= bus_num <= 0xFFFF:
+            raise ValueError("downstream_bus_num must be between 0 and 65535")
+        return bus_num
 
     @model_validator(mode="after")
     def _validate_device_addresses(self) -> Self:
@@ -393,6 +404,19 @@ class BoardProfile(_SchemaModel):
             if bus.bus_num in seen:
                 raise ValueError(f"duplicate bus_num: {bus.bus_num}")
             seen.add(bus.bus_num)
+        downstream_seen: set[int] = set()
+        for bus in self.i2c_buses:
+            for mux in bus.muxes:
+                for channel in mux.channels:
+                    if channel.downstream_bus_num is not None:
+                        if (
+                            channel.downstream_bus_num in seen
+                            or channel.downstream_bus_num in downstream_seen
+                        ):
+                            raise ValueError(
+                                f"duplicate downstream_bus_num: {channel.downstream_bus_num}"
+                            )
+                        downstream_seen.add(channel.downstream_bus_num)
         return self
 
     @classmethod

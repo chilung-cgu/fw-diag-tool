@@ -81,6 +81,40 @@ i2c_buses:
             devices: []
 """
 
+MULTI_CHANNEL_PROFILE_WITH_DOWNSTREAM_BUSES = """
+board_name: Explicit-Mux-Buses
+version: "1.0"
+i2c_buses:
+  - bus_num: 3
+    speed_mode: fast
+    muxes:
+      - address_7bit: 0x70
+        name: main-mux
+        category: mux
+        protocol: I2C
+        compatible: nxp,pca9548
+        register_width: 8
+        channels:
+          - channel: 0
+            downstream_bus_num: 10
+            devices:
+              - address_7bit: 0x48
+                name: inlet-temp
+                category: temperature
+                protocol: I2C
+                compatible: ti,tmp75
+                register_width: 8
+          - channel: 1
+            downstream_bus_num: 11
+            devices:
+              - address_7bit: 0x48
+                name: outlet-temp
+                category: temperature
+                protocol: I2C
+                compatible: ti,tmp75
+                register_width: 8
+"""
+
 
 def test_loads_representative_yv4_craterlake_yaml_topology():
     profile = BoardProfile.from_yaml(REPRESENTATIVE_PROFILE_YAML)
@@ -295,3 +329,20 @@ def test_engine_uses_board_profile_for_device_mapping():
     assert tx.device_name == "board-gpio"
     assert tx.identity_confidence == "board-profile"
     assert tx.device_category == "gpio-expander"
+
+
+def test_mux_channel_accepts_explicit_downstream_bus_num() -> None:
+    profile = BoardProfile.from_text(REPRESENTATIVE_PROFILE_YAML.replace(
+        "- channel: 0\n",
+        "- channel: 0\n            downstream_bus_num: 10\n",
+        1,
+    ))
+    assert profile.i2c_buses[0].muxes[0].channels[0].downstream_bus_num == 10
+
+
+def test_board_profile_rejects_duplicate_downstream_bus_numbers() -> None:
+    text = MULTI_CHANNEL_PROFILE_WITH_DOWNSTREAM_BUSES.replace(
+        "downstream_bus_num: 11", "downstream_bus_num: 10"
+    )
+    with pytest.raises(SchemaError, match="duplicate downstream_bus_num: 10"):
+        BoardProfile.from_text(text)
