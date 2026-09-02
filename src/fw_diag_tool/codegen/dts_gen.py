@@ -114,9 +114,7 @@ class DeviceTreeGenerator:
                 channel_path = f"{path}.channels[{channel_index}]"
                 if not isinstance(channel, dict):
                     raise TypeError(f"{channel_path} must be a mapping")
-                channel_num = cls._parse_int(
-                    f"{channel_path}.channel", channel.get("channel", 0)
-                )
+                channel_num = cls._parse_int(f"{channel_path}.channel", channel.get("channel", 0))
                 if not 0 <= channel_num <= 7:
                     raise ValueError(f"{channel_path}.channel must be between 0 and 7")
                 if channel_num in seen_channels:
@@ -143,39 +141,47 @@ class DeviceTreeGenerator:
             "",
         ]
         for address, name, compatible in normalized_direct:
-            lines.extend([
-                f"    {name}@{address:x} {{",
-                f'        compatible = "{compatible}";',
-                f"        reg = <0x{address:02x}>;",
-                "    };",
-                "",
-            ])
-        for mux_address, mux_compatible, channels in normalized_muxes:
-            lines.extend([
-                f"    i2c-mux@{mux_address:x} {{",
-                f'        compatible = "{mux_compatible}";',
-                f"        reg = <0x{mux_address:02x}>;",
-                "        #address-cells = <1>;",
-                "        #size-cells = <0>;",
-                "        i2c-mux-idle-disconnect;",
-                "",
-            ])
-            for channel_num, devices in channels:
-                lines.extend([
-                    f"        i2c@{channel_num} {{",
-                    "            #address-cells = <1>;",
-                    "            #size-cells = <0>;",
-                    f"            reg = <{channel_num}>;",
+            lines.extend(
+                [
+                    f"    {name}@{address:x} {{",
+                    f'        compatible = "{compatible}";',
+                    f"        reg = <0x{address:02x}>;",
+                    "    };",
                     "",
-                ])
-                for address, name, compatible in devices:
-                    lines.extend([
-                        f"            {name}@{address:x} {{",
-                        f'                compatible = "{compatible}";',
-                        f"                reg = <0x{address:02x}>;",
-                        "            };",
+                ]
+            )
+        for mux_address, mux_compatible, channels in normalized_muxes:
+            lines.extend(
+                [
+                    f"    i2c-mux@{mux_address:x} {{",
+                    f'        compatible = "{mux_compatible}";',
+                    f"        reg = <0x{mux_address:02x}>;",
+                    "        #address-cells = <1>;",
+                    "        #size-cells = <0>;",
+                    "        i2c-mux-idle-disconnect;",
+                    "",
+                ]
+            )
+            for channel_num, devices in channels:
+                lines.extend(
+                    [
+                        f"        i2c@{channel_num} {{",
+                        "            #address-cells = <1>;",
+                        "            #size-cells = <0>;",
+                        f"            reg = <{channel_num}>;",
                         "",
-                    ])
+                    ]
+                )
+                for address, name, compatible in devices:
+                    lines.extend(
+                        [
+                            f"            {name}@{address:x} {{",
+                            f'                compatible = "{compatible}";',
+                            f"                reg = <0x{address:02x}>;",
+                            "            };",
+                            "",
+                        ]
+                    )
                 lines.extend(["        };", ""])
             lines.extend(["    };", ""])
         lines.extend(["};", ""])
@@ -202,18 +208,23 @@ class DeviceTreeGenerator:
             channel = cls._parse_int(f"devices[{index}].channel", device.get("channel", 0))
             if not 0 <= channel <= 7:
                 raise ValueError(f"devices[{index}].channel must be between 0 and 7")
-            grouped_devices[channel].append(device)
+            address, name, compatible = cls._normalize_device(device, path=f"devices[{index}]")
+            grouped_devices[channel].append(
+                {"addr": address, "name": name, "compatible": compatible}
+            )
 
         return cls.generate_i2c_bus(
             bus_num=bus_num,
             direct_devices=[],
-            muxes=[{
-                "addr": mux_addr,
-                "compatible": mux_compatible,
-                "channels": [
-                    {"channel": channel, "devices": channel_devices}
-                    for channel, channel_devices in grouped_devices.items()
-                ],
-            }],
+            muxes=[
+                {
+                    "addr": mux_addr,
+                    "compatible": mux_compatible,
+                    "channels": [
+                        {"channel": channel, "devices": channel_devices}
+                        for channel, channel_devices in grouped_devices.items()
+                    ],
+                }
+            ],
             clock_frequency=clock_frequency,
         )
