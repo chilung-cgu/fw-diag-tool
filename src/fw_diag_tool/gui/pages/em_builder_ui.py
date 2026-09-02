@@ -407,28 +407,49 @@ def _render_validate_mode() -> None:
 
 
 def _freeze_value(val: Any) -> Any:
+    if val is None:
+        return ("NoneType", None)
+    if isinstance(val, bool):
+        return ("bool", val)
+    if isinstance(val, int):
+        return ("int", val)
+    if isinstance(val, float):
+        if math.isnan(val):
+            return ("float", "__float_nan__")
+        if math.isinf(val):
+            return ("float", "__float_inf__" if val > 0 else "__float_neginf__")
+        return ("float", val)
+    if isinstance(val, str):
+        return ("str", val)
     if isinstance(val, (bytes, bytearray, memoryview)):
-        return bytes(val)
-    if isinstance(val, float) and math.isnan(val):
-        return ("__float_nan__",)
+        return ("bytes", bytes(val))
     if isinstance(val, Mapping):
         frozen_items = [(_freeze_value(k), _freeze_value(v)) for k, v in val.items()]
-        return tuple(
-            sorted(
-                frozen_items,
-                key=lambda item: (
-                    type(item[0]).__qualname__,
-                    repr(item[0]),
-                    type(item[1]).__qualname__,
-                    repr(item[1]),
-                ),
-            )
+        return (
+            "dict",
+            tuple(
+                sorted(
+                    frozen_items,
+                    key=lambda item: (
+                        type(item[0]).__qualname__,
+                        repr(item[0]),
+                        type(item[1]).__qualname__,
+                        repr(item[1]),
+                    ),
+                )
+            ),
         )
     if isinstance(val, (set, frozenset)):
         frozen_items = [_freeze_value(v) for v in val]
-        return tuple(sorted(frozen_items, key=lambda x: (type(x).__qualname__, repr(x))))
+        return (
+            "set" if isinstance(val, set) else "frozenset",
+            tuple(sorted(frozen_items, key=lambda x: (type(x).__qualname__, repr(x)))),
+        )
     if isinstance(val, (list, tuple)):
-        return tuple(_freeze_value(v) for v in val)
+        return (
+            "list" if isinstance(val, list) else "tuple",
+            tuple(_freeze_value(v) for v in val),
+        )
     if isinstance(val, enum.Enum):
         return (type(val).__qualname__, val.name, _freeze_value(val.value))
     if isinstance(val, os.PathLike):
@@ -439,7 +460,7 @@ def _freeze_value(val: Any) -> Any:
         return (type(val).__qualname__, _freeze_value(dataclasses.asdict(val)))
     try:
         hash(val)
-        return val
+        return (type(val).__qualname__, val)
     except TypeError:
         return (type(val).__qualname__, repr(val))
 

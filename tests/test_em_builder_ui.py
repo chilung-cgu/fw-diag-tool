@@ -747,3 +747,29 @@ def test_freeze_value_handles_nan_enums_paths_dataclasses_and_models() -> None:
     model_val2 = _freeze_value(_SampleConfigModel(gain=1.5, label="temp"))
     assert model_val1 == model_val2
     assert hash(model_val1) is not None
+
+
+def test_freeze_value_distinguishes_types_with_equal_python_values() -> None:
+    # bool vs int vs float
+    assert _freeze_value(True) != _freeze_value(1)
+    assert _freeze_value(False) != _freeze_value(0)
+    assert _freeze_value(1) != _freeze_value(1.0)
+    assert _freeze_value(0) != _freeze_value(0.0)
+
+    # list vs tuple vs set
+    assert _freeze_value([1, 2]) != _freeze_value((1, 2))
+    assert _freeze_value({1, 2}) != _freeze_value([1, 2])
+    assert _freeze_value({1, 2}) != _freeze_value((1, 2))
+
+    # infinities and None
+    assert _freeze_value(float("inf")) == _freeze_value(float("inf"))
+    assert _freeze_value(float("-inf")) == _freeze_value(float("-inf"))
+    assert _freeze_value(float("inf")) != _freeze_value(float("-inf"))
+    assert _freeze_value(None) == _freeze_value(None)
+    assert _freeze_value(None) != _freeze_value(0)
+    assert _freeze_value(None) != _freeze_value(False)
+
+    # dicts containing type-confusable values
+    assert _freeze_value({"flag": True}) != _freeze_value({"flag": 1})
+    assert _freeze_value({"val": 1}) != _freeze_value({"val": 1.0})
+    assert _freeze_value({"mode": 0}) != _freeze_value({"mode": False})
