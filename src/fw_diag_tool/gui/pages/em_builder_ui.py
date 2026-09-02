@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pandas as pd
 import streamlit as st
 
@@ -399,33 +401,49 @@ def _render_validate_mode() -> None:
                         st.markdown(f"- **建議修復行動 (Suggestion)**: {issue.suggestion}")
 
 
+def _freeze_value(val: Any) -> Any:
+    if isinstance(val, dict):
+        return tuple(sorted((str(k), _freeze_value(v)) for k, v in val.items()))
+    if isinstance(val, (list, tuple, set)):
+        return tuple(_freeze_value(v) for v in val)
+    return val
+
+
 def _mock_generation_key(
     board_name: str,
     probe_expression: str,
     format_name: str,
     devices: list[EMDeviceEntry],
 ) -> tuple[object, ...]:
-    device_key = tuple(
+    norm_board = board_name.strip() or "Yosemite_V4_Mainboard"
+    norm_probe = probe_expression.strip() or "TRUE"
+    device_keys = tuple(
         (
             dev.name,
-            dev.template.chip_name,
-            dev.template.category,
-            dev.template.em_type,
             dev.bus,
             dev.address,
-            dev.power_state,
-            tuple(sorted(dev.custom_fields.items())) if dev.custom_fields else (),
+            dev.power_state if dev.power_state is not None else dev.template.default_power_state,
+            dev.template.category,
+            dev.template.chip_name,
+            dev.template.em_type,
+            dev.template.default_power_state,
+            _freeze_value(dev.template.required_fields),
+            _freeze_value(dev.template.optional_fields),
+            dev.template.description,
+            _freeze_value(dev.custom_fields),
         )
         for dev in devices
     )
-    return (board_name, probe_expression, format_name, device_key)
+    return (norm_board, norm_probe, format_name, device_keys)
 
 
 def _render_mock_mode() -> None:
     """Render Entity-Manager to D-Bus Mock Script Generator mode."""
+    st.session_state.pop("em_mock_script", None)
     devices_list: list[EMDeviceEntry] = st.session_state.get("em_devices_list", [])
 
     if not devices_list:
+        st.session_state.pop("em_mock_artifact", None)
         st.info(t("em_mock_no_devices", domain="gui"))
         if st.button(t("em_load_sample_devices", domain="gui"), key="em_mock_btn_load_sample"):
             st.session_state["em_devices_list"] = list(_get_default_sample_devices())
@@ -459,16 +477,19 @@ def _render_mock_mode() -> None:
         st.write("")
         gen_clicked = st.button(t("em_mock_generate", domain="gui"), key="em_btn_gen_mock")
 
-    board_name = st.session_state.get("em_board_name_input", "Yosemite_V4_Mainboard")
-    probe_expr = st.session_state.get("em_probe_input", "TRUE")
+    board_name = (
+        st.session_state.get("em_board_name_input", "Yosemite_V4_Mainboard").strip()
+        or "Yosemite_V4_Mainboard"
+    )
+    probe_expr = st.session_state.get("em_probe_input", "TRUE").strip() or "TRUE"
     format_name = "bash" if "Bash" in str(format_choice) else "python"
     current_key = _mock_generation_key(board_name, probe_expr, format_name, devices_list)
 
     if gen_clicked:
         config = EMBoardConfig(
-            board_name=board_name.strip() or "Yosemite_V4_Mainboard",
+            board_name=board_name,
             devices=list(devices_list),
-            probe_expression=probe_expr.strip() or "TRUE",
+            probe_expression=probe_expr,
         )
 
         if format_name == "bash":

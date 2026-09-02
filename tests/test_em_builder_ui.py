@@ -336,6 +336,34 @@ def _mock_mode_with_corrupt_artifact_app() -> None:
     render()
 
 
+def _mock_mode_empty_devices_with_stale_artifact_app() -> None:
+    import streamlit as st
+
+    from fw_diag_tool.gui.pages.em_builder_ui import render
+    from fw_diag_tool.i18n import t
+
+    st.session_state["em_mode_select"] = t("em_mode_mock", domain="gui")
+    st.session_state["em_devices_list"] = []
+    st.session_state["em_mock_artifact"] = {
+        "key": ("Yosemite_V4_Mainboard", "TRUE", "bash", ()),
+        "content": "echo stale",
+        "format": "bash",
+    }
+    render()
+
+
+def _mock_mode_with_legacy_script_state_app() -> None:
+    import streamlit as st
+
+    from fw_diag_tool.gui.pages.em_builder_ui import _get_default_sample_devices, render
+    from fw_diag_tool.i18n import t
+
+    st.session_state["em_mode_select"] = t("em_mode_mock", domain="gui")
+    st.session_state["em_devices_list"] = list(_get_default_sample_devices())
+    st.session_state["em_mock_script"] = "legacy script text"
+    render()
+
+
 def test_apptest_em_mock_mode_generate_bash_and_python() -> None:
     """Test Mock Generator Mode generating Bash and Python mock scripts."""
     at = AppTest.from_function(_mock_mode_with_devices_app, default_timeout=15).run()
@@ -375,7 +403,9 @@ def test_mock_generation_key_changes_with_format_and_devices() -> None:
     dev_tmpl1 = [EMDeviceEntry(template=tmpl1, bus=1, address=0x48, name="Temp")]
     dev_tmpl2 = [EMDeviceEntry(template=tmpl2, bus=1, address=0x48, name="Temp")]
     dev_custom = [
-        EMDeviceEntry(template=tmpl1, bus=1, address=0x48, name="Temp", custom_fields={"Threshold": 85})
+        EMDeviceEntry(
+            template=tmpl1, bus=1, address=0x48, name="Temp", custom_fields={"Threshold": 85}
+        )
     ]
 
     k_tmpl1 = _mock_generation_key("Board", "TRUE", "bash", dev_tmpl1)
@@ -385,11 +415,174 @@ def test_mock_generation_key_changes_with_format_and_devices() -> None:
     assert k_tmpl1 != k_custom
 
 
+def test_mock_generation_key_template_fields_and_nested_custom_fields() -> None:
+    base_tmpl = EMDeviceTemplate(
+        category="Temperature",
+        chip_name="TMP75",
+        em_type="TMP75",
+        default_power_state="On",
+        required_fields=["Bus", "Address", "Name"],
+        optional_fields={"Max": 100},
+        description="TI TMP75",
+    )
+    dev_base = [EMDeviceEntry(template=base_tmpl, bus=1, address=0x48, name="Temp")]
+    k_base = _mock_generation_key("Board", "TRUE", "bash", dev_base)
+
+    # default_power_state change
+    tmpl_pwr = EMDeviceTemplate(
+        category="Temperature",
+        chip_name="TMP75",
+        em_type="TMP75",
+        default_power_state="AlwaysOn",
+        required_fields=["Bus", "Address", "Name"],
+        optional_fields={"Max": 100},
+        description="TI TMP75",
+    )
+    k_pwr = _mock_generation_key(
+        "Board",
+        "TRUE",
+        "bash",
+        [EMDeviceEntry(template=tmpl_pwr, bus=1, address=0x48, name="Temp")],
+    )
+    assert k_base != k_pwr
+
+    # required_fields change
+    tmpl_req = EMDeviceTemplate(
+        category="Temperature",
+        chip_name="TMP75",
+        em_type="TMP75",
+        default_power_state="On",
+        required_fields=["Bus", "Address", "Name", "Extra"],
+        optional_fields={"Max": 100},
+        description="TI TMP75",
+    )
+    k_req = _mock_generation_key(
+        "Board",
+        "TRUE",
+        "bash",
+        [EMDeviceEntry(template=tmpl_req, bus=1, address=0x48, name="Temp")],
+    )
+    assert k_base != k_req
+
+    # optional_fields nested change
+    tmpl_opt = EMDeviceTemplate(
+        category="Temperature",
+        chip_name="TMP75",
+        em_type="TMP75",
+        default_power_state="On",
+        required_fields=["Bus", "Address", "Name"],
+        optional_fields={"Max": 100, "Nested": {"sub": [1, 2]}},
+        description="TI TMP75",
+    )
+    tmpl_opt2 = EMDeviceTemplate(
+        category="Temperature",
+        chip_name="TMP75",
+        em_type="TMP75",
+        default_power_state="On",
+        required_fields=["Bus", "Address", "Name"],
+        optional_fields={"Max": 100, "Nested": {"sub": [1, 3]}},
+        description="TI TMP75",
+    )
+    k_opt = _mock_generation_key(
+        "Board",
+        "TRUE",
+        "bash",
+        [EMDeviceEntry(template=tmpl_opt, bus=1, address=0x48, name="Temp")],
+    )
+    k_opt2 = _mock_generation_key(
+        "Board",
+        "TRUE",
+        "bash",
+        [EMDeviceEntry(template=tmpl_opt2, bus=1, address=0x48, name="Temp")],
+    )
+    assert k_base != k_opt
+    assert k_opt != k_opt2
+
+    # description change
+    tmpl_desc = EMDeviceTemplate(
+        category="Temperature",
+        chip_name="TMP75",
+        em_type="TMP75",
+        default_power_state="On",
+        required_fields=["Bus", "Address", "Name"],
+        optional_fields={"Max": 100},
+        description="Different description",
+    )
+    k_desc = _mock_generation_key(
+        "Board",
+        "TRUE",
+        "bash",
+        [EMDeviceEntry(template=tmpl_desc, bus=1, address=0x48, name="Temp")],
+    )
+    assert k_base != k_desc
+
+    # nested custom_fields
+    dev_nested1 = [
+        EMDeviceEntry(
+            template=base_tmpl,
+            bus=1,
+            address=0x48,
+            name="Temp",
+            custom_fields={"Thresholds": {"high": [80, 90]}},
+        )
+    ]
+    dev_nested2 = [
+        EMDeviceEntry(
+            template=base_tmpl,
+            bus=1,
+            address=0x48,
+            name="Temp",
+            custom_fields={"Thresholds": {"high": [80, 95]}},
+        )
+    ]
+    k_nest1 = _mock_generation_key("Board", "TRUE", "bash", dev_nested1)
+    k_nest2 = _mock_generation_key("Board", "TRUE", "bash", dev_nested2)
+    assert k_nest1 != k_nest2
+    assert hash(k_nest1) == hash(_mock_generation_key("Board", "TRUE", "bash", dev_nested1))
+
+    # power_state=None vs explicit default
+    dev_pwr_none = [
+        EMDeviceEntry(template=base_tmpl, bus=1, address=0x48, name="Temp", power_state=None)
+    ]
+    dev_pwr_explicit = [
+        EMDeviceEntry(template=base_tmpl, bus=1, address=0x48, name="Temp", power_state="On")
+    ]
+    assert _mock_generation_key("Board", "TRUE", "bash", dev_pwr_none) == _mock_generation_key(
+        "Board", "TRUE", "bash", dev_pwr_explicit
+    )
+
+    # board name and probe normalization
+    k_default = _mock_generation_key("Yosemite_V4_Mainboard", "TRUE", "bash", dev_base)
+    assert (
+        _mock_generation_key("  Yosemite_V4_Mainboard  ", "  TRUE  ", "bash", dev_base) == k_default
+    )
+    assert _mock_generation_key("", "", "bash", dev_base) == k_default
+    assert _mock_generation_key("   ", "   ", "bash", dev_base) == k_default
+
+
 def test_apptest_em_mock_invalidates_malformed_session_state() -> None:
     at = AppTest.from_function(_mock_mode_with_corrupt_artifact_app, default_timeout=15).run()
     assert not at.exception
     assert not at.code
     assert not at.download_button
+
+
+def test_apptest_em_mock_clears_artifact_when_devices_list_is_empty() -> None:
+    at = AppTest.from_function(
+        _mock_mode_empty_devices_with_stale_artifact_app, default_timeout=15
+    ).run()
+    assert not at.exception
+    assert not at.code
+    assert not at.download_button
+    assert "em_mock_artifact" not in at.session_state
+
+
+def test_apptest_em_mock_clears_legacy_script_state() -> None:
+    at = AppTest.from_function(_mock_mode_with_legacy_script_state_app, default_timeout=15).run()
+    assert not at.exception
+    assert not at.code
+    assert not at.download_button
+    assert "em_mock_script" not in at.session_state
 
 
 def test_apptest_em_mock_format_change_invalidates_generated_artifact() -> None:
@@ -399,7 +592,8 @@ def test_apptest_em_mock_format_change_invalidates_generated_artifact() -> None:
     assert any(code.language == "bash" for code in at.code)
 
     format_radio = next(
-        radio for radio in at.radio
+        radio
+        for radio in at.radio
         if "輸出格式" in radio.label or "Python daemon" in getattr(radio, "options", [])
     )
     format_radio.set_value("Python daemon").run()
