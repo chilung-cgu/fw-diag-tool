@@ -406,7 +406,16 @@ def _mock_generation_key(
     devices: list[EMDeviceEntry],
 ) -> tuple[object, ...]:
     device_key = tuple(
-        (dev.name, dev.template.em_type, dev.bus, dev.address, dev.power_state)
+        (
+            dev.name,
+            dev.template.chip_name,
+            dev.template.category,
+            dev.template.em_type,
+            dev.bus,
+            dev.address,
+            dev.power_state,
+            tuple(sorted(dev.custom_fields.items())) if dev.custom_fields else (),
+        )
         for dev in devices
     )
     return (board_name, probe_expression, format_name, device_key)
@@ -474,8 +483,14 @@ def _render_mock_mode() -> None:
         }
 
     artifact = st.session_state.get("em_mock_artifact")
-    if artifact is not None and artifact["key"] != current_key:
-        st.session_state.pop("em_mock_artifact", None)
+    if not (
+        isinstance(artifact, dict)
+        and artifact.get("key") == current_key
+        and isinstance(artifact.get("content"), str)
+        and artifact.get("format") in ("bash", "python")
+    ):
+        if artifact is not None:
+            st.session_state.pop("em_mock_artifact", None)
         artifact = None
 
     if artifact is not None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from streamlit.testing.v1 import AppTest
 
-from fw_diag_tool.em.models import EMDeviceEntry
+from fw_diag_tool.em.models import EMDeviceEntry, EMDeviceTemplate
 from fw_diag_tool.gui.pages import em_builder_ui
 from fw_diag_tool.gui.pages.em_builder_ui import (
     _get_default_sample_devices,
@@ -324,6 +324,18 @@ def _mock_mode_with_devices_app() -> None:
     render()
 
 
+def _mock_mode_with_corrupt_artifact_app() -> None:
+    import streamlit as st
+
+    from fw_diag_tool.gui.pages.em_builder_ui import _get_default_sample_devices, render
+    from fw_diag_tool.i18n import t
+
+    st.session_state["em_mode_select"] = t("em_mode_mock", domain="gui")
+    st.session_state["em_devices_list"] = list(_get_default_sample_devices())
+    st.session_state["em_mock_artifact"] = {"corrupt": True}
+    render()
+
+
 def test_apptest_em_mock_mode_generate_bash_and_python() -> None:
     """Test Mock Generator Mode generating Bash and Python mock scripts."""
     at = AppTest.from_function(_mock_mode_with_devices_app, default_timeout=15).run()
@@ -357,6 +369,27 @@ def test_mock_generation_key_changes_with_format_and_devices() -> None:
     )
     assert bash_key != python_key
     assert bash_key != _mock_generation_key("Board", "TRUE", "bash", changed_devices)
+
+    tmpl1 = EMDeviceTemplate(category="Temperature", chip_name="TMP75", em_type="TMP75")
+    tmpl2 = EMDeviceTemplate(category="Temperature", chip_name="LM75", em_type="TMP75")
+    dev_tmpl1 = [EMDeviceEntry(template=tmpl1, bus=1, address=0x48, name="Temp")]
+    dev_tmpl2 = [EMDeviceEntry(template=tmpl2, bus=1, address=0x48, name="Temp")]
+    dev_custom = [
+        EMDeviceEntry(template=tmpl1, bus=1, address=0x48, name="Temp", custom_fields={"Threshold": 85})
+    ]
+
+    k_tmpl1 = _mock_generation_key("Board", "TRUE", "bash", dev_tmpl1)
+    k_tmpl2 = _mock_generation_key("Board", "TRUE", "bash", dev_tmpl2)
+    k_custom = _mock_generation_key("Board", "TRUE", "bash", dev_custom)
+    assert k_tmpl1 != k_tmpl2
+    assert k_tmpl1 != k_custom
+
+
+def test_apptest_em_mock_invalidates_malformed_session_state() -> None:
+    at = AppTest.from_function(_mock_mode_with_corrupt_artifact_app, default_timeout=15).run()
+    assert not at.exception
+    assert not at.code
+    assert not at.download_button
 
 
 def test_apptest_em_mock_format_change_invalidates_generated_artifact() -> None:
