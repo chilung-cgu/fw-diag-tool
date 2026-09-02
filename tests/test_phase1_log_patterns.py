@@ -103,7 +103,7 @@ def test_pattern_nfsroot_mount_fail() -> None:
 @pytest.mark.parametrize(
     "log",
     [
-        "Sep 02 01:00:00 bmc ipmid[200]: Host command timeout configured to 30 seconds",
+        "Sep 02 01:00:00 bmc ipmid[200]: timeout configured to 30 seconds",
         "Sep 02 01:00:01 bmc systemd[1]: demo.service: Main process exited, code=exited, status=0/SUCCESS",
         "Sep 02 02:00:00 bmc systemd-journald[50]: Vacuuming done, freed 16.0M of archived journals",
         "Sep 02 02:00:01 bmc systemd-journald[50]: Suppressed 12 messages from demo.service",
