@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import dataclasses
+import enum
 import os
+import pathlib
 import subprocess
 import sys
 
+from pydantic import BaseModel
 from streamlit.testing.v1 import AppTest
 
 from fw_diag_tool.em.models import EMDeviceEntry, EMDeviceTemplate
 from fw_diag_tool.gui.pages import em_builder_ui
 from fw_diag_tool.gui.pages.em_builder_ui import (
+    _freeze_value,
     _get_default_sample_devices,
     _mock_generation_key,
     _parse_address,
@@ -687,3 +692,58 @@ def test_apptest_em_mock_format_change_invalidates_generated_artifact() -> None:
 
     assert not at.code
     assert not at.download_button
+
+
+class _SampleEnum(enum.Enum):
+    MODE_A = "fast"
+    MODE_B = "slow"
+
+
+@dataclasses.dataclass
+class _SampleConfigDC:
+    retries: int
+    target: str
+
+
+class _SampleConfigModel(BaseModel):
+    gain: float
+    label: str
+
+
+def test_freeze_value_mixed_dict_keys_and_uncomparable_values() -> None:
+    # Keys with matching str representations but different types and uncomparable values
+    raw_dict = {1: (1, 2), "1": 5}
+    frozen = _freeze_value(raw_dict)
+    assert isinstance(frozen, tuple)
+    assert hash(frozen) is not None
+
+    # Re-ordered dictionary items must produce identical frozen representation
+    raw_dict_reordered = {"1": 5, 1: (1, 2)}
+    assert _freeze_value(raw_dict_reordered) == frozen
+    assert hash(_freeze_value(raw_dict_reordered)) == hash(frozen)
+
+
+def test_freeze_value_handles_nan_enums_paths_dataclasses_and_models() -> None:
+    nan1 = _freeze_value({"nan_val": float("nan")})
+    nan2 = _freeze_value({"nan_val": float("nan")})
+    assert nan1 == nan2
+    assert hash(nan1) == hash(nan2)
+
+    enum_val = _freeze_value(_SampleEnum.MODE_A)
+    assert hash(enum_val) is not None
+    assert enum_val != _freeze_value(_SampleEnum.MODE_B)
+
+    path_val1 = _freeze_value(pathlib.Path("/etc/sensors.conf"))
+    path_val2 = _freeze_value(pathlib.Path("/etc/sensors.conf"))
+    assert path_val1 == path_val2
+    assert hash(path_val1) is not None
+
+    dc_val1 = _freeze_value(_SampleConfigDC(retries=3, target="i2c1"))
+    dc_val2 = _freeze_value(_SampleConfigDC(retries=3, target="i2c1"))
+    assert dc_val1 == dc_val2
+    assert hash(dc_val1) is not None
+
+    model_val1 = _freeze_value(_SampleConfigModel(gain=1.5, label="temp"))
+    model_val2 = _freeze_value(_SampleConfigModel(gain=1.5, label="temp"))
+    assert model_val1 == model_val2
+    assert hash(model_val1) is not None
