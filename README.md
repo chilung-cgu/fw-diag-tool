@@ -1,7 +1,7 @@
 # Firmware Diagnostic Suite (`fw_diag_tool`)
 
 專為 **Junior 韌體 / 嵌入式 / 硬體工程師** 設計的本機診斷與學習工具，目標平台為 macOS 與 Linux。
-目前版本 **v2.0.0**，提供 I2C/PMBus、PCIe AER、SPI Flash、UART Crash Dump、MCTP/IPMB 五大協定分析、Linux Kernel / OpenBMC 系統日誌關聯分析、OpenBMC Entity-Manager 組態產生與驗證、全協定差分引擎（Diff Engine）、目錄級批次分析（Batch Analysis）、偏好設定（Settings）、無障礙輔助與 26 個 synthetic 練習情境。各模組的輸入能力與限制請先閱讀 [能力與限制](docs/LIMITATIONS.md)。
+目前版本 **v2.0.0**，提供 I2C/PMBus、PCIe AER、SPI Flash、UART Crash Dump、MCTP/IPMB 五大協定分析、Linux Kernel / OpenBMC 系統日誌關聯分析、OpenBMC Entity-Manager 組態產生與驗證、Board Profile 拓撲橋接、D-Bus Mock 產生、全協定差分引擎（Diff Engine）、目錄級批次分析（Batch Analysis）、偏好設定（Settings）、無障礙輔助與 26 個 synthetic 練習情境。各模組的輸入能力與限制請先閱讀 [能力與限制](docs/LIMITATIONS.md)。
 
 👉 **完整新人圖文教學指南**：請參閱 [docs/index.md](docs/index.md)；若不知道某個 GUI 頁面或圖表怎麼讀，先看 [28 個 GUI 頁面的閱讀地圖](docs/chapters/appendix_gui_reading_guide.md)。
 > 📂 **各章節詳細文件**：[ch01 I2C波形](docs/chapters/ch01_i2c_pmbus.md) | [ch02 封包/驅動產生](docs/chapters/ch02_packet_builder.md) | [ch03 Waveform Diff](docs/chapters/ch03_waveform_diff.md) | [ch04 UART Crash](docs/chapters/ch04_uart_crash.md) | [ch05 MCTP/IPMB](docs/chapters/ch05_mctp_ipmb.md) | [ch06 Device Tree](docs/chapters/ch06_dts_generator.md) | [ch07 PCIe AER](docs/chapters/ch07_pcie_aer.md) | [ch08 SPI Flash](docs/chapters/ch08_spi_flash.md) | [ch09 Register/Codegen](docs/chapters/ch09_register_codegen.md) | [ch10 Fault Arena](docs/chapters/ch10_fault_arena.md) | [ch11 Board Profile](docs/chapters/ch11_board_profile.md) | [ch12 SOP](docs/chapters/ch12_sop.md) | [ch13 晶片資料庫](docs/chapters/ch13_chip_db.md) | [ch14 模擬器](docs/chapters/ch14_emulator.md) | [ch15 Fuzz Lab](docs/chapters/ch15_fuzz_lab.md) | [ch16 Dashboard](docs/chapters/ch16_dashboard.md) | [ch17 關聯分析](docs/chapters/ch17_correlation.md) | [ch18 Session 趨勢](docs/chapters/ch18_session_analytics.md) | [ch19 PDF 匯出](docs/chapters/ch19_pdf_export.md) | [ch20 協定 Diff](docs/chapters/ch20_protocol_diff.md) | [ch21 Session 比對](docs/chapters/ch21_session_compare.md) | [ch22 批次分析](docs/chapters/ch22_batch_analysis.md) | [ch23 偏好設定](docs/chapters/ch23_settings.md) | [ch24 日誌關聯分析](docs/chapters/ch24_log_analyzer.md) | [ch25 Entity-Manager 產生器](docs/chapters/ch25_em_builder.md) | [附錄A 圖表判讀](docs/chapters/appendix_chart_guide.md)
@@ -12,9 +12,10 @@
 
 ## ✨ v2.0.0 版本亮點（Highlights）
 
-- **系統日誌關聯診斷 (Log Analyzer)**：支援 Linux Kernel (`dmesg`) 與 OpenBMC (`journalctl`) 日誌解析、22+ 種硬體/驅動錯誤特徵比對、事件群組與根因假說推導。
+- **系統日誌關聯診斷 (Log Analyzer)**：支援 Linux Kernel (`dmesg`) 與 OpenBMC (`journalctl`) 日誌解析、35 種跨 13 個子系統的硬體/驅動錯誤特徵比對、事件群組與根因假說推導。
 - **日誌 A/B 差異比對 (Log Diff)**：比較正常與異常開機/運作日誌，自動標示新增事件、消失事件與等級演變。
-- **OpenBMC Entity-Manager 產生器 (EM Builder)**：提供視覺化 JSON 組態產生與校驗，內建 7 大類別 13+ 種晶片範本（溫度、電壓、風扇、EEPROM、MUX、RTC）與語法/數值/拓撲即時驗證。
+- **OpenBMC Entity-Manager 產生器 (EM Builder)**：提供視覺化 JSON 組態產生與校驗，內建 7 大類別 13+ 種晶片範本（溫度、電壓、風扇、EEPROM、MUX、RTC）與語法/數值/拓撲即時驗證，並支援 Board Profile 到 EM/DTS 的拓撲保真轉換。
+- **D-Bus Mock 產生器**：將 EM JSON 轉成 injection-safe 的 Bash launcher 或 `dbus-next` Python daemon，供沒有實體硬體時驗證感測器物件拓撲；實際 system bus policy 仍需在目標環境驗證。
 - **拓撲關聯增強 (Topology Enrichment)**：日誌診斷自動對照 Board Profile，將 I2C 匯流排、位址與 PCIe BDF 關聯至實體晶片名稱與位置。
 - **CLI 與 GUI 全面整合**：新增 `fw-diag log` 與 `fw-diag em` CLI 指令，並於 Web 介面新增「系統日誌與組態」專屬分類。
 
@@ -143,6 +144,10 @@ fw-diag em validate examples/data/entity_config.json
 uv run fw-diag em generate profile.yaml --format json > entity-manager.json
 uv run fw-diag em generate profile.yaml --format dts > device-tree.dts
 mkdir -p generated && uv run fw-diag em generate profile.yaml --format both --out generated
+
+# 5e. 從 Entity-Manager JSON 產生 D-Bus Mock launcher/daemon
+uv run fw-diag em mock entity-manager.json --format bash --output mock_sensors.sh
+uv run fw-diag em mock entity-manager.json --format python --output mock_sensors.py
 
 # 6. 目錄級多檔案批次平行分析（自動偵測協定、匯出多格式報告）
 fw-diag batch /path/to/captures/ -o ./batch_reports/ --format all

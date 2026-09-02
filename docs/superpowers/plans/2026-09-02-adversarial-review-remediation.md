@@ -53,7 +53,7 @@
 - Produces: `EMMockGenerator._build_mock_objects(config: EMBoardConfig) -> list[dict[str, Any]]`; both script generators must consume this single mapping.
 - Preserves: `EMMockGenerator._get_sensor_mapping(dev)` as the category-to-interface mapping helper.
 
-- [ ] **Step 1: Write failing parser-contract tests**
+- [x] **Step 1: Write failing parser-contract tests**
 
 Append these tests to `tests/test_em_mock_gen.py`:
 
@@ -74,7 +74,7 @@ def test_parse_em_json_rejects_malformed_contract(payload: dict[str, object], me
         EMMockGenerator.parse_em_json(json.dumps(payload))
 ```
 
-- [ ] **Step 2: Run the parser tests and verify red**
+- [x] **Step 2: Run the parser tests and verify red**
 
 Run:
 
@@ -84,7 +84,7 @@ uv run pytest tests/test_em_mock_gen.py::test_parse_em_json_rejects_malformed_co
 
 Expected: at least the mapping, non-object item, boolean, float, or out-of-range cases fail because the current parser silently skips or coerces them.
 
-- [ ] **Step 3: Add strict integer and shape helpers, then use them in `parse_em_json`**
+- [x] **Step 3: Add strict integer and shape helpers, then use them in `parse_em_json`**
 
 Add this helper above `EMMockGenerator` and replace the permissive defaults in `parse_em_json`:
 
@@ -125,7 +125,7 @@ for idx, item in enumerate(exposes_list):
     )
 ```
 
-- [ ] **Step 4: Run focused parser tests and existing valid parser tests**
+- [x] **Step 4: Run focused parser tests and existing valid parser tests**
 
 Run:
 
@@ -135,7 +135,7 @@ uv run pytest tests/test_em_mock_gen.py -k 'parse_em_json' -v
 
 Expected: all selected tests pass.
 
-- [ ] **Step 5: Write failing category and sanitized-name collision tests**
+- [x] **Step 5: Write failing category and sanitized-name collision tests**
 
 Append:
 
@@ -164,7 +164,7 @@ def test_mock_mapping_disambiguates_sanitized_path_collisions() -> None:
     assert paths[1].endswith("/CPU_Temp_b2_a48")
 ```
 
-- [ ] **Step 6: Run the mapping tests and verify red**
+- [x] **Step 6: Run the mapping tests and verify red**
 
 Run:
 
@@ -174,7 +174,7 @@ uv run pytest tests/test_em_mock_gen.py -k 'skips_mux or sanitized_path_collisio
 
 Expected: FAIL because MUX currently falls back to a temperature sensor and colliding sanitized names produce identical paths.
 
-- [ ] **Step 7: Add one deterministic object builder**
+- [x] **Step 7: Add one deterministic object builder**
 
 Change `_infer_category` so explicit MUX tokens return `"mux"`. Change `_get_sensor_mapping` so `gpio` and `mux` return `None`. Add `_build_mock_objects` that first counts sanitized base names, then suffixes every colliding base with bus/address:
 
@@ -215,7 +215,7 @@ def _build_mock_objects(cls, config: EMBoardConfig) -> list[dict[str, Any]]:
 
 Update `_get_sensor_mapping` to return a `kind` value (`temperature`, `fan_tach`, `power`, or `voltage`) rather than constructing its own final path. Do not keep two path-building implementations.
 
-- [ ] **Step 8: Run focused tests, static checks, and commit**
+- [x] **Step 8: Run focused tests, static checks, and commit**
 
 Run:
 
@@ -250,7 +250,7 @@ Expected: tests and checks pass; one commit is created.
 - Preserves: `EMMockGenerator.generate_busctl_script(config) -> str`, but its output becomes a Bash launcher containing the same Python daemon in a single-quoted heredoc; it no longer claims that `busctl set-property` creates objects.
 - Generated daemon requests `xyz.openbmc_project.FWDiagMock`, exports each path, and runs until interrupted. A one-shot mode is intentionally omitted because exported objects disappear when their owning process exits.
 
-- [ ] **Step 1: Write failing syntax and source-injection tests**
+- [x] **Step 1: Write failing syntax and source-injection tests**
 
 Append:
 
@@ -286,7 +286,7 @@ def test_generated_bash_does_not_execute_device_text(
 
 Add `from pathlib import Path` and `import subprocess` to the test module.
 
-- [ ] **Step 2: Run the syntax and injection tests and verify red**
+- [x] **Step 2: Run the syntax and injection tests and verify red**
 
 Run:
 
@@ -296,7 +296,7 @@ uv run pytest tests/test_em_mock_gen.py -k 'generated_python or generated_bash' 
 
 Expected: FAIL because JSON booleans are invalid Python and unescaped values currently enter source syntax.
 
-- [ ] **Step 3: Add the runtime dependency and refresh the lock**
+- [x] **Step 3: Add the runtime dependency and refresh the lock**
 
 Add this item to `[project].dependencies`:
 
@@ -336,7 +336,7 @@ Create `tests/fixtures/em_mock_sample.json` with this exact content so later smo
 }
 ```
 
-- [ ] **Step 4: Write the failing service-ownership contract test**
+- [x] **Step 4: Write the failing service-ownership contract test**
 
 Append:
 
@@ -352,7 +352,7 @@ def test_generated_python_owns_name_and_exports_objects(
     assert "|| true" not in script
 ```
 
-- [ ] **Step 5: Run the ownership test and verify red**
+- [x] **Step 5: Run the ownership test and verify red**
 
 Run:
 
@@ -362,7 +362,7 @@ uv run pytest tests/test_em_mock_gen.py::test_generated_python_owns_name_and_exp
 
 Expected: FAIL because current output only writes properties to a service that does not exist.
 
-- [ ] **Step 6: Replace generated Python with a real `dbus-next` daemon**
+- [x] **Step 6: Replace generated Python with a real `dbus-next` daemon**
 
 Use `pprint.pformat(objects, sort_dicts=True, width=100)` for `MOCK_OBJECTS` and `repr(config.board_name)` for `BOARD_NAME`. The generated source must contain these concrete interfaces:
 
@@ -425,7 +425,7 @@ async def publish_mock_objects() -> MessageBus:
 
 Catch connection/name/export errors only in generated `main()`, print one error to stderr, and return 1. Do not catch exceptions inside `publish_mock_objects()`.
 
-- [ ] **Step 7: Make Bash output a quoted launcher for the exact Python daemon**
+- [x] **Step 7: Make Bash output a quoted launcher for the exact Python daemon**
 
 Build the Bash output only from fixed shell lines plus the already-generated Python source:
 
@@ -443,7 +443,7 @@ return "\n".join([
 
 No board name or device field may appear in a shell command outside the quoted heredoc.
 
-- [ ] **Step 8: Update CLI and GUI labels without changing command names**
+- [x] **Step 8: Update CLI and GUI labels without changing command names**
 
 Keep CLI values `bash` and `python`. Set the CLI help text to `Output format: bash launcher or python daemon (default: bash)`. Change GUI radio options to `Bash launcher` and `Python daemon`. Keep the existing translation key names and use these exact values:
 
@@ -460,7 +460,7 @@ Add this exact paragraph to `docs/chapters/ch25_em_builder.md`:
 產生的 Mock 是長時間執行的 D-Bus service，不是一次性的 `busctl set-property` 指令。它會取得 `xyz.openbmc_project.FWDiagMock` bus name 並 export sensor/inventory objects；執行環境必須安裝 `dbus-next`，且 D-Bus policy 必須允許該 process 連線、取得名稱與匯出物件。任一動作失敗時程式會以非零狀態結束，不會顯示假成功。
 ```
 
-- [ ] **Step 9: Run focused tests and commit**
+- [x] **Step 9: Run focused tests and commit**
 
 Run:
 
@@ -492,7 +492,7 @@ Expected: tests, syntax checks, type checks, and MkDocs build pass.
 - `EMBridge.from_board_profile()` maps direct devices and MUX chips to the parent `bus_num`; it maps downstream devices to `downstream_bus_num`.
 - `EMBridge.from_board_profile()` raises `ValueError` when a populated channel lacks `downstream_bus_num`; DTS generation does not require this field.
 
-- [ ] **Step 1: Write failing BoardProfile validation tests**
+- [x] **Step 1: Write failing BoardProfile validation tests**
 
 Add to `tests/test_board_profile.py`:
 
@@ -552,7 +552,7 @@ i2c_buses:
 """
 ```
 
-- [ ] **Step 2: Run the model tests and verify red**
+- [x] **Step 2: Run the model tests and verify red**
 
 Run:
 
@@ -562,7 +562,7 @@ uv run pytest tests/test_board_profile.py -k 'downstream_bus' -v
 
 Expected: FAIL because `MuxChannel` forbids the unknown field.
 
-- [ ] **Step 3: Add and validate `downstream_bus_num`**
+- [x] **Step 3: Add and validate `downstream_bus_num`**
 
 Add to `MuxChannel`:
 
@@ -582,7 +582,7 @@ def _validate_downstream_bus_num(cls, value: Any) -> int | None:
 
 Extend `BoardProfile._validate_bus_numbers()` with a second set. Reject a `downstream_bus_num` that duplicates a parent `bus_num` or another downstream bus. The error text must be `duplicate downstream_bus_num: <number>`.
 
-- [ ] **Step 4: Write failing EMBridge topology tests**
+- [x] **Step 4: Write failing EMBridge topology tests**
 
 Update `SAMPLE_BOARD_WITH_MUX_YAML` in `tests/test_em_bridge.py` so channel 0 uses bus 10 and channel 1 uses bus 11. Then add:
 
@@ -607,7 +607,7 @@ def test_from_board_profile_rejects_populated_mux_channel_without_linux_bus() ->
         EMBridge.from_board_profile(profile)
 ```
 
-- [ ] **Step 5: Run EMBridge tests and verify red**
+- [x] **Step 5: Run EMBridge tests and verify red**
 
 Run:
 
@@ -617,7 +617,7 @@ uv run pytest tests/test_em_bridge.py -k 'downstream_bus_identity or without_lin
 
 Expected: the preserved-identity test fails because current code flattens both channels to bus 3; the missing-mapping test fails because current code does not reject it.
 
-- [ ] **Step 6: Use explicit channel bus numbers in `EMBridge.from_board_profile`**
+- [x] **Step 6: Use explicit channel bus numbers in `EMBridge.from_board_profile`**
 
 Replace the downstream loop with:
 
@@ -635,7 +635,7 @@ for channel in mux.channels:
 
 Do not add private pseudo-bus numbering or put non-standard MUX fields into Entity-Manager `Exposes`.
 
-- [ ] **Step 7: Add the documented example fail-fast CLI test**
+- [x] **Step 7: Add the documented example fail-fast CLI test**
 
 Add to `tests/test_cli_log_em.py`:
 
@@ -655,7 +655,7 @@ Add this exact paragraph to `docs/chapters/ch11_board_profile.md`:
 `downstream_bus_num` 是 MUX channel 對應到 Linux runtime I2C adapter 的明確編號。DTS 產生只需要 parent bus、MUX address 與 channel，因此可以省略；Entity-Manager 的 `Bus` 欄位則必須填入實際 adapter number。工具不會猜測此值：只要 populated channel 缺少 `downstream_bus_num`，`fw-diag em generate --format json` 就會停止並指出 MUX 與 channel。請在目標板上依 `/sys/bus/i2c/devices` 或 `i2cdetect -l` 的實際結果填入，不能直接複製另一塊板的編號。
 ```
 
-- [ ] **Step 8: Run focused tests, static checks, docs, and commit**
+- [x] **Step 8: Run focused tests, static checks, docs, and commit**
 
 Run:
 
@@ -687,7 +687,7 @@ Expected: all selected checks pass and existing non-MUX BoardProfiles remain val
 - Preserves: `generate_dts_from_topology(...)` as a compatibility wrapper that creates one MUX descriptor and delegates to `generate_i2c_bus`.
 - `EMBridge.to_dts()` converts every `bus.devices` item and every item in `bus.muxes`; it never creates a MUX when `bus.muxes` is empty.
 
-- [ ] **Step 1: Write failing renderer topology tests**
+- [x] **Step 1: Write failing renderer topology tests**
 
 Add to `tests/test_dts_gen.py`:
 
@@ -723,7 +723,7 @@ def test_generate_i2c_bus_renders_direct_devices_and_all_muxes() -> None:
     assert "fru-b@50" in dts
 ```
 
-- [ ] **Step 2: Run renderer tests and verify red**
+- [x] **Step 2: Run renderer tests and verify red**
 
 Run:
 
@@ -733,7 +733,7 @@ uv run pytest tests/test_dts_gen.py -k 'generate_i2c_bus' -v
 
 Expected: FAIL with `AttributeError` because `generate_i2c_bus` does not exist.
 
-- [ ] **Step 3: Implement the multi-MUX renderer and delegate the old API**
+- [x] **Step 3: Implement the multi-MUX renderer and delegate the old API**
 
 Use existing `_parse_int`, `_validate_address`, `_validate_node_name`, and `_validate_compatible` helpers. `generate_i2c_bus` must:
 
@@ -900,7 +900,7 @@ return cls.generate_i2c_bus(
 
 Preserve current validation messages covered by `tests/test_codegen_hardening.py` wherever the old API is used.
 
-- [ ] **Step 4: Run renderer and compatibility tests**
+- [x] **Step 4: Run renderer and compatibility tests**
 
 Run:
 
@@ -910,7 +910,7 @@ uv run pytest tests/test_dts_gen.py tests/test_codegen_hardening.py -k 'dts' -v
 
 Expected: all selected tests pass.
 
-- [ ] **Step 5: Write failing EMBridge multi-MUX tests**
+- [x] **Step 5: Write failing EMBridge multi-MUX tests**
 
 Add this exact fixture to `tests/test_em_bridge.py`:
 
@@ -997,7 +997,7 @@ i2c_buses:
         register_width: 8
 ```
 
-- [ ] **Step 6: Run bridge DTS tests and verify red**
+- [x] **Step 6: Run bridge DTS tests and verify red**
 
 Run:
 
@@ -1007,7 +1007,7 @@ uv run pytest tests/test_em_bridge.py -k 'all_muxes or does_not_invent_mux' -v
 
 Expected: current code omits the direct child in a MUX bus, ignores the second MUX, and invents `i2c-mux@70` on direct-only buses.
 
-- [ ] **Step 7: Make `EMBridge.to_dts` build the complete descriptor**
+- [x] **Step 7: Make `EMBridge.to_dts` build the complete descriptor**
 
 For each selected bus, build:
 
@@ -1037,7 +1037,7 @@ muxes = [
 
 Call `DeviceTreeGenerator.generate_i2c_bus(...)`. Add `_dts_name(name: str) -> str` once; normalize whitespace and underscores to `-`, lowercase the result, and let `DeviceTreeGenerator` validate the remaining characters.
 
-- [ ] **Step 8: Run focused tests, static checks, and commit**
+- [x] **Step 8: Run focused tests, static checks, and commit**
 
 Run:
 
@@ -1063,7 +1063,7 @@ Expected: focused suites and checks pass.
 - Preserves pattern IDs: `IPMID_TIMEOUT`, `SYSTEMD_SERVICE_FAILED`, `JOURNAL_DISK_FULL`, `EMMC_IO_ERROR`, and `NFSROOT_MOUNT_FAIL`.
 - Changes only matching precision; severity, subsystem, triage hint, and positive examples remain stable.
 
-- [ ] **Step 1: Write one parameterized failing negative-control test**
+- [x] **Step 1: Write one parameterized failing negative-control test**
 
 Append:
 
@@ -1086,7 +1086,7 @@ def test_expanded_patterns_ignore_normal_status_lines(log: str) -> None:
 
 Add `import pytest` to the test module.
 
-- [ ] **Step 2: Run the negative controls and verify red**
+- [x] **Step 2: Run the negative controls and verify red**
 
 Run:
 
@@ -1096,7 +1096,7 @@ uv run pytest tests/test_phase1_log_patterns.py::test_expanded_patterns_ignore_n
 
 Expected: all six cases currently produce false-positive events.
 
-- [ ] **Step 3: Replace only the five over-broad regular expressions**
+- [x] **Step 3: Replace only the five over-broad regular expressions**
 
 Use these regex contracts:
 
@@ -1119,7 +1119,7 @@ r"NFS:.*(?:mount.*failed|No route to host|Connection refused)"
 
 Keep `re.IGNORECASE`. Do not combine lifecycle/status messages into failure patterns merely because they contain words such as `timeout`, `request`, `retrying`, or `suppressed`.
 
-- [ ] **Step 4: Run positive and negative pattern tests**
+- [x] **Step 4: Run positive and negative pattern tests**
 
 Run:
 
@@ -1129,7 +1129,7 @@ uv run pytest tests/test_phase1_log_patterns.py -v
 
 Expected: all original positive cases and all new negative controls pass.
 
-- [ ] **Step 5: Run log regression tests, static checks, and commit**
+- [x] **Step 5: Run log regression tests, static checks, and commit**
 
 Run:
 
@@ -1156,7 +1156,7 @@ Expected: all checks pass.
 - Stores: `st.session_state["em_mock_artifact"]` as `{"key": key, "content": str, "format": "bash" | "python"}`.
 - Removes: legacy `em_mock_script` state after migration; no display path may infer metadata from the current radio value.
 
-- [ ] **Step 1: Write a failing pure helper test for input identity**
+- [x] **Step 1: Write a failing pure helper test for input identity**
 
 Import `_mock_generation_key` in `tests/test_em_builder_ui.py` and add:
 
@@ -1178,7 +1178,7 @@ def test_mock_generation_key_changes_with_format_and_devices() -> None:
 
 Import `EMDeviceEntry` from `fw_diag_tool.em.models`.
 
-- [ ] **Step 2: Run the helper test and verify red**
+- [x] **Step 2: Run the helper test and verify red**
 
 Run:
 
@@ -1188,7 +1188,7 @@ uv run pytest tests/test_em_builder_ui.py::test_mock_generation_key_changes_with
 
 Expected: FAIL with `ImportError` because the helper does not exist.
 
-- [ ] **Step 3: Add the immutable key helper**
+- [x] **Step 3: Add the immutable key helper**
 
 Implement:
 
@@ -1206,7 +1206,7 @@ def _mock_generation_key(
     return (board_name, probe_expression, format_name, device_key)
 ```
 
-- [ ] **Step 4: Write the failing AppTest stale-format test**
+- [x] **Step 4: Write the failing AppTest stale-format test**
 
 Extend the mock-mode AppTest:
 
@@ -1226,7 +1226,7 @@ def test_apptest_em_mock_format_change_invalidates_generated_artifact() -> None:
 
 If the translated label differs, select the format radio by checking that its options contain `Python daemon`; do not select by list index.
 
-- [ ] **Step 5: Run the AppTest and verify red**
+- [x] **Step 5: Run the AppTest and verify red**
 
 Run:
 
@@ -1236,7 +1236,7 @@ uv run pytest tests/test_em_builder_ui.py::test_apptest_em_mock_format_change_in
 
 Expected: FAIL because the old Bash content remains while metadata changes to Python.
 
-- [ ] **Step 6: Store content and metadata as one artifact and invalidate on mismatch**
+- [x] **Step 6: Store content and metadata as one artifact and invalidate on mismatch**
 
 Before rendering a saved artifact, calculate the current key. If the saved key differs, remove it:
 
@@ -1251,7 +1251,7 @@ if artifact is not None and artifact["key"] != current_key:
 
 On generation, store `key`, `content`, and `format` together. When rendering, derive language, file suffix, and MIME only from `artifact["format"]`. Never read `em_mock_fmt_select` for an already-generated artifact.
 
-- [ ] **Step 7: Run GUI tests, static checks, and commit**
+- [x] **Step 7: Run GUI tests, static checks, and commit**
 
 Run:
 
@@ -1281,7 +1281,7 @@ Expected: all tests and checks pass.
 - `fw-diag em generate PROFILE --format both --out DIRECTORY` writes `entity-manager.json` and `device-tree.dts` in that existing directory.
 - `--format both` without `--out`, or with a non-directory path, exits 2 without partial output.
 
-- [ ] **Step 1: Strengthen the JSON stdout test so it fails on Rich decoration**
+- [x] **Step 1: Strengthen the JSON stdout test so it fails on Rich decoration**
 
 Replace the stdout portion of `test_cli_em_generate_json` with:
 
@@ -1293,7 +1293,7 @@ assert payload["Name"] == "TestServer_V1"
 assert payload["Exposes"][0]["Type"] == "TMP75"
 ```
 
-- [ ] **Step 2: Run the JSON stdout test and verify red**
+- [x] **Step 2: Run the JSON stdout test and verify red**
 
 Run:
 
@@ -1303,7 +1303,7 @@ uv run pytest tests/test_cli_log_em.py::test_cli_em_generate_json -v
 
 Expected: FAIL with `json.JSONDecodeError` because Rich Panel borders and title surround the JSON.
 
-- [ ] **Step 3: Write failing `both` artifact contract tests**
+- [x] **Step 3: Write failing `both` artifact contract tests**
 
 Replace the old concatenation assertions in `test_cli_em_generate_both_and_invalid` and add:
 
@@ -1338,7 +1338,7 @@ def test_cli_em_generate_both_rejects_file_output_without_partial_write(tmp_path
     assert not output_file.exists()
 ```
 
-- [ ] **Step 4: Run the `both` tests and verify red**
+- [x] **Step 4: Run the `both` tests and verify red**
 
 Run:
 
@@ -1348,7 +1348,7 @@ uv run pytest tests/test_cli_log_em.py -k 'generate_both' -v
 
 Expected: FAIL because current command concatenates JSON and DTS and accepts a single file/stdout.
 
-- [ ] **Step 5: Separate data stdout from human status output**
+- [x] **Step 5: Separate data stdout from human status output**
 
 Use `typer.echo(output_text)` for single-format stdout; do not wrap data in `Panel`. Keep Rich errors for invalid input. Handle `both` before generation:
 
@@ -1371,7 +1371,7 @@ Generate both strings in memory before writing either file. Then write:
 
 If either generation step raises, write neither artifact. Existing-directory requirement avoids silently creating a misspelled output location.
 
-- [ ] **Step 6: Narrow the mock command parser exception boundary**
+- [x] **Step 6: Narrow the mock command parser exception boundary**
 
 Replace `except Exception` around EM input parsing with:
 
@@ -1381,7 +1381,7 @@ except (OSError, UnicodeError, json.JSONDecodeError, TypeError, ValueError) as e
 
 This prevents programming errors from being mislabeled as user JSON errors.
 
-- [ ] **Step 7: Update CLI documentation**
+- [x] **Step 7: Update CLI documentation**
 
 Document three copy-pasteable commands:
 
@@ -1393,7 +1393,7 @@ mkdir -p generated && uv run fw-diag em generate profile.yaml --format both --ou
 
 State that JSON/DTS stdout contains artifact bytes only, while `both` never concatenates unlike formats.
 
-- [ ] **Step 8: Run CLI tests, static checks, docs, and commit**
+- [x] **Step 8: Run CLI tests, static checks, docs, and commit**
 
 Run:
 
@@ -1420,7 +1420,7 @@ Expected: CLI tests, static checks, and documentation build pass.
 - Consumes: commits from Tasks 1-7.
 - Produces: verification evidence and a clean reviewable branch; no merge or push.
 
-- [ ] **Step 1: Generate representative artifacts into a temporary directory**
+- [x] **Step 1: Generate representative artifacts into a temporary directory**
 
 Run:
 
@@ -1434,7 +1434,7 @@ bash -n "$tmp_dir/mock.sh"
 
 Expected: both syntax checks exit zero. This step does not claim a live OpenBMC system-bus test.
 
-- [ ] **Step 2: Verify raw CLI artifact behavior**
+- [x] **Step 2: Verify raw CLI artifact behavior**
 
 Run:
 
@@ -1447,7 +1447,7 @@ rg -n '^&i2c[0-9]+ \{' "$tmp_dir/board.dts"
 
 Expected: JSON parses and DTS contains at least one controller node.
 
-- [ ] **Step 3: Run the full automated gates**
+- [x] **Step 3: Run the full automated gates**
 
 Run:
 
@@ -1462,7 +1462,7 @@ git diff --check
 
 Expected: every command exits zero. If a command fails, apply `superpowers:systematic-debugging`, fix only the demonstrated regression, and rerun the failing command followed by this complete gate list.
 
-- [ ] **Step 4: Run adversarial review before any merge decision**
+- [x] **Step 4: Run adversarial review before any merge decision**
 
 Dispatch two read-only reviewers after all gates pass:
 
@@ -1471,7 +1471,7 @@ Dispatch two read-only reviewers after all gates pass:
 
 Neither reviewer may edit files. Any finding must include severity, exact file/line, reproduction, and a minimal fix recommendation.
 
-- [ ] **Step 5: Report branch state and stop**
+- [x] **Step 5: Report branch state and stop**
 
 Run:
 
@@ -1503,3 +1503,24 @@ Expected: branch is `codex/fix-adversarial-review`; only intentional changes exi
 - Type consistency: `downstream_bus_num`, `_build_mock_objects`, `_mock_generation_key`, and `generate_i2c_bus` use the same names and signatures in tests and implementations.
 - Safety boundary: no bus number is inferred; a missing runtime mapping produces a deterministic error.
 - Evidence boundary: generated-source syntax can be verified locally; actual system-bus ownership requires a host with D-Bus permissions and is not implied by unit tests.
+
+---
+
+## Completion Record (2026-09-02)
+
+| Remediation scope | Implementation evidence |
+|---|---|
+| Strict parsing and collision-free mock mapping | `525f9cb`, `3afab8e` |
+| Injection-safe, owned D-Bus daemon and launcher | `40ada5a`, `25d8db7` |
+| Explicit MUX-to-Entity-Manager bus identity | `a458ab3` |
+| Direct and multi-MUX DTS topology | `64e061d` |
+| Log negative controls | `8f91183` |
+| GUI artifact identity and stale-state invalidation | `bbd50f0`, `2e2a6c2`, `4cf43c5`, `507571c`, `f204614`, `4bcddac`, `b06d4e9` |
+| Raw CLI output and atomic artifact rollback | `b2158aa`, `c112fee`, `4d3a4b4`, `650a2a9`, `0678b6f` |
+
+- [x] Fresh full-suite evidence: `uv run pytest` completed with 1518 passed; `uv run ruff check .`, `uv run mypy src/`, and `uv run mkdocs build --strict` all exited zero.
+- [x] Generated-artifact evidence: Python/Bash mock files passed `py_compile` and `bash -n`; generated JSON passed `json.tool`; generated DTS contained `&i2c1`.
+- [x] Independent read-only review evidence: contract/plan coverage and adversarial security/topology review both reported approval; no files were edited by reviewers.
+- [x] Branch gate: HEAD is `c59f028` on `codex/fix-adversarial-review`; merge, push, remote CI, and live D-Bus runtime verification remain intentionally unperformed.
+
+Evidence note: every task checkbox above is marked complete from committed implementation/test artifacts. The red-phase commands are historical TDD evidence and were not replayed by reverting the committed tree during this final acceptance.

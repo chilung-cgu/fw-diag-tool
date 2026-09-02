@@ -37,7 +37,7 @@
   - `generate_busctl_script(cls, config: EMBoardConfig) -> str`
   - `generate_python_mock(cls, config: EMBoardConfig) -> str`
 
-- [ ] **Step 1: Write the failing tests for `EMMockGenerator`**
+- [x] **Step 1: Write the failing tests for `EMMockGenerator`**
 
 Create `tests/test_em_mock_gen.py` with unit tests covering JSON parsing, bash script generation, Python script generation, sensor path mappings, unit strings, default values, FRU inventory objects, and GPIO skipping:
 
@@ -215,12 +215,12 @@ def test_package_exports_mock_generator() -> None:
     assert callable(em_pkg.EMMockGenerator.parse_em_json)
 ```
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `uv run pytest tests/test_em_mock_gen.py -v`
 Expected: FAIL with `ModuleNotFoundError: No module named 'fw_diag_tool.em.mock_gen'`
 
-- [ ] **Step 3: Implement `src/fw_diag_tool/em/mock_gen.py`**
+- [x] **Step 3: Implement `src/fw_diag_tool/em/mock_gen.py`**
 
 Create `src/fw_diag_tool/em/mock_gen.py`:
 
@@ -563,7 +563,7 @@ if __name__ == "__main__":
         return script
 ```
 
-- [ ] **Step 4: Update `src/fw_diag_tool/em/__init__.py`**
+- [x] **Step 4: Update `src/fw_diag_tool/em/__init__.py`**
 
 Export `EMMockGenerator` in `src/fw_diag_tool/em/__init__.py`:
 
@@ -601,12 +601,12 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 5: Run tests and verify success**
+- [x] **Step 5: Run tests and verify success**
 
 Run: `uv run pytest tests/test_em_mock_gen.py -v`
 Expected: ALL PASS
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add src/fw_diag_tool/em/mock_gen.py src/fw_diag_tool/em/__init__.py tests/test_em_mock_gen.py
@@ -625,7 +625,7 @@ git commit -m "feat(em): implement D-Bus mock script generator core module"
 - Consumes: `EMMockGenerator` from `fw_diag_tool.em`
 - Produces: Typer subcommand `@em_app.command("mock")` supporting `--format` (`bash`/`python`) and `--output` options
 
-- [ ] **Step 1: Write failing CLI tests**
+- [x] **Step 1: Write failing CLI tests**
 
 Add the following tests to `tests/test_cli_log_em.py`:
 
@@ -686,12 +686,12 @@ def test_cli_em_mock_missing_file() -> None:
     assert "not found" in result.output.lower()
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 Run: `uv run pytest tests/test_cli_log_em.py -k "test_cli_em_mock" -v`
 Expected: FAIL with `No such command 'mock'`
 
-- [ ] **Step 3: Implement `@em_app.command("mock")` in `src/fw_diag_tool/cli.py`**
+- [x] **Step 3: Implement `@em_app.command("mock")` in `src/fw_diag_tool/cli.py`**
 
 In `src/fw_diag_tool/cli.py`, ensure `EMMockGenerator` is imported from `fw_diag_tool.em`, and append the `mock` command:
 
@@ -744,12 +744,12 @@ def mock_em(
         print(script_code, end="")
 ```
 
-- [ ] **Step 4: Run CLI tests to verify success**
+- [x] **Step 4: Run CLI tests to verify success**
 
 Run: `uv run pytest tests/test_cli_log_em.py -v`
 Expected: ALL PASS (including existing log and em validate tests)
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```bash
 git add src/fw_diag_tool/cli.py tests/test_cli_log_em.py
@@ -769,7 +769,7 @@ git commit -m "feat(cli): add 'fw-diag em mock' command for D-Bus mock script ge
 - Consumes: `EMMockGenerator` from `fw_diag_tool.em`, session state `em_devices_list`, i18n translation keys
 - Produces: Third radio work mode "🧪 Mock 產生器" in EM Builder UI with interactive format selection, code viewer, and one-click script download
 
-- [ ] **Step 1: Add i18n translation keys**
+- [x] **Step 1: Add i18n translation keys**
 
 In `src/fw_diag_tool/i18n/domains/gui.py`, add the new keys to `GUI_TRANSLATIONS` under the Entity-Manager section:
 
@@ -796,7 +796,7 @@ In `src/fw_diag_tool/i18n/domains/gui.py`, add the new keys to `GUI_TRANSLATIONS
     },
 ```
 
-- [ ] **Step 2: Write failing AppTest GUI tests**
+- [x] **Step 2: Write failing AppTest GUI tests**
 
 In `tests/test_em_builder_ui.py`, append tests verifying the new Mock Generator mode:
 
@@ -861,7 +861,7 @@ def test_apptest_em_mock_mode_empty_state_and_sample_load() -> None:
     assert len(at.code) >= 1
 ```
 
-- [ ] **Step 3: Update `src/fw_diag_tool/gui/pages/em_builder_ui.py`**
+- [x] **Step 3: Update `src/fw_diag_tool/gui/pages/em_builder_ui.py`**
 
 Add `_render_mock_mode()` and wire it into `render()`:
 
@@ -975,7 +975,7 @@ def _render_mock_mode() -> None:
         )
 ```
 
-- [ ] **Step 4: Run full test suites**
+- [x] **Step 4: Run full test suites**
 
 Run:
 ```bash
@@ -986,7 +986,7 @@ uv run mypy src/fw_diag_tool/em/
 ```
 Expected: ALL PASS
 
-- [ ] **Step 5: Commit Task 3**
+- [x] **Step 5: Commit Task 3**
 
 ```bash
 git add src/fw_diag_tool/i18n/domains/gui.py src/fw_diag_tool/gui/pages/em_builder_ui.py tests/test_em_builder_ui.py
@@ -1023,3 +1023,12 @@ git commit -m "feat(gui): integrate D-Bus mock script generator tab into EM Buil
    uv run mypy src/fw_diag_tool
    ```
 
+---
+
+## Completion Record (2026-09-02)
+
+- [x] Core generator and parser: `fdbbc1e`, `525f9cb`, `3afab8e`, `40ada5a`, and `25d8db7` cover strict EM input handling, deterministic collision-free mapping, quoted output, and a real `dbus-next` daemon source.
+- [x] CLI and GUI integration: `dd34349` plus the GUI hardening commits through `b06d4e9` cover `fw-diag em mock`, i18n, AppTest state invalidation, and artifact metadata binding.
+- [x] Fresh final evidence: `uv run pytest` completed with 1518 passed; `uv run ruff check .`, `uv run mypy src/`, and `uv run mkdocs build --strict` all exited zero.
+- [x] Generated scripts: representative Python and Bash artifacts passed `py_compile` and `bash -n`; the CLI output files were written successfully.
+- Evidence boundary: local source/syntax checks do not prove permissions or ownership on a target OpenBMC system bus; that runtime check still requires a deployed BMC policy.

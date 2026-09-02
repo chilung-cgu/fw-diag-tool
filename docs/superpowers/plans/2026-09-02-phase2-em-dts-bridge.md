@@ -79,3 +79,12 @@ fw-diag em generate <PROFILE_PATH> [--bus <BUS_NUM>] [--format json|dts|both] [-
    uv run ruff check src/fw_diag_tool/em/bridge.py src/fw_diag_tool/cli.py
    uv run mypy src/fw_diag_tool/em/bridge.py src/fw_diag_tool/cli.py
    ```
+
+---
+
+## Completion Record (2026-09-02)
+
+- [x] Core bridge and CLI implementation: `d9ca8da`, `a458ab3`, `64e061d`, and `dd34349` cover BoardProfile translation, explicit MUX bus identity, direct/multi-MUX DTS rendering, exports, and CLI integration.
+- [x] Fresh final evidence: `uv run pytest` completed with 1518 passed; `uv run ruff check .`, `uv run mypy src/`, and `uv run mkdocs build --strict` all exited zero.
+- [x] Artifact smoke evidence: `fw-diag em generate` produced JSON parseable by `json.tool` and DTS containing `&i2c1`; both formats were generated separately without concatenation.
+- Evidence boundary: the generated DTS/JSON checks are local static artifacts; physical I2C adapter numbering and target-board runtime behavior remain environment-dependent.

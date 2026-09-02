@@ -13,6 +13,18 @@ All notable changes to this project will be documented in this file.
 - GUI pages: System Log Analyzer (`log-analyzer`) and Entity-Manager Generator (`em-builder`) under new `系統日誌與組態` category.
 - Documentation chapters `ch24_log_analyzer.md` and `ch25_em_builder.md`.
 
+### Changed
+- Expanded the log pattern library from 22+ to 35 patterns across 13 subsystems, including DBUS and MEMORY classifications with incident hypotheses and negative controls.
+- Added BoardProfile-driven EM/DTS bridge generation with explicit downstream MUX bus identity and direct/multi-MUX topology preservation.
+- Added raw-artifact CLI contracts: JSON and DTS remain pipeable, while `--format both` writes separate files atomically.
+- Added the `fw-diag em mock` workflow and documented Bash launcher/Python daemon output for local D-Bus topology simulation.
+- Final regression coverage is 1518 tests, with Ruff, mypy, and strict MkDocs gates recorded for this branch.
+
+### Fixed
+- Hardened generated mock parsing, object-path collision handling, source quoting, D-Bus name ownership, and non-zero failure propagation.
+- Invalidated stale or malformed GUI mock artifacts whenever input or format identity changes.
+- Preserved pre-existing output files and rollback recovery artifacts during failed atomic generation.
+
 ## [1.7.0] - 2026-08-30
 
 ### Added

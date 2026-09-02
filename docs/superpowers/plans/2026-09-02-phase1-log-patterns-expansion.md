@@ -34,7 +34,7 @@
 - Consumes: nothing new
 - Produces: `Subsystem.DBUS` (value `"dbus"`) and `Subsystem.MEMORY` (value `"memory"`) enum members, used by Task 2's new patterns
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `tests/test_log_models.py`:
 
@@ -49,12 +49,12 @@ def test_subsystem_has_dbus_and_memory() -> None:
     assert Subsystem.MEMORY.value == "memory"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/test_log_models.py::test_subsystem_has_dbus_and_memory -v`
 Expected: FAIL with `AttributeError: DBUS`
 
-- [ ] **Step 3: Add the enum members**
+- [x] **Step 3: Add the enum members**
 
 In `src/fw_diag_tool/log/models.py`, inside the `Subsystem` class (after `USB = "usb"` and before `GENERAL = "general"`), add:
 
@@ -63,17 +63,17 @@ In `src/fw_diag_tool/log/models.py`, inside the `Subsystem` class (after `USB = 
     MEMORY = "memory"
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/test_log_models.py::test_subsystem_has_dbus_and_memory -v`
 Expected: PASS
 
-- [ ] **Step 5: Run full model tests and linters**
+- [x] **Step 5: Run full model tests and linters**
 
 Run: `uv run pytest tests/test_log_models.py -v && uv run ruff check src/fw_diag_tool/log/ && uv run mypy src/fw_diag_tool/log/`
 Expected: All pass, no errors
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/fw_diag_tool/log/models.py tests/test_log_models.py
@@ -94,7 +94,7 @@ git commit -m "feat(log): add DBUS and MEMORY subsystem enum members"
 
 Below are all 13 patterns to append to the `PATTERN_LIBRARY` list at the end of `patterns.py`. Add each one inside the existing list.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add the following test functions to `tests/test_log_parser.py`. Each test feeds a realistic log line to `LogParser.parse_log_text()` and asserts the expected pattern is matched:
 
@@ -196,12 +196,12 @@ def test_pattern_nfsroot_mount_fail() -> None:
     assert report.events[0].pattern_id == "NFSROOT_MOUNT_FAIL"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_log_parser.py -k "test_pattern_oom or test_pattern_dbus or test_pattern_phosphor or test_pattern_ipmid or test_pattern_systemd_service or test_pattern_journal or test_pattern_kernel_rcu or test_pattern_kernel_soft or test_pattern_mtd or test_pattern_emmc or test_pattern_nfsroot" -v`
 Expected: All 13 tests FAIL
 
-- [ ] **Step 3: Add all 13 patterns to `patterns.py`**
+- [x] **Step 3: Add all 13 patterns to `patterns.py`**
 
 Append these entries to the `PATTERN_LIBRARY` list in `src/fw_diag_tool/log/patterns.py`, right before the closing `]`. Remember the imports for `Subsystem` are already at the top of `patterns.py`:
 
@@ -365,17 +365,17 @@ Append these entries to the `PATTERN_LIBRARY` list in `src/fw_diag_tool/log/patt
     ),
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_log_parser.py -k "test_pattern_oom or test_pattern_dbus or test_pattern_phosphor or test_pattern_ipmid or test_pattern_systemd_service or test_pattern_journal or test_pattern_kernel_rcu or test_pattern_kernel_soft or test_pattern_mtd or test_pattern_emmc or test_pattern_nfsroot" -v`
 Expected: All 13 tests PASS
 
-- [ ] **Step 5: Run full test suite and linters**
+- [x] **Step 5: Run full test suite and linters**
 
 Run: `uv run pytest tests/test_log_parser.py tests/test_log_models.py tests/test_log_diff.py -v && uv run ruff check src/fw_diag_tool/log/ && uv run mypy src/fw_diag_tool/log/`
 Expected: All pass
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/fw_diag_tool/log/patterns.py tests/test_log_parser.py
@@ -394,7 +394,7 @@ git commit -m "feat(log): add 13 OpenBMC application-layer log patterns"
 - Consumes: `Subsystem.DBUS`, `Subsystem.MEMORY` from Task 1; new patterns from Task 2
 - Produces: Updated `_RELATED_TOOL_PAGES` map with new subsystem entries; enhanced hypothesis strings in incident correlation
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `tests/test_log_parser.py`:
 
@@ -430,14 +430,22 @@ def test_related_tool_pages_new_subsystems() -> None:
 
     assert Subsystem.DBUS in _RELATED_TOOL_PAGES
     assert Subsystem.MEMORY in _RELATED_TOOL_PAGES
+
+---
+
+## Completion Record (2026-09-02)
+
+- Implementation evidence: `fe2b545` adds the DBUS/MEMORY subsystems, 13 OpenBMC patterns, related-page mapping, incident hypotheses, and regression tests; `8f91183` adds the subsequent negative-control hardening.
+- Fresh final evidence: `uv run pytest` completed with 1518 passed; `uv run ruff check .`, `uv run mypy src/`, and `uv run mkdocs build --strict` all exited zero.
+- Evidence boundary: the red-phase commands listed in the task steps belong to the historical implementation sequence and were not replayed by reverting the committed tree. No live OpenBMC log stream was used in this local acceptance.
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run pytest tests/test_log_parser.py::test_incident_hypothesis_oom_plus_hwmon tests/test_log_parser.py::test_incident_hypothesis_dbus_saturation tests/test_log_parser.py::test_related_tool_pages_new_subsystems -v`
 Expected: FAIL
 
-- [ ] **Step 3: Update `parser.py`**
+- [x] **Step 3: Update `parser.py`**
 
 In `src/fw_diag_tool/log/parser.py`:
 
@@ -461,20 +469,19 @@ In `src/fw_diag_tool/log/parser.py`:
                 hypothesis = "One or more systemd services entered a failed state"
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run pytest tests/test_log_parser.py::test_incident_hypothesis_oom_plus_hwmon tests/test_log_parser.py::test_incident_hypothesis_dbus_saturation tests/test_log_parser.py::test_related_tool_pages_new_subsystems -v`
 Expected: PASS
 
-- [ ] **Step 5: Run full test suite**
+- [x] **Step 5: Run full test suite**
 
 Run: `uv run pytest tests/ -v && uv run ruff check . && uv run mypy src/`
 Expected: All pass (1422+ tests)
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/fw_diag_tool/log/parser.py tests/test_log_parser.py
 git commit -m "feat(log): expand incident hypotheses and related tool pages for new subsystems"
 ```
-
