@@ -150,3 +150,45 @@ def test_mock_mapping_disambiguates_sanitized_path_collisions() -> None:
     assert len(paths) == len(set(paths)) == 2
     assert paths[0].endswith("/CPU_Temp_b1_a48")
     assert paths[1].endswith("/CPU_Temp_b2_a48")
+
+
+
+def test_mock_mapping_handles_multi_channel_same_bus_addr_collision() -> None:
+    template = get_template("TMP75")
+    assert template is not None
+    # e.g., two downstream sensor items exposed with identical bus & address
+    config = EMBoardConfig(board_name="B", devices=[
+        EMDeviceEntry(template=template, bus=1, address=0x48, name="CPU Temp"),
+        EMDeviceEntry(template=template, bus=1, address=0x48, name="CPU-Temp"),
+    ])
+    objects = EMMockGenerator._build_mock_objects(config)
+    paths = [obj["path"] for obj in objects]
+    assert len(paths) == len(set(paths)) == 2
+    assert paths[0] == "/xyz/openbmc_project/sensors/temperature/CPU_Temp_b1_a48"
+    assert paths[1] == "/xyz/openbmc_project/sensors/temperature/CPU_Temp_b1_a48_2"
+
+
+def test_mock_mapping_handles_three_way_name_collision() -> None:
+    template = get_template("TMP75")
+    assert template is not None
+    config = EMBoardConfig(board_name="B", devices=[
+        EMDeviceEntry(template=template, bus=1, address=0x48, name="CPU Temp"),
+        EMDeviceEntry(template=template, bus=2, address=0x48, name="CPU_Temp"),
+        EMDeviceEntry(template=template, bus=3, address=0x48, name="CPU-Temp"),
+    ])
+    paths = [obj["path"] for obj in EMMockGenerator._build_mock_objects(config)]
+    assert len(paths) == len(set(paths)) == 3
+    assert paths[0].endswith("/CPU_Temp_b1_a48")
+    assert paths[1].endswith("/CPU_Temp_b2_a48")
+    assert paths[2].endswith("/CPU_Temp_b3_a48")
+
+
+def test_mock_mapping_handles_case_collision_on_case_insensitive_comparisons() -> None:
+    template = get_template("TMP75")
+    assert template is not None
+    config = EMBoardConfig(board_name="B", devices=[
+        EMDeviceEntry(template=template, bus=1, address=0x48, name="cpu_temp"),
+        EMDeviceEntry(template=template, bus=1, address=0x49, name="CPU_TEMP"),
+    ])
+    paths = [obj["path"] for obj in EMMockGenerator._build_mock_objects(config)]
+    assert len(paths) == len(set(paths)) == 2

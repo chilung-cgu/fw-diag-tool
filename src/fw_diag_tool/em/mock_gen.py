@@ -201,6 +201,7 @@ class EMMockGenerator:
             base = _sanitize_name(dev.name)
             base_counts[base] = base_counts.get(base, 0) + 1
 
+        used_paths: set[str] = set()
         objects: list[dict[str, Any]] = []
         for dev, mapping in supported:
             base = _sanitize_name(dev.name)
@@ -211,13 +212,21 @@ class EMMockGenerator:
                 if sensor_kind == "inventory"
                 else f"/xyz/openbmc_project/sensors/{sensor_kind}"
             )
+            candidate_path = f"{prefix}/{component}"
+            if candidate_path in used_paths:
+                counter = 2
+                while f"{candidate_path}_{counter}" in used_paths:
+                    counter += 1
+                candidate_path = f"{candidate_path}_{counter}"
+
+            used_paths.add(candidate_path)
             objects.append({
                 "name": dev.name,
                 "chip": dev.template.chip_name,
                 "category": dev.template.category.lower(),
                 "bus": dev.bus,
                 "address": f"0x{dev.address:02x}",
-                "path": f"{prefix}/{component}",
+                "path": candidate_path,
                 "unit": mapping["unit"],
                 "value": mapping["value"],
                 "is_sensor": mapping["is_sensor"],
@@ -250,7 +259,7 @@ class EMMockGenerator:
                     f"# Expected Object Path: {path}",
                     f'# Verify with: busctl call xyz.openbmc_project.ObjectMapper /xyz/openbmc_project/object_mapper xyz.openbmc_project.ObjectMapper GetObject sas \"{path}\" 0',
                     f'echo "[MOCK] Registering FRU Board Object: {clean_name}"',
-                    f'busctl set-property {cls.MOCK_SERVICE} {path} {cls.BOARD_INTF} PrettyName s "{clean_name}" 2>/dev/null || true',
+                    f'busctl set-property {cls.MOCK_SERVICE} {path} {cls.BOARD_INTF} PrettyName s \"{clean_name}\" 2>/dev/null || true',
                     "",
                 ])
                 continue
@@ -338,8 +347,8 @@ class EMMockGenerator:
             "def main() -> int:",
             '    \"\"\"Main entrypoint for D-Bus mock script.\"\"\"',
             f'    parser = argparse.ArgumentParser(description=\"Mock D-Bus sensor daemon for {board}\")',
-            '    parser.add_argument(\"--interval", type=float, default=2.0, help=\"Periodic refresh interval\")',
-            '    parser.add_argument(\"--once", action=\"store_true", help=\"Set properties once and exit\")',
+            '    parser.add_argument(\"--interval\", type=float, default=2.0, help=\"Periodic refresh interval\")',
+            '    parser.add_argument(\"--once\", action=\"store_true\", help=\"Set properties once and exit\")',
             "    args = parser.parse_args()",
             "",
             "    setup_mock_objects()",
