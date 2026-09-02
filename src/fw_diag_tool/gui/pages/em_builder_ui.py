@@ -414,11 +414,20 @@ def _freeze_value(val: Any) -> Any:
     def freeze(value: Any, seen: set[int]) -> tuple[Any, ...]:
         if value is None:
             return ("none",)
-        if isinstance(value, bool):
+        if isinstance(value, enum.Enum):
+            value_id = id(value)
+            if value_id in seen:
+                return ("cycle", qualified_type(value))
+            seen.add(value_id)
+            frozen_value = freeze(value.value, seen)
+            seen.remove(value_id)
+            return ("enum", qualified_type(value), value.name, frozen_value)
+        value_type = type(value)
+        if value_type is bool:
             return ("bool", value)
-        if isinstance(value, int):
+        if value_type is int:
             return ("int", value)
-        if isinstance(value, float):
+        if value_type is float:
             if math.isnan(value):
                 token = "nan"
             elif math.isinf(value):
@@ -426,10 +435,63 @@ def _freeze_value(val: Any) -> Any:
             else:
                 token = value.hex()
             return ("float", token)
-        if isinstance(value, str):
+        if value_type is str:
             return ("str", value)
-        if isinstance(value, (bytes, bytearray, memoryview)):
+        if value_type in (bytes, bytearray, memoryview):
             return ("bytes", bytes(value))
+
+        if isinstance(value, (bool, int, float, str, bytes, bytearray, memoryview)):
+            value_id = id(value)
+            if value_id in seen:
+                return ("cycle", qualified_type(value))
+            if isinstance(value, float):
+                builtin_value: object
+                float_value = float.__float__(value)
+                if math.isnan(float_value):
+                    builtin_value = "nan"
+                elif math.isinf(float_value):
+                    builtin_value = "inf" if float_value > 0 else "-inf"
+                else:
+                    builtin_value = float_value.hex()
+                scalar_kind = "float"
+            elif isinstance(value, int):
+                builtin_value = int.__int__(value)
+                scalar_kind = "int"
+            elif isinstance(value, str):
+                builtin_value = str.__str__(value)
+                scalar_kind = "str"
+            else:
+                builtin_value = memoryview(value).tobytes()
+                scalar_kind = "bytes"
+
+            scalar_state: dict[str, Any] = {}
+            try:
+                scalar_state.update(
+                    {
+                        name: state
+                        for name, state in vars(value).items()
+                        if not name.startswith("_")
+                    }
+                )
+            except TypeError:
+                pass
+            for scalar_type in type(value).__mro__:
+                slot_names = scalar_type.__dict__.get("__slots__", ())
+                if isinstance(slot_names, str):
+                    slot_names = (slot_names,)
+                for slot_name in slot_names:
+                    if (
+                        isinstance(slot_name, str)
+                        and not slot_name.startswith("_")
+                        and hasattr(value, slot_name)
+                    ):
+                        scalar_state[slot_name] = getattr(value, slot_name)
+            if scalar_state:
+                seen.add(value_id)
+                frozen_state = freeze(scalar_state, seen)
+                seen.remove(value_id)
+                return ("scalar", qualified_type(value), scalar_kind, builtin_value, frozen_state)
+            return ("scalar", qualified_type(value), scalar_kind, builtin_value)
 
         value_id = id(value)
         if value_id in seen:
@@ -450,11 +512,6 @@ def _freeze_value(val: Any) -> Any:
             frozen_items = tuple(freeze(item, seen) for item in value)
             seen.remove(value_id)
             return ("list" if isinstance(value, list) else "tuple", frozen_items)
-        if isinstance(value, enum.Enum):
-            seen.add(value_id)
-            frozen_value = freeze(value.value, seen)
-            seen.remove(value_id)
-            return ("enum", qualified_type(value), value.name, frozen_value)
         if isinstance(value, os.PathLike):
             return ("path", qualified_type(value), freeze(os.fspath(value), seen))
         if hasattr(value, "model_dump") and callable(value.model_dump):

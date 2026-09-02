@@ -699,6 +699,24 @@ class _SampleEnum(enum.Enum):
     MODE_B = "slow"
 
 
+class _UnhashableInt(int):
+    __hash__ = None
+
+
+class _UnhashableStr(str):
+    __hash__ = None
+
+
+class _SampleIntEnum(enum.IntEnum):
+    ZERO = 0
+    ONE = 1
+
+
+class _SampleStrEnum(str, enum.Enum):
+    FAST = "fast"
+    SLOW = "slow"
+
+
 @dataclasses.dataclass
 class _SampleConfigDC:
     retries: int
@@ -822,6 +840,47 @@ def test_freeze_value_hashable_public_state_is_structural_not_raw_object() -> No
     assert frozen[1] != value
     assert "0x" not in repr(frozen)
     assert hash(frozen) is not None
+
+
+def test_freeze_value_scalar_subclasses_are_hashable_and_type_distinct() -> None:
+    int_value = _UnhashableInt(7)
+    str_value = _UnhashableStr("fast")
+
+    frozen_int = _freeze_value(int_value)
+    frozen_str = _freeze_value(str_value)
+
+    assert frozen_int == _freeze_value(_UnhashableInt(7))
+    assert frozen_str == _freeze_value(_UnhashableStr("fast"))
+    assert frozen_int != _freeze_value(7)
+    assert frozen_str != _freeze_value("fast")
+    assert hash(frozen_int) is not None
+    assert hash(frozen_str) is not None
+
+
+def test_freeze_value_int_and_str_enums_are_type_distinct_and_stable() -> None:
+    assert _freeze_value(_SampleIntEnum.ONE) == _freeze_value(_SampleIntEnum.ONE)
+    assert _freeze_value(_SampleIntEnum.ONE) != _freeze_value(1)
+    assert _freeze_value(_SampleStrEnum.FAST) == _freeze_value(_SampleStrEnum.FAST)
+    assert _freeze_value(_SampleStrEnum.FAST) != _freeze_value("fast")
+
+
+def test_mock_generation_key_hashes_nested_scalar_subclasses_and_enums() -> None:
+    template = EMDeviceTemplate(
+        category="test",
+        chip_name="TEST",
+        em_type="Test",
+        optional_fields={"threshold": _UnhashableInt(3), "mode": _SampleIntEnum.ONE},
+    )
+    device = EMDeviceEntry(
+        template=template,
+        bus=1,
+        address=0x48,
+        name="Test",
+        custom_fields={"label": _UnhashableStr("fast"), "state": _SampleStrEnum.FAST},
+    )
+
+    key = _mock_generation_key("Board", "TRUE", "bash", [device])
+    assert hash(key) is not None
 
 
 def test_freeze_value_constant_repr_mapping_and_set_are_hashseed_invariant() -> None:
